@@ -81,11 +81,14 @@ Three layers, cheapest first:
    and check its files (`cat /dev/ux/version`, write `activate` to a
    control's `ctl`, read its `events`). These need no display for
    anything below rio.
-3. **GUI tests**: a Zig harness under `test/`, modeled on h9's
+3. **GUI tests**: a Zig harness under `test/harness`, modeled on h9's
    `tests/backends.zig`, that embeds h9 with the headless backend, runs
    the rio fork, injects input, compares screen regions against golden
    images, and drives the 9P files at the same time. The Phase 0
-   regression suite for stock rio behavior lives here.
+   regression suite for stock rio behavior is `test/rio`.
+
+`scripts/test.sh` runs all of them; [testing.md](testing.md) says how to
+write each kind.
 
 ## What still needs a real 9front
 
@@ -98,18 +101,25 @@ h9 is one machine with one screen in one host process. Use a 9front VM
   criterion 6).
 - Release checks: install into a real system and boot into the fork.
 
-## Things to verify early
+## What Phase 0 checked
 
-These are assumptions this plan makes about h9 that haven't been tried
-yet with 9/UX code; Phase 0 checks each one.
+These were assumptions about h9 when this plan was written. Results, at
+`H9_REV` b27cacd (details and gaps in [h9-needs.md](h9-needs.md)):
 
-- Nested rio inside the fork, under `h9 --gfx`.
-- The headless backend together with the `native` backend on Linux CI,
-  or failing that, which backend CI should use.
-- A Zig harness can embed h9 from outside the h9 tree (as a package
-  dependency) with `-Dgfx=headless`.
-- Exporting rio's `/dev/ux` with `--serve` while the window is open.
-
-If something is missing, the fix may belong in h9 (for example a CLI
-switch for a headless screen with a screenshot file, so tests can be
-written in rc alone).
+- **Headless with the native backend on Linux CI: works.** GitHub's
+  x86\_64 runners have no KVM; `--backend native` runs the amd64 root
+  unpacked from the release ISO, and the harness's headless screen runs
+  there. `rio/` builds in well under a second and the whole regression
+  suite takes about 15 seconds. `scripts/h9.sh` picks this setup on any
+  Linux x86\_64 host without a usable `/dev/kvm`.
+- **Embedding h9 from outside its tree: works, as a path dependency**
+  (`test/harness/build.zig.zon` points at `.local/hyper9`), not as a
+  fetched package.
+- **Nested rio inside the fork: works** headless (`test/rio/apps_test.zig`),
+  as do acme and sam. Not yet tried under `h9 --gfx` with a real window.
+- **Exporting rio's `/dev/ux` with `--serve`:** the export is the
+  namespace h9 built, not rio's, so `/dev/ux` isn't in it directly; the
+  machine's `/srv` is, so a client can mount rio's posted
+  `/srv/rio.USER.PID`.
+- **A headless screen from the CLI**, so GUI tests could be rc alone:
+  not in h9; the Zig harness ([testing.md](testing.md)) does it instead.
