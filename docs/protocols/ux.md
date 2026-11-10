@@ -55,8 +55,8 @@ menus/
         ctl          rw   invoke an action
         events       r    stream: actions from this menu
 windows/
-    <winid>/          rio's window ID (/dev/winid)
-        kind         r    window, dialog, alert, chooser
+    <winid>/          rio's window ID (/dev/winid); see below
+        kind         r    window, dialog, alert, chooser (a window holding a file-chooser control)
         title        r
         rect         r    the window in screen coordinates
         state        r    flags
@@ -73,6 +73,11 @@ windows/
                 events   r    stream: this control
                 ...      type-specific files (below)
 ```
+
+Window directories are named by rio's `winid` whenever the app runs
+under rio. An app with no rio (headless tests, no `/dev/winid`) numbers
+its windows 1, 2, … in the order it opens them; those numbers mean
+nothing to rio or uxd's `windows` map.
 
 Every directory is listable, and windows and controls come and go while
 the app runs (dialogs, dynamic lists of controls). Control IDs are flat
@@ -111,13 +116,14 @@ modal dialog: other windows of the app won't take input).
 | `type` | The control type (below), one word |
 | `label` | The visible label; empty for controls without one |
 | `state` | Flags: `enabled`, `visible`, `focused`, `default` (the default button), `readonly`, `multiline`, `sensitive`, `secret` |
-| `rect` | `minx miny maxx maxy`, window-local |
+| `rect` | `minx miny maxx maxy`, window-local (space-separated, as on every state file line; attributes in events use the comma form) |
 | `parent` | The containing control's ID, or empty for a top-level control |
 | `ctl` | Commands for the type; reading it lists `verb right` per line |
 | `events` | The control's stream |
 
-Commands on a control that lacks `enabled` fail with `disabled`, except
-`focus`, which fails the same way.
+Every command on a control that lacks `enabled` fails with `disabled`,
+`focus` included. `set`, `insert` and `value` writes on a control with
+`readonly` fail with `bad value: readonly`.
 
 ### Control types
 
@@ -255,7 +261,8 @@ item close label=Close key=w enabled=off
 |---|---|---|
 | `invoke actionid [win=winid]` | activate | Choose the item, as from the bar |
 
-Events: `action` (`id=`, `win=`, `via=`), `items`.
+Events: `action` (`id=`, `win=`, `via=`, and `menu=` when known), `items`.
+A menu's own `events` carries every action whose ID is among its items.
 
 ## Events
 
@@ -291,7 +298,7 @@ everything.
 | `focus` | `win`, `ctl` | Keyboard focus moved to a control |
 | `origin`, `extent` | `ctl`, `pt` / `rect` | A scroll view changed |
 | `dir`, `choose`, `cancel` | `ctl`, `path` | A file chooser changed or finished |
-| `action` | `menu`, `id`, `win`, `via` | A menu action was chosen |
+| `action` | `menu`, `id`, `win`, `via` | A menu action was chosen. `menu` is optional: an action ID can be in several menus, and the menu bar reports only the ID. libux names the first menu holding the action when it knows it |
 
 `via` says where an action came from: `ui` (a person using the window),
 `key` (a keyboard shortcut), `menu` (the menu bar), or `ctl` (a 9P
@@ -413,7 +420,9 @@ denied`, and its events reach the client with `value` removed and
 `redacted=on` added. A control with `secret` (a password field) is
 stronger: libux never serves its value or its keystrokes to anyone,
 uxd included, so `value` always reads empty and its `value` events never
-carry a value. Its `type`, `state`, `label` and `rect` stay visible.
+carry a value. Its `value` events are still sent, with `redacted=on`,
+so watchers know it changed. Its `type`, `state`, `label` and `rect`
+stay visible.
 
 Display focus is not authority: a client's rights come only from how it
 attached, never from which window has focus.

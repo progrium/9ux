@@ -37,12 +37,12 @@ fn fails {
 	pat=$1
 	shift
 	if($* >[2]$out/err){
-		echo 'FAIL '^$test^': '^$"*^' succeeded'
+		echo 'FAIL '^$test^': '^$"*^' succeeded' >[1=2]
 		failed=1
 	}
 	if not if(! grep -s -- $pat $out/err){
-		echo 'FAIL '^$test^': '^$"*^': wanted error /'^$pat^'/'
-		sed 's/^/	/' $out/err
+		echo 'FAIL '^$test^': '^$"*^': wanted error /'^$pat^'/' >[1=2]
+		sed 's/^/	/' $out/err >[1=2]
 		failed=1
 	}
 }

@@ -100,7 +100,7 @@ test=secret
 } <[4]$a/events
 same $c/password/value '
 '
-want '^[0-9]+ value ctl=windows/9/controls/password$' $out/e
+want '^[0-9]+ value ctl=windows/9/controls/password redacted=on$' $out/e
 dontwant hunter2 $out/e
 want secret $c/password/state
 
@@ -129,6 +129,22 @@ fails 'bad value' echo select 5 1 >$c/name/ctl
 fake state ok enabled off
 fails disabled echo activate >$c/ok/ctl
 fake state ok enabled on
+
+fake state name enabled off
+fails disabled echo focus >$c/name/ctl
+fake state name enabled on
+fake state name readonly on
+fails 'bad value: readonly' echo set x >$c/name/ctl
+fake state name readonly off
+
+test=busy
+{
+	cat /fd/4 >/dev/null >[2]/dev/null &
+	sleep 1
+	fails busy dd -quiet 1 -bs 8192 -count 1 -if /fd/4
+	kill_reader=$apid
+} <[4]$c/agree/events
+echo kill >/proc/$kill_reader/note
 
 test=dynamic
 {

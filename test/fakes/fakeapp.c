@@ -243,7 +243,9 @@ valueev(Ctl *c)
 	mbegin(&m, "value");
 	mattr(&m, "ctl", "%s", c->path);
 	/* a secret never carries its value */
-	if(!(c->flags & Fsecret) && strchr(c->value, '\n') == nil && strlen(c->value) <= 1024)
+	if(c->flags & Fsecret)
+		mattr(&m, "redacted", "on");
+	else if(strchr(c->value, '\n') == nil && strlen(c->value) <= 1024)
 		mattr(&m, "value", "%s", c->value);
 	cev(c, mend(&m));
 }
@@ -525,14 +527,14 @@ ctlcmd(char *line, void *v)
 		if(n != 2)
 			e = "bad syntax";
 		else if(c->flags & Freadonly)
-			e = "permission denied: readonly";
+			e = "bad value: readonly";
 		else
 			setvalue(c, k.tok[1]);
 	}else if(strcmp(verb, "insert") == 0){
 		if(n != 2)
 			e = "bad syntax";
 		else if(c->flags & Freadonly)
-			e = "permission denied: readonly";
+			e = "bad value: readonly";
 		else
 			e = insert(c, k.tok[1]);
 	}else if(strcmp(verb, "select") == 0){
@@ -811,7 +813,7 @@ fsopen(Req *r)
 				return;
 			}
 			if(n->c->flags & Freadonly){
-				respond(r, "permission denied: readonly");
+				respond(r, "bad value: readonly");
 				return;
 			}
 			o->writing = 1;

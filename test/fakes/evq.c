@@ -111,6 +111,10 @@ drain(Sub *s)
 void
 subread(Sub *s, Req *r)
 {
+	if(s->nwait > 0){
+		respond(r, "busy");
+		return;
+	}
 	s->wait = erealloc9p(s->wait, (s->nwait+1)*sizeof s->wait[0]);
 	s->wait[s->nwait++] = r;
 	drain(s);
@@ -145,7 +149,7 @@ enq(Sub *s, char *line)
 	if(s->nq >= s->max){
 		dropped = s->nq + 1;
 		qfree(s);
-		seq++;
+		/* lost takes the seq of the message that didn't fit */
 		mbegin(&m, "lost");
 		mattr(&m, "n", "%ld", dropped);
 		line = mend(&m);

@@ -166,7 +166,10 @@ All `events` files in 9/UX behave the same way.
   see the same messages. A read on one never consumes another's.
 - **Blocking reads.** A read returns at once if messages are queued,
   and otherwise blocks until one is. Servers must answer `Tflush` for a
-  blocked read promptly; that is how a client stops waiting.
+  blocked read promptly; that is how a client stops waiting. Only one
+  read may be outstanding on a subscription: a second read on the same
+  fid while one is blocked fails with `busy`. (Open the file again for a
+  second reader.)
 - **Whole messages.** A read returns one or more complete lines and
   never splits a line. If the count is too small for the next message,
   the read fails with `short read`. Read with at least 8192 bytes. (So
@@ -179,7 +182,10 @@ All `events` files in 9/UX behave the same way.
   least one per message. The same event has the same `seq` in every
   file and for every reader, so readers can line up events from
   different files of one server. Numbers start from 1 when the server
-  starts.
+  starts. `resync` takes a fresh number when it is queued; `gone` takes
+  one fresh number shared by every subscription it ends; `lost` takes the
+  number of the message that didn't fit, so it never uses up a number
+  other readers see for something else.
 - **First message.** The first message on every new subscription is
   `seq resync`, queued at open. Its `seq` marks the start of the
   subscription.
