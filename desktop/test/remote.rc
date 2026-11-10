@@ -5,11 +5,11 @@
 # remote_test.sh to stop the server and checks the volume goes offline.
 rfork ne
 O=`{sed -n 's/^O=//p' /$objtype/mkfile}
-fcore=`{pwd}^/desktop/$O.fcore
+dcore=`{pwd}^/desktop/$O.dcore
 addr=$1
 sync=$2
 mkdir -p /tmp/rvol
-F=($fcore -M -v 'remote=/tmp/rvol@'^$addr)
+F=($dcore -M -v 'remote=/tmp/rvol@'^$addr)
 $F <<'!'
 attach remote
 ls remote:docs

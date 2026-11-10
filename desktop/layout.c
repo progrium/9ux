@@ -12,12 +12,12 @@
 #include <draw.h>
 #include <thread.h>
 #include <ux.h>
-#include "fcore.h"
+#include "dcore.h"
 #include "desktop.h"
 #include "uxstyle.h"
 
 void*
-femalloc(ulong n)
+demalloc(ulong n)
 {
 	void *p;
 
@@ -29,7 +29,7 @@ femalloc(ulong n)
 }
 
 char*
-festrdup(char *s)
+destrdup(char *s)
 {
 	s = strdup(s);
 	if(s == nil)
@@ -133,7 +133,7 @@ savewin(View *v)
 	if(meta == nil || v->kind != Kfolder)
 		return;
 	q = quotestrdup(v->path);
-	if(fcmetactl(meta, "set folder %s x=%d y=%d width=%d height=%d view=%s sort=%s open=yes\n",
+	if(dcmetactl(meta, "set folder %s x=%d y=%d width=%d height=%d view=%s sort=%s open=yes\n",
 		q, v->r.min.x, v->r.min.y, Dx(v->r), Dy(v->r),
 		v->mode == Mlist ? "list" : "icons",
 		v->sort == Skind ? "kind" : v->sort == Sdate ? "date" : v->sort == Ssize ? "size" : "name") < 0)
@@ -150,7 +150,7 @@ forgetwin(View *v)
 	if(meta == nil || v->kind != Kfolder)
 		return;
 	q = quotestrdup(v->path);
-	if(fcmetactl(meta, "set folder %s open=no\n", q) < 0)
+	if(dcmetactl(meta, "set folder %s open=no\n", q) < 0)
 		metaerr(v->path);
 	free(q);
 }
@@ -167,7 +167,7 @@ saveitem(View *v, Item *it)
 	if(meta == nil || v->kind != Kfolder)
 		return;
 	q = quotestrdup(it->path);
-	if(fcmetactl(meta, "set item %s x=%d y=%d\n", q, it->pt.x, it->pt.y) < 0)
+	if(dcmetactl(meta, "set item %s x=%d y=%d\n", q, it->pt.x, it->pt.y) < 0)
 		metaerr(it->path);
 	free(q);
 }
@@ -180,23 +180,23 @@ savevol(Item *it)
 	if(meta == nil || it->vol == nil)
 		return;
 	q = quotestrdup(it->vol->name);
-	if(fcmetactl(meta, "set volume %s x=%d y=%d\n", q, it->pt.x, it->pt.y) < 0)
+	if(dcmetactl(meta, "set volume %s x=%d y=%d\n", q, it->pt.x, it->pt.y) < 0)
 		metaerr(it->vol->name);
 	free(q);
 	it->vol->x = it->pt.x;
 	it->vol->y = it->pt.y;
 }
 
-static Fcrec*
+static Dcrec*
 folderrec(char *path)
 {
 	char *q;
-	Fcrec *r;
+	Dcrec *r;
 
 	if(meta == nil)
 		return nil;
 	q = quotestrdup(path);
-	r = fcmetaquery(meta, "folder %s", q);
+	r = dcmetaquery(meta, "folder %s", q);
 	free(q);
 	return r;
 }
@@ -205,7 +205,7 @@ folderrec(char *path)
 Rectangle
 winrect(char *path)
 {
-	Fcrec *r;
+	Dcrec *r;
 	char *x, *y, *w, *h;
 	Rectangle rr;
 
@@ -213,13 +213,13 @@ winrect(char *path)
 	r = folderrec(path);
 	if(r == nil)
 		return rr;
-	x = fcrecget(r, "x");
-	y = fcrecget(r, "y");
-	w = fcrecget(r, "width");
-	h = fcrecget(r, "height");
+	x = dcrecget(r, "x");
+	y = dcrecget(r, "y");
+	w = dcrecget(r, "width");
+	h = dcrecget(r, "height");
 	if(x && y && w && h && atoi(w) >= UXwindowminwidth && atoi(h) >= UXwindowminheight)
 		rr = Rect(atoi(x), atoi(y), atoi(x)+atoi(w), atoi(y)+atoi(h));
-	fcrecfree(r);
+	dcrecfree(r);
 	return rr;
 }
 
@@ -227,7 +227,7 @@ winrect(char *path)
 int
 winmode(char *path, int *sort)
 {
-	Fcrec *r;
+	Dcrec *r;
 	char *s;
 	int m;
 
@@ -236,27 +236,27 @@ winmode(char *path, int *sort)
 	r = folderrec(path);
 	if(r == nil)
 		return m;
-	s = fcrecget(r, "view");
+	s = dcrecget(r, "view");
 	if(s != nil && strcmp(s, "list") == 0)
 		m = Mlist;
-	s = fcrecget(r, "sort");
-	if(s != nil && fcsortby(s) >= 0)
-		*sort = fcsortby(s);
-	fcrecfree(r);
+	s = dcrecget(r, "sort");
+	if(s != nil && dcsortby(s) >= 0)
+		*sort = dcsortby(s);
+	dcrecfree(r);
 	return m;
 }
 
 /* item records for dir's own entries */
-Fcrec*
+Dcrec*
 itemrecs(char *dir)
 {
 	char *q;
-	Fcrec *recs;
+	Dcrec *recs;
 
 	if(meta == nil)
 		return nil;
 	q = quotestrdup(dir);
-	recs = fcmetaquery(meta, "under item %s", q);
+	recs = dcmetaquery(meta, "under item %s", q);
 	free(q);
 	return recs;
 }

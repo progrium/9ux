@@ -11,12 +11,12 @@
 #include <u.h>
 #include <libc.h>
 #include <auth.h>
-#include "fcore.h"
+#include "dcore.h"
 
-Fcws*
-fcwsopen(char *name, Fcmeta *m)
+Dcws*
+dcwsopen(char *name, Dcmeta *m)
 {
-	Fcws *w;
+	Dcws *w;
 
 	w = mallocz(sizeof *w, 1);
 	if(name == nil)
@@ -30,15 +30,15 @@ fcwsopen(char *name, Fcmeta *m)
 	w->name = name;
 	w->meta = m;
 	w->gen = -1;
-	if(m != nil && fcwsload(w) < 0){
-		fcwsclose(w);
+	if(m != nil && dcwsload(w) < 0){
+		dcwsclose(w);
 		return nil;
 	}
 	return w;
 }
 
 static void
-volfree(Fcvol *v)
+volfree(Dcvol *v)
 {
 	free(v->name);
 	free(v->path);
@@ -50,7 +50,7 @@ volfree(Fcvol *v)
 }
 
 void
-fcwsclose(Fcws *w)
+dcwsclose(Dcws *w)
 {
 	int i;
 
@@ -63,10 +63,10 @@ fcwsclose(Fcws *w)
 	free(w);
 }
 
-static Fcvol*
-newvol(Fcws *w, char *name)
+static Dcvol*
+newvol(Dcws *w, char *name)
 {
-	Fcvol *v;
+	Dcvol *v;
 
 	v = mallocz(sizeof *v, 1);
 	v->name = strdup(name);
@@ -76,8 +76,8 @@ newvol(Fcws *w, char *name)
 	return v;
 }
 
-Fcvol*
-fcvolbyname(Fcws *w, char *name)
+Dcvol*
+dcvolbyname(Dcws *w, char *name)
 {
 	int i;
 
@@ -116,16 +116,16 @@ cleanpath(char *p)
  * changed.
  */
 int
-fcwsload(Fcws *w)
+dcwsload(Dcws *w)
 {
-	Fcrec *recs, *r;
-	Fcvol *v;
+	Dcrec *recs, *r;
+	Dcvol *v;
 	char *path, *s;
 	int i, j, moved;
 
 	if(w->meta == nil)
 		return 0;
-	recs = fcmetaquery(w->meta, "volume");
+	recs = dcmetaquery(w->meta, "volume");
 	if(recs == nil){
 		char err[ERRMAX];
 
@@ -138,17 +138,17 @@ fcwsload(Fcws *w)
 	for(r = recs; r != nil; r = r->next){
 		if(strcmp(r->a[0].attr, "volume") != 0)
 			continue;
-		s = fcrecget(r, "path");
+		s = dcrecget(r, "path");
 		if(s == nil || s[0] != '/')
 			continue;	/* a volume needs an absolute mount point */
 		path = cleanpath(s);
-		v = fcvolbyname(w, fcreckey(r));
+		v = dcvolbyname(w, dcreckey(r));
 		if(v == nil)
-			v = newvol(w, fcreckey(r));
+			v = newvol(w, dcreckey(r));
 		moved = setstr(&v->path, path);
-		moved |= setstr(&v->addr, fcrecget(r, "addr"));
-		moved |= setstr(&v->srv, fcrecget(r, "srv"));
-		moved |= setstr(&v->spec, fcrecget(r, "spec"));
+		moved |= setstr(&v->addr, dcrecget(r, "addr"));
+		moved |= setstr(&v->srv, dcrecget(r, "srv"));
+		moved |= setstr(&v->spec, dcrecget(r, "spec"));
 		free(path);
 		if(moved){
 			v->state = Vunknown;
@@ -156,17 +156,17 @@ fcwsload(Fcws *w)
 			v->err[0] = 0;
 			memset(&v->caps, 0, sizeof v->caps);
 		}
-		setstr(&v->icon, fcrecget(r, "icon"));
-		s = fcrecget(r, "desktop");
+		setstr(&v->icon, dcrecget(r, "icon"));
+		s = dcrecget(r, "desktop");
 		v->desktop = s != nil && (strcmp(s, "yes") == 0 || strcmp(s, "on") == 0);
-		s = fcrecget(r, "x");
+		s = dcrecget(r, "x");
 		v->x = s ? atoi(s) : 0;
-		s = fcrecget(r, "y");
+		s = dcrecget(r, "y");
 		v->y = s ? atoi(s) : 0;
 		v->seen = 1;
 	}
 	w->gen = w->meta->gen;
-	fcrecfree(recs);
+	dcrecfree(recs);
 	for(i = j = 0; i < w->nvol; i++){
 		if(w->vol[i]->seen)
 			w->vol[j++] = w->vol[i];
@@ -177,12 +177,12 @@ fcwsload(Fcws *w)
 	return 0;
 }
 
-Fcvol*
-fcwsaddvol(Fcws *w, char *name, char *path)
+Dcvol*
+dcwsaddvol(Dcws *w, char *name, char *path)
 {
-	Fcvol *v;
+	Dcvol *v;
 
-	v = fcvolbyname(w, name);
+	v = dcvolbyname(w, name);
 	if(v == nil)
 		v = newvol(w, name);
 	free(v->path);
@@ -194,10 +194,10 @@ fcwsaddvol(Fcws *w, char *name, char *path)
 }
 
 /* the volume whose mount point is the longest prefix of path */
-Fcvol*
-fcvolof(Fcws *w, char *path)
+Dcvol*
+dcvolof(Dcws *w, char *path)
 {
-	Fcvol *v, *best;
+	Dcvol *v, *best;
 	int i, n, bn;
 
 	best = nil;
@@ -218,7 +218,7 @@ fcvolof(Fcws *w, char *path)
 }
 
 char*
-fcvolstate(int state)
+dcvolstate(int state)
 {
 	switch(state){
 	case Vonline:	return "online";
@@ -228,7 +228,7 @@ fcvolstate(int state)
 }
 
 static int
-offline(Fcvol *v, char *fmt, ...)
+offline(Dcvol *v, char *fmt, ...)
 {
 	va_list arg;
 
@@ -241,7 +241,7 @@ offline(Fcvol *v, char *fmt, ...)
 }
 
 int
-fcvolcheck(Fcvol *v)
+dcvolcheck(Dcvol *v)
 {
 	char err[ERRMAX];
 	Dir *d;
@@ -250,9 +250,9 @@ fcvolcheck(Fcvol *v)
 	d = dirstat(v->path);
 	if(d == nil){
 		rerrstr(err, sizeof err);
-		if(fcerrclass(err) == Egone)
+		if(dcerrclass(err) == Egone)
 			return offline(v, "gone: %s: %s", v->name, err);
-		return offline(v, "%s: %s: %s", fcerrname(fcerrclass(err)), v->name, err);
+		return offline(v, "%s: %s: %s", dcerrname(dcerrclass(err)), v->name, err);
 	}
 	if((d->qid.type & QTDIR) == 0){
 		free(d);
@@ -267,9 +267,9 @@ fcvolcheck(Fcvol *v)
 	if(fd < 0){
 		free(d);
 		rerrstr(err, sizeof err);
-		if(fcerrclass(err) == Egone)
+		if(dcerrclass(err) == Egone)
 			return offline(v, "gone: %s: %s", v->name, err);
-		return offline(v, "%s: %s: %s", fcerrname(fcerrclass(err)), v->name, err);
+		return offline(v, "%s: %s: %s", dcerrname(dcerrclass(err)), v->name, err);
 	}
 	close(fd);
 	if(!v->haveid){
@@ -289,14 +289,14 @@ fcvolcheck(Fcvol *v)
  * without either are expected to be in the namespace already.
  */
 int
-fcvolattach(Fcvol *v)
+dcvolattach(Dcvol *v)
 {
 	char err[ERRMAX];
 	Dir *d;
 	int fd, mfd;
 
 	if(v->addr == nil && v->srv == nil){
-		if(fcvolcheck(v) != Vonline)
+		if(dcvolcheck(v) != Vonline)
 			return -1;
 		return 0;
 	}
@@ -323,20 +323,20 @@ fcvolattach(Fcvol *v)
 	if(amount(fd, v->path, MREPL|MCREATE, v->spec ? v->spec : "") < 0){
 		rerrstr(err, sizeof err);
 		close(fd);
-		offline(v, "%s: %s: mount: %s", fcerrname(fcerrclass(err)), v->name, err);
+		offline(v, "%s: %s: mount: %s", dcerrname(dcerrclass(err)), v->name, err);
 		return -1;
 	}
 	close(fd);
 	v->attached = 1;
 	v->haveid = 0;
 	memset(&v->caps, 0, sizeof v->caps);
-	if(fcvolcheck(v) != Vonline)
+	if(dcvolcheck(v) != Vonline)
 		return -1;
 	return 0;
 }
 
 int
-fcvoldetach(Fcvol *v)
+dcvoldetach(Dcvol *v)
 {
 	if(!v->attached){
 		werrstr("bad value: %s wasn't attached by Desktop", v->name);
@@ -354,18 +354,18 @@ fcvoldetach(Fcvol *v)
  * on volume VOL; anything else is used as it is.
  */
 char*
-fcresolve(Fcws *w, char *arg)
+dcresolve(Dcws *w, char *arg)
 {
 	char *c, *name, *p;
-	Fcvol *v;
+	Dcvol *v;
 
 	if(arg[0] != '/' && (c = strchr(arg, ':')) != nil){
 		name = mallocz(c-arg+1, 1);
 		memmove(name, arg, c-arg);
-		v = fcvolbyname(w, name);
+		v = dcvolbyname(w, name);
 		free(name);
 		if(v != nil){
-			p = fcjoin(v->path, c+1);
+			p = dcjoin(v->path, c+1);
 			cleanname(p);
 			return p;
 		}

@@ -1,9 +1,9 @@
 /*
- * Unit tests for libfcore: 6.unit [scratchdir]
+ * Unit tests for libdcore: 6.unit [scratchdir]
  */
 #include <u.h>
 #include <libc.h>
-#include "../fcore.h"
+#include "../dcore.h"
 
 int nfail, npass;
 char *T;
@@ -54,7 +54,7 @@ ckerr(char *phrase, int line)
 static char*
 path(char *rel)
 {
-	return fcjoin(T, rel);
+	return dcjoin(T, rel);
 }
 
 static void
@@ -128,43 +128,43 @@ testparse(void)
 		"\n"
 		"type=text desc=\"Plain text\" open=edit # comment\n"
 		"flag\n";
-	Fcrec *r;
+	Dcrec *r;
 	vlong gen;
 
 	gen = -1;
-	r = fcparserecs(text, &gen);
+	r = dcparserecs(text, &gen);
 	check(gen == 7);
 	check(r != nil);
 	checkstr(r->a[0].attr, "volume");
-	checkstr(fcreckey(r), "home");
-	checkstr(fcrecget(r, "desktop"), "yes");
-	checkstr(fcrecget(r, "path"), "/usr/glenda");
+	checkstr(dcreckey(r), "home");
+	checkstr(dcrecget(r, "desktop"), "yes");
+	checkstr(dcrecget(r, "path"), "/usr/glenda");
 	check(r->next != nil);
-	checkstr(fcrecget(r->next, "desc"), "Plain text");
-	checkstr(fcrecget(r->next, "open"), "edit");
-	check(fcrecget(r->next, "comment") == nil);
-	check(r->next->next != nil && strcmp(fcreckey(r->next->next), "") == 0);
-	fcrecfree(r);
+	checkstr(dcrecget(r->next, "desc"), "Plain text");
+	checkstr(dcrecget(r->next, "open"), "edit");
+	check(dcrecget(r->next, "comment") == nil);
+	check(r->next->next != nil && strcmp(dcreckey(r->next->next), "") == 0);
+	dcrecfree(r);
 }
 
 static void
 testerr(void)
 {
-	check(fcerrclass("wstat prohibited") == Enotsup);
-	check(fcerrclass("rename not supported") == Enotsup);
-	check(fcerrclass("file system read only") == Enotsup);
-	check(fcerrclass("mounted directory forbids creation") == Enotsup);
-	check(fcerrclass("permission denied") == Eperm);
-	check(fcerrclass("wstat -- not owner") == Eperm);
-	check(fcerrclass("i/o on hungup channel") == Egone);
-	check(fcerrclass("mount rpc error") == Egone);
-	check(fcerrclass("Broken pipe") == Egone);
-	check(fcerrclass("clone failed: '/n/x'") == Egone);
-	check(fcerrclass("'/x' file does not exist") == Enotfound);
-	check(fcerrclass("file already exists") == Eexist);
-	check(fcerrclass("create/wstat -- file exists") == Eexist);
-	check(fcerrclass("something else") == Eother);
-	check(fcerrclass("not supported: ours") == Enotsup);
+	check(dcerrclass("wstat prohibited") == Enotsup);
+	check(dcerrclass("rename not supported") == Enotsup);
+	check(dcerrclass("file system read only") == Enotsup);
+	check(dcerrclass("mounted directory forbids creation") == Enotsup);
+	check(dcerrclass("permission denied") == Eperm);
+	check(dcerrclass("wstat -- not owner") == Eperm);
+	check(dcerrclass("i/o on hungup channel") == Egone);
+	check(dcerrclass("mount rpc error") == Egone);
+	check(dcerrclass("Broken pipe") == Egone);
+	check(dcerrclass("clone failed: '/n/x'") == Egone);
+	check(dcerrclass("'/x' file does not exist") == Enotfound);
+	check(dcerrclass("file already exists") == Eexist);
+	check(dcerrclass("create/wstat -- file exists") == Eexist);
+	check(dcerrclass("something else") == Eother);
+	check(dcerrclass("not supported: ours") == Enotsup);
 }
 
 static void
@@ -172,45 +172,45 @@ testnames(void)
 {
 	char *s;
 
-	check(fcvalidname("a b.txt"));
-	check(fcvalidname("ünïcode"));
-	check(!fcvalidname(""));
-	check(!fcvalidname("."));
-	check(!fcvalidname(".."));
-	check(!fcvalidname("a/b"));
-	check(!fcvalidname("a\nb"));
-	checkstr(s = fcjoin("/", "x"), "/x"); free(s);
-	checkstr(s = fcjoin("/a", "x"), "/a/x"); free(s);
-	checkstr(s = fcdirname("/a/b/c"), "/a/b"); free(s);
-	checkstr(s = fcdirname("/a"), "/"); free(s);
-	checkstr(fcbasename("/a/b/c"), "c");
+	check(dcvalidname("a b.txt"));
+	check(dcvalidname("ünïcode"));
+	check(!dcvalidname(""));
+	check(!dcvalidname("."));
+	check(!dcvalidname(".."));
+	check(!dcvalidname("a/b"));
+	check(!dcvalidname("a\nb"));
+	checkstr(s = dcjoin("/", "x"), "/x"); free(s);
+	checkstr(s = dcjoin("/a", "x"), "/a/x"); free(s);
+	checkstr(s = dcdirname("/a/b/c"), "/a/b"); free(s);
+	checkstr(s = dcdirname("/a"), "/"); free(s);
+	checkstr(dcbasename("/a/b/c"), "c");
 }
 
 static void
 testvolof(void)
 {
-	Fcws *w;
-	Fcvol *v;
+	Dcws *w;
+	Dcvol *v;
 	char *s;
 
-	w = fcwsopen("unit", nil);
-	fcwsaddvol(w, "root", "/");
-	fcwsaddvol(w, "home", "/usr/glenda");
-	fcwsaddvol(w, "doc", "/usr/glenda/doc/");
-	v = fcvolof(w, "/usr/glenda/doc/x");
+	w = dcwsopen("unit", nil);
+	dcwsaddvol(w, "root", "/");
+	dcwsaddvol(w, "home", "/usr/glenda");
+	dcwsaddvol(w, "doc", "/usr/glenda/doc/");
+	v = dcvolof(w, "/usr/glenda/doc/x");
 	check(v != nil && strcmp(v->name, "doc") == 0);
-	v = fcvolof(w, "/usr/glenda/docs");
+	v = dcvolof(w, "/usr/glenda/docs");
 	check(v != nil && strcmp(v->name, "home") == 0);
-	v = fcvolof(w, "/tmp");
+	v = dcvolof(w, "/tmp");
 	check(v != nil && strcmp(v->name, "root") == 0);
-	checkstr(s = fcresolve(w, "home:lib/profile"), "/usr/glenda/lib/profile"); free(s);
-	checkstr(s = fcresolve(w, "doc:"), "/usr/glenda/doc"); free(s);
-	checkstr(s = fcresolve(w, "nope:x"), "nope:x"); free(s);
-	fcwsclose(w);
+	checkstr(s = dcresolve(w, "home:lib/profile"), "/usr/glenda/lib/profile"); free(s);
+	checkstr(s = dcresolve(w, "doc:"), "/usr/glenda/doc"); free(s);
+	checkstr(s = dcresolve(w, "nope:x"), "nope:x"); free(s);
+	dcwsclose(w);
 }
 
 static int
-haschange(Fcchange *c, int n, int op, char *name, char *old)
+haschange(Dcchange *c, int n, int op, char *name, char *old)
 {
 	int i;
 
@@ -224,8 +224,8 @@ haschange(Fcchange *c, int n, int op, char *name, char *old)
 static void
 testfolder(void)
 {
-	Fcfolder *f;
-	Fcchange *c;
+	Dcfolder *f;
+	Dcchange *c;
 	Dir nd, **v;
 	char *p;
 	int n;
@@ -235,17 +235,17 @@ testfolder(void)
 	put("f/A.c", "a");
 	mkd("f/sub");
 	p = path("f");
-	f = fcfolderopen(p);
+	f = dcfolderopen(p);
 	check(f != nil);
 	if(f == nil)
 		return;
 	check(f->n == 3);
-	check(fcfind(f, "b.txt") != nil);
-	check(fcfind(f, "nope") == nil);
+	check(dcfind(f, "b.txt") != nil);
+	check(dcfind(f, "nope") == nil);
 
-	n = fcrescan(f, &c);
+	n = dcrescan(f, &c);
 	check(n == 0);
-	fcchangefree(c, n);
+	dcchangefree(c, n);
 
 	put("f/new", "n");
 	free(path("x"));
@@ -253,60 +253,60 @@ testfolder(void)
 	remove(p);
 	free(p);
 	put("f/b.txt", "bbbbbb");
-	n = fcrescan(f, &c);
+	n = dcrescan(f, &c);
 	check(n == 3);
 	check(haschange(c, n, Cadd, "new", nil));
 	check(haschange(c, n, Cdel, "A.c", nil));
 	check(haschange(c, n, Cmod, "b.txt", nil));
-	fcchangefree(c, n);
+	dcchangefree(c, n);
 
 	p = path("f/new");
 	nulldir(&nd);
 	nd.name = "renamed";
 	check(dirwstat(p, &nd) >= 0);
 	free(p);
-	n = fcrescan(f, &c);
+	n = dcrescan(f, &c);
 	check(n == 1);
 	check(haschange(c, n, Cren, "renamed", "new"));
-	fcchangefree(c, n);
+	dcchangefree(c, n);
 
 	/* sorting */
 	put("f/Zed", "zzzzzzzzzz");
 	put("f/apple", "");
-	fcrescan(f, &c);
-	fcchangefree(c, 2);
-	v = fcsorted(f, Sname);
+	dcrescan(f, &c);
+	dcchangefree(c, 2);
+	v = dcsorted(f, Sname);
 	checkstr(v[0]->name, "apple");
 	checkstr(v[1]->name, "b.txt");
 	free(v);
-	v = fcsorted(f, Skind);
+	v = dcsorted(f, Skind);
 	checkstr(v[0]->name, "sub");
 	free(v);
-	v = fcsorted(f, Ssize);
+	v = dcsorted(f, Ssize);
 	checkstr(v[0]->name, "Zed");
 	free(v);
-	check(fcsortby("date") == Sdate);
-	check(fcsortby(nil) == Sname);
+	check(dcsortby("date") == Sdate);
+	check(dcsortby(nil) == Sname);
 
 	/* the folder going away */
-	fcdelete(nil, f->path, Frecursive);
-	n = fcrescan(f, &c);
+	dcdelete(nil, f->path, Frecursive);
+	n = dcrescan(f, &c);
 	check(n == -1);
 	check(strncmp(f->err, "not found", 9) == 0);
 	check(f->n == 5);	/* old entries kept */
-	fcfolderfree(f);
+	dcfolderfree(f);
 }
 
 static void
 testops(void)
 {
-	Fcws *w;
-	Fcvol *v;
+	Dcws *w;
+	Dcvol *v;
 	char *s;
 
-	w = fcwsopen("unit", nil);
-	v = fcwsaddvol(w, "t", T);
-	check(fcvolcheck(v) == Vonline);
+	w = dcwsopen("unit", nil);
+	v = dcwsaddvol(w, "t", T);
+	check(dcvolcheck(v) == Vonline);
 
 	mkd("o");
 	mkd("o/tree");
@@ -317,81 +317,81 @@ testops(void)
 	mkd("o/dst");
 
 	/* copy */
-	s = fccopy(w, path("o/tree"), path("o/dst"), nil);
+	s = dccopy(w, path("o/tree"), path("o/dst"), nil);
 	check(s != nil);
 	free(s);
 	checkstr(get("o/dst/tree/deep/two"), "22");
 	checkstr(get("o/dst/tree/one"), "1");
-	check(fccopy(w, path("o/tree"), path("o/dst"), nil) == nil);
+	check(dccopy(w, path("o/tree"), path("o/dst"), nil) == nil);
 	checkerr("exists");
-	check(fccopy(w, path("o/tree"), path("o/tree/deep"), nil) == nil);
+	check(dccopy(w, path("o/tree"), path("o/tree/deep"), nil) == nil);
 	checkerr("bad value");
-	check(fccopy(w, path("o/nope"), path("o/dst"), nil) == nil);
+	check(dccopy(w, path("o/nope"), path("o/dst"), nil) == nil);
 	checkerr("not found");
 
 	/* duplicate */
-	s = fcduplicate(w, path("o/doc.txt"));
-	checkstr(s ? fcbasename(s) : nil, "doc copy.txt");
+	s = dcduplicate(w, path("o/doc.txt"));
+	checkstr(s ? dcbasename(s) : nil, "doc copy.txt");
 	free(s);
-	s = fcduplicate(w, path("o/doc.txt"));
-	checkstr(s ? fcbasename(s) : nil, "doc copy 2.txt");
+	s = dcduplicate(w, path("o/doc.txt"));
+	checkstr(s ? dcbasename(s) : nil, "doc copy 2.txt");
 	free(s);
-	s = fcduplicate(w, path("o/tree"));
-	checkstr(s ? fcbasename(s) : nil, "tree copy");
+	s = dcduplicate(w, path("o/tree"));
+	checkstr(s ? dcbasename(s) : nil, "tree copy");
 	free(s);
 	checkstr(get("o/tree copy/deep/two"), "22");
 
 	/* rename */
-	check(fcrename(w, path("o/doc.txt"), "doc copy.txt", 0) < 0);
+	check(dcrename(w, path("o/doc.txt"), "doc copy.txt", 0) < 0);
 	checkerr("exists");
-	check(fcrename(w, path("o/doc.txt"), "a/b", 0) < 0);
+	check(dcrename(w, path("o/doc.txt"), "a/b", 0) < 0);
 	checkerr("bad value");
-	check(fcrename(w, path("o/doc.txt"), "renamed.txt", 0) == 0);
+	check(dcrename(w, path("o/doc.txt"), "renamed.txt", 0) == 0);
 	check(there("o/renamed.txt") && !there("o/doc.txt"));
 	check(v->caps.c[Krename] == Cyes);
-	check(fcrename(w, T, "x", 0) < 0);
+	check(dcrename(w, T, "x", 0) < 0);
 	checkerr("bad value");
 
 	/* move */
-	check(fcmove(w, path("o/renamed.txt"), path("o/dst"), 0) < 0);
+	check(dcmove(w, path("o/renamed.txt"), path("o/dst"), 0) < 0);
 	checkerr("not supported");
 	check(there("o/renamed.txt"));
-	check(fcmove(w, path("o/renamed.txt"), path("o/dst"), Fcopydel) == 0);
+	check(dcmove(w, path("o/renamed.txt"), path("o/dst"), Fcopydel) == 0);
 	check(!there("o/renamed.txt") && there("o/dst/renamed.txt"));
 	checkstr(get("o/dst/renamed.txt"), "doc");
-	check(fcmove(w, path("o/tree"), path("o/tree/deep"), Fcopydel) < 0);
+	check(dcmove(w, path("o/tree"), path("o/tree/deep"), Fcopydel) < 0);
 	checkerr("bad value");
-	check(fcmove(w, path("o/dst/renamed.txt"), path("o/dst"), 0) == 0);	/* already there */
+	check(dcmove(w, path("o/dst/renamed.txt"), path("o/dst"), 0) == 0);	/* already there */
 
 	/* new folder */
-	s = fcmkdir(w, path("o"), nil);
-	checkstr(s ? fcbasename(s) : nil, "untitled folder");
+	s = dcmkdir(w, path("o"), nil);
+	checkstr(s ? dcbasename(s) : nil, "untitled folder");
 	free(s);
-	s = fcmkdir(w, path("o"), nil);
-	checkstr(s ? fcbasename(s) : nil, "untitled folder 2");
+	s = dcmkdir(w, path("o"), nil);
+	checkstr(s ? dcbasename(s) : nil, "untitled folder 2");
 	free(s);
-	check(fcmkdir(w, path("o"), "dst") == nil);
+	check(dcmkdir(w, path("o"), "dst") == nil);
 	checkerr("exists");
 
 	/* chmod */
-	check(fcchmod(w, path("o/dst/renamed.txt"), 0600) == 0);
-	check(fcchmod(w, path("o/dst/renamed.txt"), 01000) < 0);
+	check(dcchmod(w, path("o/dst/renamed.txt"), 0600) == 0);
+	check(dcchmod(w, path("o/dst/renamed.txt"), 01000) < 0);
 	checkerr("bad value");
 
 	/* delete */
-	check(fcdelete(w, path("o/tree"), 0) < 0);
+	check(dcdelete(w, path("o/tree"), 0) < 0);
 	checkerr("not empty");
-	check(fcdelete(w, path("o/tree"), Frecursive) == 0);
+	check(dcdelete(w, path("o/tree"), Frecursive) == 0);
 	check(!there("o/tree"));
-	check(fcdelete(w, path("o/untitled folder"), 0) == 0);
-	check(fcdelete(w, T, Frecursive) < 0);
+	check(dcdelete(w, path("o/untitled folder"), 0) == 0);
+	check(dcdelete(w, T, Frecursive) < 0);
 	checkerr("bad value");
 
 	/* info */
 	{
-		Fcinfo *fi;
+		Dcinfo *fi;
 
-		fi = fcinfo(w, path("o/dst"), 1);
+		fi = dcinfo(w, path("o/dst"), 1);
 		check(fi != nil);
 		if(fi != nil){
 			checkstr(fi->kind, "folder");
@@ -399,17 +399,17 @@ testops(void)
 			check(fi->size == 6);
 			check(fi->complete);
 			check(fi->vol == v);
-			fcinfofree(fi);
+			dcinfofree(fi);
 		}
-		fi = fcinfo(w, T, 0);
+		fi = dcinfo(w, T, 0);
 		check(fi != nil && strcmp(fi->kind, "volume") == 0);
-		fcinfofree(fi);
-		fi = fcinfo(w, path("o/dst/renamed.txt"), 0);
+		dcinfofree(fi);
+		fi = dcinfo(w, path("o/dst/renamed.txt"), 0);
 		check(fi != nil && strcmp(fi->kind, "document") == 0 && fi->size == 3);
-		fcinfofree(fi);
+		dcinfofree(fi);
 	}
 
-	fcwsclose(w);
+	dcwsclose(w);
 }
 
 static int ncalls;
@@ -423,12 +423,12 @@ cancelafter(void *arg, char*, vlong)
 static void
 testcancel(void)
 {
-	Fcws *w;
+	Dcws *w;
 	int limit;
 	char *s;
 
-	w = fcwsopen("unit", nil);
-	fcwsaddvol(w, "t", T);
+	w = dcwsopen("unit", nil);
+	dcwsaddvol(w, "t", T);
 	mkd("c");
 	mkd("c/src");
 	put("c/src/1", "1");
@@ -437,12 +437,12 @@ testcancel(void)
 	limit = 1;
 	w->progress = cancelafter;
 	w->progarg = &limit;
-	s = fccopy(w, path("c/src"), path("c"), "dst");
+	s = dccopy(w, path("c/src"), path("c"), "dst");
 	check(s == nil);
 	checkerr("cancelled");
 	check(!there("c/dst"));	/* the partial copy is cleaned up */
 	check(ncalls >= 2);
-	fcwsclose(w);
+	dcwsclose(w);
 }
 
 void
@@ -451,7 +451,7 @@ main(int argc, char **argv)
 	int fd;
 
 	quotefmtinstall();
-	T = argc > 1 ? argv[1] : smprint("/tmp/fcunit.%d", getpid());
+	T = argc > 1 ? argv[1] : smprint("/tmp/dcunit.%d", getpid());
 	fd = create(T, OREAD, DMDIR|0755);
 	if(fd < 0)
 		sysfatal("create %s: %r", T);
@@ -465,7 +465,7 @@ main(int argc, char **argv)
 	tname = "testops"; tcheck = 0; testops();
 	tname = "testcancel"; tcheck = 0; testcancel();
 
-	fcdelete(nil, T, Frecursive);
+	dcdelete(nil, T, Frecursive);
 	print("unit: %d passed, %d failed\n", npass, nfail);
 	exits(nfail ? "fail" : nil);
 }

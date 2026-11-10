@@ -87,7 +87,7 @@ starting stock rio, on a throwaway overlay.
 ## Found and fixed while integrating
 
 - **Desktop never attached a remote volume on open** (`desktop/view.c`):
-  `fcvolcheck`'s result was compared with `< 0`, but it returns
+  `dcvolcheck`'s result was compared with `< 0`, but it returns
   `Vonline` or `Voffline`. A volume with `addr=` that Desktop hadn't
   mounted yet failed to open with "not found", and an offline volume's
   alert never showed.

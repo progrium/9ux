@@ -1,5 +1,5 @@
 #!/bin/rc
-# Interface tests for Desktop's core through fcore: rc test/run [path/to/fcore]
+# Interface tests for Desktop's core through dcore: rc test/run [path/to/dcore]
 #
 #  - a server with no wstat: honest "not supported", capabilities
 #    learned by probing and by use, the explicit copy-and-delete
@@ -12,15 +12,15 @@
 
 rfork ne
 O=`{sed -n 's/^O=//p' /$objtype/mkfile}
-fcore=$1
-if(~ $#fcore 0)
-	fcore=../$O.fcore
-if(! ~ $fcore /*)
-	fcore=`{pwd}^/$fcore
+dcore=$1
+if(~ $#dcore 0)
+	dcore=../$O.dcore
+if(! ~ $dcore /*)
+	dcore=`{pwd}^/$dcore
 here=`{pwd}
 nowstatfs=$here/$O.nowstatfs
 uxmeta=$here/../../uxmeta/$O.out
-t=/tmp/fcore-rc.$pid
+t=/tmp/dcore-rc.$pid
 nfail=0
 npass=0
 
@@ -62,10 +62,10 @@ mkdir -p $t
 test=nowstat
 # a server that can create and remove, but has no wstat
 mkdir -p $t/nw
-$nowstatfs -s fcore-nw.$pid -m $t/nw
+$nowstatfs -s dcore-nw.$pid -m $t/nw
 echo hello > $t/nw/a.txt
 mkdir $t/nw/dir
-$fcore -M -v 'nw='^$t/nw > $t/out >[2=1] <<'EOF'
+$dcore -M -v 'nw='^$t/nw > $t/out >[2=1] <<'EOF'
 caps nw
 rename nw:a.txt b.txt
 caps nw
@@ -95,7 +95,7 @@ mkdir -p $t/tv/docs/sub
 echo keep me > $t/tv/docs/a.txt
 echo deep > $t/tv/docs/sub/b.txt
 echo nw > $t/nw/c.txt
-$fcore -M -v 'tv='^$t/tv -v 'nw='^$t/nw > $t/out >[2=1] <<'EOF'
+$dcore -M -v 'tv='^$t/tv -v 'nw='^$t/nw > $t/out >[2=1] <<'EOF'
 trashlimit tv
 trash tv:docs/a.txt
 trash tv:docs/sub
@@ -122,15 +122,15 @@ if(~ `{cat $t/tv/.trash/*/sub/b.txt} deep) pass
 if not fail trashed folder lost its contents
 item=`{ls -d $t/tv/.trash/*/a.txt}
 echo again > $t/tv/docs/a.txt
-$fcore -M -v 'tv='^$t/tv putback $item > $t/out >[2=1]
+$dcore -M -v 'tv='^$t/tv putback $item > $t/out >[2=1]
 has $t/out 'exists: '^$t^'/tv/docs/a\.txt$'
 rm $t/tv/docs/a.txt
-$fcore -M -v 'tv='^$t/tv putback $item > $t/out >[2=1]
+$dcore -M -v 'tv='^$t/tv putback $item > $t/out >[2=1]
 has $t/out '^'^$t^'/tv/docs/a\.txt$'
 got=`{cat $t/tv/docs/a.txt}
 if(~ $"got 'keep me') pass
 if not fail put back lost the contents
-$fcore -M -v 'tv='^$t/tv > $t/out >[2=1] <<'EOF'
+$dcore -M -v 'tv='^$t/tv > $t/out >[2=1] <<'EOF'
 trashlist tv
 emptytrash tv
 trashlist tv
@@ -142,17 +142,17 @@ if not pass
 
 test=gone
 # the server goes away: the volume goes offline and says why
-$fcore -M -v 'nw='^$t/nw check nw > $t/out >[2=1]
+$dcore -M -v 'nw='^$t/nw check nw > $t/out >[2=1]
 has $t/out '^nw .* online '
 kill 6.nowstatfs | rc
 sleep 0.2
-$fcore -M -v 'nw='^$t/nw > $t/out >[2=1] <<'EOF'
+$dcore -M -v 'nw='^$t/nw > $t/out >[2=1] <<'EOF'
 check nw
 ls nw:
 EOF
 has $t/out '^nw .* offline .*''err=gone: nw: ' '^error: gone: '
 unmount $t/nw >[2]/dev/null
-rm -f /srv/fcore-nw.$pid
+rm -f /srv/dcore-nw.$pid
 
 if(! test -x $uxmeta){
 	echo run: uxmeta not built, skipping the registry, plumbing and launch tests
@@ -165,7 +165,7 @@ if(! test -x $uxmeta){
 
 test=registry
 home=$t/home
-mkdir -p $t/sys $t/apps $t/user $home/lib $t/vol/docs $t/other /n/fcmeta
+mkdir -p $t/sys $t/apps $t/user $home/lib $t/vol/docs $t/other /n/dcmeta
 echo 'some text' > $t/vol/docs/notes.txt
 echo '#!/bin/rc' > $t/vol/run
 chmod +x $t/vol/run
@@ -178,9 +178,9 @@ volume=scratch path=$t/vol icon=disk desktop=yes x=20 y=40
 volume=relative path=not/absolute
 app=hello exec=$t/hello
 EOF
-srvname=fcore-meta.$pid
-$uxmeta -s $srvname -m /n/fcmeta -d $t/sys -a $t/apps -u $t/user -w testws -i 50
-F=($fcore -m /n/fcmeta -w testws)
+srvname=dcore-meta.$pid
+$uxmeta -s $srvname -m /n/dcmeta -d $t/sys -a $t/apps -u $t/user -w testws -i 50
+F=($dcore -m /n/dcmeta -w testws)
 $F volumes > $t/out >[2=1]
 has $t/out '^scratch '^$t^'/vol online desktop=yes icon=disk$'
 lacks $t/out '^relative '
@@ -199,12 +199,12 @@ $F volumes > $t/out >[2=1]
 has $t/out '^scratch ' '^other '^$t^'/other online'
 
 test=layout-follows-rename
-echo 'set item '^$t^'/vol/docs/notes.txt x=10 y=20' > /n/fcmeta/ctl
+echo 'set item '^$t^'/vol/docs/notes.txt x=10 y=20' > /n/dcmeta/ctl
 $F rename scratch:docs/notes.txt readme.txt > $t/out >[2=1]
 {
 	echo 'item '^$t^'/vol/docs/readme.txt' >[1=3]
 	cat <[0=3]
-} <>[3]/n/fcmeta/query > $t/out
+} <>[3]/n/dcmeta/query > $t/out
 has $t/out 'readme\.txt x=10 y=20'
 
 test=open
@@ -258,7 +258,7 @@ has $t/vol/docs/ran '^ran in '^$t^'/vol/docs$'
 $F launch nosuch > $t/out >[2=1]
 has $t/out 'not found: no application nosuch'
 
-unmount /n/fcmeta >[2]/dev/null
+unmount /n/dcmeta >[2]/dev/null
 rm -f /srv/$srvname
 kill $O.out | rc
 rm -rf $t

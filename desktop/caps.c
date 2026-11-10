@@ -4,7 +4,7 @@
  */
 #include <u.h>
 #include <libc.h>
-#include "fcore.h"
+#include "dcore.h"
 
 static char *capnames[Nkind] = {
 [Kread]		"read",
@@ -18,7 +18,7 @@ static char *capnames[Nkind] = {
 };
 
 char*
-fccapname(int kind)
+dccapname(int kind)
 {
 	if(kind < 0 || kind >= Nkind)
 		return "?";
@@ -26,7 +26,7 @@ fccapname(int kind)
 }
 
 char*
-fccapval(int val)
+dccapval(int val)
 {
 	switch(val){
 	case Cyes:	return "yes";
@@ -47,7 +47,7 @@ has(char *s, char *sub)
  * driver; a new server's wording may need adding here.
  */
 int
-fcerrclass(char *err)
+dcerrclass(char *err)
 {
 	if(err == nil || *err == 0)
 		return Eother;
@@ -79,7 +79,7 @@ fcerrclass(char *err)
 }
 
 char*
-fcerrname(int class)
+dcerrname(int class)
 {
 	switch(class){
 	case Eperm:	return "permission denied";
@@ -97,7 +97,7 @@ fcerrname(int class)
  * marks a capability as missing.
  */
 void
-fccapnote(Fccaps *c, int kind, int ok, char *err)
+dccapnote(Dccaps *c, int kind, int ok, char *err)
 {
 	if(c == nil || kind < 0 || kind >= Nkind)
 		return;
@@ -106,7 +106,7 @@ fccapnote(Fccaps *c, int kind, int ok, char *err)
 		c->why[kind][0] = 0;
 		return;
 	}
-	if(fcerrclass(err) == Enotsup){
+	if(dcerrclass(err) == Enotsup){
 		c->c[kind] = Cno;
 		strecpy(c->why[kind], c->why[kind]+ERRMAX, err);
 	}
@@ -118,10 +118,10 @@ fccapnote(Fccaps *c, int kind, int ok, char *err)
  * probe makes is removed; it never touches existing files.
  */
 int
-fcprobe(Fcvol *v, char *dir)
+dcprobe(Dcvol *v, char *dir)
 {
 	char err[ERRMAX], *f, *g, *sub, name[64];
-	Fccaps *c;
+	Dccaps *c;
 	Dir nd, *d;
 	int fd, ok;
 
@@ -131,28 +131,28 @@ fcprobe(Fcvol *v, char *dir)
 	d = dirstat(dir);
 	if(d == nil){
 		rerrstr(err, sizeof err);
-		fccapnote(c, Kread, 0, err);
-		werrstr("%s: %s", fcerrname(fcerrclass(err)), err);
+		dccapnote(c, Kread, 0, err);
+		werrstr("%s: %s", dcerrname(dcerrclass(err)), err);
 		return -1;
 	}
 	free(d);
 	fd = open(dir, OREAD);
 	if(fd < 0){
 		rerrstr(err, sizeof err);
-		fccapnote(c, Kread, 0, err);
-		werrstr("%s: %s", fcerrname(fcerrclass(err)), err);
+		dccapnote(c, Kread, 0, err);
+		werrstr("%s: %s", dcerrname(dcerrclass(err)), err);
 		return -1;
 	}
 	close(fd);
-	fccapnote(c, Kread, 1, nil);
+	dccapnote(c, Kread, 1, nil);
 
-	snprint(name, sizeof name, ".fcprobe.%d", getpid());
-	f = fcjoin(dir, name);
+	snprint(name, sizeof name, ".dcprobe.%d", getpid());
+	f = dcjoin(dir, name);
 	fd = create(f, OWRITE|OEXCL, 0644);
 	if(fd < 0){
 		rerrstr(err, sizeof err);
-		fccapnote(c, Kcreate, 0, err);
-		if(fcerrclass(err) == Eperm){
+		dccapnote(c, Kcreate, 0, err);
+		if(dcerrclass(err) == Eperm){
 			free(f);
 			werrstr("permission denied: can't probe %s: %s", dir, err);
 			return -1;
@@ -161,52 +161,52 @@ fcprobe(Fcvol *v, char *dir)
 		free(f);
 		return 0;
 	}
-	fccapnote(c, Kcreate, 1, nil);
+	dccapnote(c, Kcreate, 1, nil);
 	ok = write(fd, "probe\n", 6) == 6;
 	rerrstr(err, sizeof err);
-	fccapnote(c, Kwrite, ok, err);
+	dccapnote(c, Kwrite, ok, err);
 	close(fd);
 
 	nulldir(&nd);
 	nd.mode = 0600;
 	ok = dirwstat(f, &nd) >= 0;
 	rerrstr(err, sizeof err);
-	fccapnote(c, Kchmod, ok, err);
+	dccapnote(c, Kchmod, ok, err);
 
 	nulldir(&nd);
 	nd.mtime = 1000000000;
 	ok = dirwstat(f, &nd) >= 0;
 	rerrstr(err, sizeof err);
-	fccapnote(c, Kmtime, ok, err);
+	dccapnote(c, Kmtime, ok, err);
 
-	snprint(name, sizeof name, ".fcprobe.%d.r", getpid());
+	snprint(name, sizeof name, ".dcprobe.%d.r", getpid());
 	nulldir(&nd);
 	nd.name = name;
 	ok = dirwstat(f, &nd) >= 0;
 	rerrstr(err, sizeof err);
-	fccapnote(c, Krename, ok, err);
+	dccapnote(c, Krename, ok, err);
 	g = f;
 	if(ok){
-		g = fcjoin(dir, name);
+		g = dcjoin(dir, name);
 		free(f);
 	}
 
-	snprint(name, sizeof name, ".fcprobe.%d.d", getpid());
-	sub = fcjoin(dir, name);
+	snprint(name, sizeof name, ".dcprobe.%d.d", getpid());
+	sub = dcjoin(dir, name);
 	fd = create(sub, OREAD|OEXCL, DMDIR|0755);
 	if(fd >= 0){
 		close(fd);
-		fccapnote(c, Kmkdir, 1, nil);
+		dccapnote(c, Kmkdir, 1, nil);
 		remove(sub);
 	}else{
 		rerrstr(err, sizeof err);
-		fccapnote(c, Kmkdir, 0, err);
+		dccapnote(c, Kmkdir, 0, err);
 	}
 	free(sub);
 
 	ok = remove(g) >= 0;
 	rerrstr(err, sizeof err);
-	fccapnote(c, Kremove, ok, err);
+	dccapnote(c, Kremove, ok, err);
 	if(!ok){
 		werrstr("partial: probe file %s left behind: %s", g, err);
 		free(g);

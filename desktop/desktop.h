@@ -1,6 +1,6 @@
 /*
  * Desktop, the app: the desktop and folder windows on libux, over the
- * core library in fcore.h. See README.md (The Desktop app).
+ * core library in dcore.h. See README.md (The Desktop app).
  *
  * libux runs our handlers on its UI thread. They only copy the event
  * and send it to Desktop's own proc (main.c), which does everything
@@ -9,7 +9,7 @@
  * Desktop's state below is touched only by that proc.
  */
 
-typedef struct Fev Fev;
+typedef struct Dev Dev;
 typedef struct Item Item;
 typedef struct View View;
 typedef struct Alert Alert;
@@ -31,7 +31,7 @@ enum
 };
 
 /* an event from libux, copied for Desktop's proc */
-struct Fev
+struct Dev
 {
 	int	type;
 	int	via;
@@ -61,7 +61,7 @@ struct Item
 	int	dir;
 	Point	pt;	/* the icon's centre in the view */
 	int	placed;	/* pt came from uxmeta (or the user), not auto placement */
-	Fcvol	*vol;	/* desktop volumes */
+	Dcvol	*vol;	/* desktop volumes */
 	int	offline;
 	int	trash;	/* the desktop's Trash */
 };
@@ -86,8 +86,8 @@ struct View
 	Item	*editing;
 	int	mode;
 	int	sort;
-	Fcfolder	*f;
-	Fcvol	*vol;
+	Dcfolder	*f;
+	Dcvol	*vol;
 	Item	**item;
 	int	nitem;
 	int	nextid;
@@ -124,8 +124,8 @@ struct Alert
 extern Lock	itemlk;
 
 /* main.c */
-extern Fcws	*ws;
-extern Fcmeta	*meta;
+extern Dcws	*ws;
+extern Dcmeta	*meta;
 extern View	*views;
 extern View	*desk;
 extern View	*front;
@@ -153,7 +153,7 @@ void	folderchrome(View*);
 void	folderlayout(View*);
 Point	viewport(View*);
 Rectangle	viewcontent(View*);
-void	viewevent(View*, Fev*);
+void	viewevent(View*, Dev*);
 void	openit(View*, Item*);
 int	viewsel(View*, Item ***items);
 void	viewselectall(View*);
@@ -166,9 +166,9 @@ void	renameend(View*, int commit);
 void	metachange(char *line);
 char*	viewlabel(Item*);
 void	itemsetpath(Item*, char*);
-void	viewdrop(View*, Fev*);
+void	viewdrop(View*, Dev*);
 void	dragsetup(View*);
-void	droplookup(View*, Uxev*, Fev*);
+void	droplookup(View*, Uxev*, Dev*);
 
 /* trashwin.c */
 View*	trashopen(void);
@@ -183,12 +183,12 @@ Point	trashpt(View*);
 
 /* info.c */
 View*	infoopen(char *path);
-void	infoevent(View*, Fev*);
+void	infoevent(View*, Dev*);
 void	inforefresh(View*);
 
 /* alert.c */
 Alert*	alert(char *msg, char *def, char *other, void (*fn)(Alert*, int));
-void	alertevent(Alert*, Fev*);
+void	alertevent(Alert*, Dev*);
 Alert*	alertbywin(Uxwin*);
 void	alerterr(char *what);
 
@@ -201,9 +201,9 @@ void	savevol(Item*);
 void	forgetwin(View*);
 Rectangle	winrect(char *path);
 int	winmode(char *path, int *sort);
-Fcrec*	itemrecs(char *dir);
+Dcrec*	itemrecs(char *dir);
 Rectangle	cascade(void);
 
 /* util (layout.c) */
-void*	femalloc(ulong);
-char*	festrdup(char*);
+void*	demalloc(ulong);
+char*	destrdup(char*);

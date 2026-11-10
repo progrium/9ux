@@ -8,7 +8,7 @@
 #include <draw.h>
 #include <thread.h>
 #include <ux.h>
-#include "fcore.h"
+#include "dcore.h"
 #include "desktop.h"
 #include "uxstyle.h"
 
@@ -124,10 +124,10 @@ newitem(View *v, char *name, char *path)
 {
 	Item *it;
 
-	it = femalloc(sizeof *it);
+	it = demalloc(sizeof *it);
 	it->id = smprint("i%d", ++v->nextid);
-	it->name = festrdup(name);
-	it->path = festrdup(path);
+	it->name = destrdup(name);
+	it->path = destrdup(path);
 	lock(&itemlk);
 	v->item = realloc(v->item, (v->nitem+1)*sizeof(Item*));
 	v->item[v->nitem++] = it;
@@ -161,58 +161,58 @@ viewlabel(Item *it)
 {
 	if(it->offline)
 		return smprint("%s (offline)", it->name);
-	return festrdup(it->name);
+	return destrdup(it->name);
 }
 
 /* the icon name for a folder entry: uxmeta's association, or a generic one */
 static char*
-iconfor(char *path, Dir *d, Fcrec *rec)
+iconfor(char *path, Dir *d, Dcrec *rec)
 {
-	Fcrec *r;
+	Dcrec *r;
 	char *q, *s, *home;
 
-	if(rec != nil && (s = fcrecget(rec, "icon")) != nil && s[0])
-		return festrdup(s);
+	if(rec != nil && (s = dcrecget(rec, "icon")) != nil && s[0])
+		return destrdup(s);
 	if(d->qid.type & QTDIR){
 		home = getenv("home");
 		s = home != nil && strcmp(home, path) == 0 ? "folder-home" : "folder";
 		free(home);
-		return festrdup(s);
+		return destrdup(s);
 	}
 	if(meta != nil){
 		q = quotestrdup(path);
-		r = fcmetaquery(meta, "resolve %s", q);
+		r = dcmetaquery(meta, "resolve %s", q);
 		free(q);
-		if(r != nil && (s = fcrecget(r, "icon")) != nil && s[0]){
-			s = festrdup(s);
-			fcrecfree(r);
+		if(r != nil && (s = dcrecget(r, "icon")) != nil && s[0]){
+			s = destrdup(s);
+			dcrecfree(r);
 			return s;
 		}
-		fcrecfree(r);
+		dcrecfree(r);
 	}
 	if(d->mode & 0111)
-		return festrdup("app");
-	return festrdup("doc");
+		return destrdup("app");
+	return destrdup("doc");
 }
 
-static Fcrec*
-recfor(Fcrec *recs, char *path)
+static Dcrec*
+recfor(Dcrec *recs, char *path)
 {
 	for(; recs != nil; recs = recs->next)
-		if(strcmp(recs->a[0].attr, "item") == 0 && strcmp(fcreckey(recs), path) == 0)
+		if(strcmp(recs->a[0].attr, "item") == 0 && strcmp(dcreckey(recs), path) == 0)
 			return recs;
 	return nil;
 }
 
 static void
-setpos(Item *it, Fcrec *rec)
+setpos(Item *it, Dcrec *rec)
 {
 	char *x, *y;
 
 	if(rec == nil)
 		return;
-	x = fcrecget(rec, "x");
-	y = fcrecget(rec, "y");
+	x = dcrecget(rec, "x");
+	y = dcrecget(rec, "y");
 	if(x != nil && y != nil && x[0] && y[0]){
 		it->pt = Pt(atoi(x), atoi(y));
 		it->placed = 1;
@@ -220,13 +220,13 @@ setpos(Item *it, Fcrec *rec)
 }
 
 static Item*
-entryitem(View *v, Dir *d, Fcrec *recs)
+entryitem(View *v, Dir *d, Dcrec *recs)
 {
 	Item *it;
 	char *p;
-	Fcrec *rec;
+	Dcrec *rec;
 
-	p = fcjoin(v->path, d->name);
+	p = dcjoin(v->path, d->name);
 	it = newitem(v, d->name, p);
 	free(p);
 	rec = recfor(recs, it->path);
@@ -372,9 +372,9 @@ deskopen(void)
 {
 	View *v;
 
-	v = femalloc(sizeof *v);
+	v = demalloc(sizeof *v);
 	v->kind = Kdesk;
-	v->title = festrdup("Desktop");
+	v->title = destrdup("Desktop");
 	v->w = uxwindow("desktop", "Desktop", ZR);
 	v->r = uxwinrect(v->w);
 	v->size = uxwinsize(v->w);
@@ -398,7 +398,7 @@ desktrash(View *v)
 }
 
 static char*
-volicon(Fcvol *vol)
+volicon(Dcvol *vol)
 {
 	if(vol->icon != nil && vol->icon[0])
 		return vol->icon;
@@ -412,14 +412,14 @@ void
 deskload(void)
 {
 	View *v;
-	Fcvol *vol;
+	Dcvol *vol;
 	Item *it;
 	int i, j, found;
 
 	v = desk;
 	if(v == nil)
 		return;
-	if(meta != nil && fcwsload(ws) < 0)
+	if(meta != nil && dcwsload(ws) < 0)
 		fprint(2, "desktop: volumes: %r\n");
 	/* drop volumes that left the registry or the desktop */
 	for(i = 0; i < v->nitem; ){
@@ -445,23 +445,23 @@ deskload(void)
 			it = newitem(v, vol->name, vol->path);
 			it->vol = vol;
 			it->dir = 1;
-			it->icon = festrdup(volicon(vol));
+			it->icon = destrdup(volicon(vol));
 			if(vol->x != 0 || vol->y != 0){
 				it->pt = Pt(vol->x, vol->y);
 				it->placed = 1;
 			}else
 				it->pt = freecell(v);
-			fcvolcheck(vol);
+			dcvolcheck(vol);
 			it->offline = vol->state == Voffline;
 			showitem(v, it);
 			continue;
 		}
 		/* path, icon or position changed in the registry */
 		if(strcmp(it->path, vol->path) != 0)
-			itemsetpath(it, festrdup(vol->path));
+			itemsetpath(it, destrdup(vol->path));
 		if(strcmp(it->icon, volicon(vol)) != 0){
 			free(it->icon);
-			it->icon = festrdup(volicon(vol));
+			it->icon = destrdup(volicon(vol));
 		}
 		if((vol->x != 0 || vol->y != 0) && !eqpt(it->pt, Pt(vol->x, vol->y))){
 			it->pt = Pt(vol->x, vol->y);
@@ -472,7 +472,7 @@ deskload(void)
 	if(desktrash(v) == nil){
 		it = newitem(v, "Trash", "");
 		it->trash = 1;
-		it->icon = festrdup("trash");
+		it->icon = destrdup("trash");
 		it->pt = trashpt(v);
 		showitem(v, it);
 		trashcheck();
@@ -496,7 +496,7 @@ deskcheck(void)
 		it = v->item[i];
 		if(it->vol == nil)
 			continue;
-		fcvolcheck(it->vol);
+		dcvolcheck(it->vol);
 		off = it->vol->state == Voffline;
 		if(off != it->offline){
 			it->offline = off;
@@ -520,16 +520,16 @@ static void
 loaditems(View *v)
 {
 	Dir **dv;
-	Fcrec *recs;
+	Dcrec *recs;
 	int i;
 
 	recs = itemrecs(v->path);
-	dv = fcsorted(v->f, v->sort);
+	dv = dcsorted(v->f, v->sort);
 	for(i = 0; i < v->f->n; i++)
 		if(!hidden(v, dv[i]->name))
 			entryitem(v, dv[i], recs);
 	free(dv);
-	fcrecfree(recs);
+	dcrecfree(recs);
 	placeall(v);
 }
 
@@ -538,10 +538,10 @@ folderopen(char *path, int remember)
 {
 	View *v;
 	Rectangle r;
-	Fcfolder *f;
+	Dcfolder *f;
 	char *p;
 
-	p = festrdup(path);
+	p = destrdup(path);
 	cleanname(p);
 	v = viewbypath(p);
 	if(v != nil){
@@ -550,21 +550,21 @@ folderopen(char *path, int remember)
 		setfront(v);
 		return v;
 	}
-	f = fcfolderopen(p);
+	f = dcfolderopen(p);
 	if(f == nil){
 		alerterr(p);
 		free(p);
 		return nil;
 	}
-	v = femalloc(sizeof *v);
+	v = demalloc(sizeof *v);
 	v->kind = Kfolder;
 	v->path = p;
 	v->f = f;
-	v->vol = fcvolof(ws, p);
+	v->vol = dcvolof(ws, p);
 	if(v->vol != nil && strcmp(v->vol->path, p) == 0)
-		v->title = festrdup(v->vol->name);
+		v->title = destrdup(v->vol->name);
 	else
-		v->title = festrdup(fcbasename(p));
+		v->title = destrdup(dcbasename(p));
 	v->mode = winmode(p, &v->sort);
 	r = winrect(p);
 	if(Dx(r) == 0)
@@ -610,7 +610,7 @@ viewclose(View *v, int forget)
 	for(i = 0; i < v->nrows; i++)
 		free(v->rows[i]);
 	free(v->rows);
-	fcfolderfree(v->f);
+	dcfolderfree(v->f);
 	free(v->path);
 	free(v->title);
 	free(v);
@@ -633,23 +633,23 @@ sizestr(vlong n)
 static char*
 kindof(Item *it, Dir *d)
 {
-	Fcrec *r;
+	Dcrec *r;
 	char *q, *s;
 
 	if(it->dir)
-		return festrdup("folder");
+		return destrdup("folder");
 	if(meta != nil){
 		q = quotestrdup(it->path);
-		r = fcmetaquery(meta, "resolve %s", q);
+		r = dcmetaquery(meta, "resolve %s", q);
 		free(q);
-		if(r != nil && (s = fcrecget(r, "type")) != nil && s[0]){
-			s = festrdup(s);
-			fcrecfree(r);
+		if(r != nil && (s = dcrecget(r, "type")) != nil && s[0]){
+			s = destrdup(s);
+			dcrecfree(r);
 			return s;
 		}
-		fcrecfree(r);
+		dcrecfree(r);
 	}
-	return festrdup((d->mode & 0111) ? "program" : "file");
+	return destrdup((d->mode & 0111) ? "program" : "file");
 }
 
 /* a list row: name, kind and size, in tab-separated columns */
@@ -658,7 +658,7 @@ row(Item *it, Dir *d)
 {
 	char *s, *sz, *kind;
 
-	sz = it->dir ? festrdup("--") : sizestr(d->length);
+	sz = it->dir ? destrdup("--") : sizestr(d->length);
 	kind = kindof(it, d);
 	s = smprint("%s\t%s\t%s", it->name, kind, sz);
 	free(kind);
@@ -710,10 +710,10 @@ populate(View *v)
 		for(i = 0; i < v->nrows; i++)
 			free(v->rows[i]);
 		free(v->rows);
-		dv = fcsorted(v->f, v->sort);
-		rows = femalloc((v->f->n+1)*sizeof(char*));
-		icons = femalloc((v->f->n+1)*sizeof(char*));
-		v->rows = femalloc((v->f->n+1)*sizeof(char*));
+		dv = dcsorted(v->f, v->sort);
+		rows = demalloc((v->f->n+1)*sizeof(char*));
+		icons = demalloc((v->f->n+1)*sizeof(char*));
+		v->rows = demalloc((v->f->n+1)*sizeof(char*));
 		n = 0;
 		for(i = 0; i < v->f->n; i++){
 			it = itembyname(v, dv[i]->name);
@@ -721,7 +721,7 @@ populate(View *v)
 				continue;
 			rows[n] = row(it, dv[i]);
 			icons[n] = it->icon;
-			v->rows[n] = festrdup(it->id);
+			v->rows[n] = destrdup(it->id);
 			n++;
 		}
 		v->nrows = n;
@@ -789,7 +789,7 @@ viewsel(View *v, Item ***items)
 	if(v->icons != nil){
 		n = uxicongetsel(v->icons, &ids);
 		if(n > 0)
-			*items = femalloc(n*sizeof(Item*));
+			*items = demalloc(n*sizeof(Item*));
 		for(i = 0; i < n; i++){
 			if((it = itembyid(v, ids[i])) != nil)
 				(*items)[m++] = it;
@@ -799,7 +799,7 @@ viewsel(View *v, Item ***items)
 	}else if(v->list != nil){
 		n = uxgetsel(v->list, &rows);
 		if(n > 0)
-			*items = femalloc(n*sizeof(Item*));
+			*items = demalloc(n*sizeof(Item*));
 		for(i = 0; i < n; i++)
 			if(rows[i] < v->nrows && (it = itembyid(v, v->rows[rows[i]])) != nil)
 				(*items)[m++] = it;
@@ -819,7 +819,7 @@ viewselectall(View *v)
 	int i;
 
 	if(v->icons != nil){
-		ids = femalloc((v->nitem+1)*sizeof(char*));
+		ids = demalloc((v->nitem+1)*sizeof(char*));
 		for(i = 0; i < v->nitem; i++)
 			ids[i] = v->item[i]->id;
 		uxiconselect(v->icons, ids, v->nitem);
@@ -843,8 +843,8 @@ viewselectname(View *v, char *name)
 void
 viewrescan(View *v)
 {
-	Fcchange *c;
-	Fcrec *recs;
+	Dcchange *c;
+	Dcrec *recs;
 	Dir *d;
 	Item *it;
 	char *l;
@@ -853,7 +853,7 @@ viewrescan(View *v)
 	if(v->kind != Kfolder)
 		return;
 	wasbad = v->err[0] != 0;
-	n = fcrescan(v->f, &c);
+	n = dcrescan(v->f, &c);
 	if(n < 0){
 		if(strcmp(v->err, v->f->err) != 0){
 			strecpy(v->err, v->err+sizeof v->err, v->f->err);
@@ -878,7 +878,7 @@ viewrescan(View *v)
 		case Cadd:
 			if(itembyname(v, c[i].name) != nil || hidden(v, c[i].name))
 				break;
-			d = fcfind(v->f, c[i].name);
+			d = dcfind(v->f, c[i].name);
 			if(d == nil)
 				break;
 			it = entryitem(v, d, recs);
@@ -896,8 +896,8 @@ viewrescan(View *v)
 			if(it == nil)
 				break;	/* we renamed it ourselves */
 			free(it->name);
-			it->name = festrdup(c[i].name);
-			itemsetpath(it, fcjoin(v->path, it->name));
+			it->name = destrdup(c[i].name);
+			itemsetpath(it, dcjoin(v->path, it->name));
 			l = viewlabel(it);
 			if(v->icons != nil)
 				uxiconset(v->icons, it->id, l, nil, it->pt);
@@ -905,8 +905,8 @@ viewrescan(View *v)
 			break;
 		}
 	}
-	fcchangefree(c, n);
-	fcrecfree(recs);
+	dcchangefree(c, n);
+	dcrecfree(recs);
 	if(v->mode == Mlist)
 		populate(v);
 	else
@@ -964,7 +964,7 @@ viewcleanup(View *v)
 		}
 		return;
 	}
-	dv = fcsorted(v->f, v->sort);
+	dv = dcsorted(v->f, v->sort);
 	for(i = 0; i < v->f->n; i++){
 		it = itembyname(v, dv[i]->name);
 		if(it == nil)
@@ -1010,7 +1010,7 @@ resized(View *v)
 void
 openit(View *v, Item *it)
 {
-	Fev e;
+	Dev e;
 
 	/* the same as File > Open on just this item */
 	USED(v);
@@ -1022,13 +1022,13 @@ openit(View *v, Item *it)
 	if(v->kind == Ktrash)
 		return;	/* things in the Trash don't open; Put Back first */
 	if(it->vol != nil || it->dir){
-		if(it->vol != nil && fcvolcheck(it->vol) != Vonline
+		if(it->vol != nil && dcvolcheck(it->vol) != Vonline
 		&& (it->vol->addr != nil || it->vol->srv != nil) && !it->vol->attached
-		&& fcvolattach(it->vol) < 0){
+		&& dcvolattach(it->vol) < 0){
 			alerterr(it->name);
 			return;
 		}
-		if(it->vol != nil && fcvolcheck(it->vol) != Vonline){
+		if(it->vol != nil && dcvolcheck(it->vol) != Vonline){
 			alerterr(it->name);
 			deskcheck();
 			return;
@@ -1043,7 +1043,7 @@ openit(View *v, Item *it)
 		int r;
 
 		dst = nil;
-		r = fcopen(ws, it->path, &dst);
+		r = dcopen(ws, it->path, &dst);
 		free(dst);
 		if(r < 0)
 			alerterr(it->name);
@@ -1053,7 +1053,7 @@ openit(View *v, Item *it)
 }
 
 void
-viewevent(View *v, Fev *e)
+viewevent(View *v, Dev *e)
 {
 	Item *it;
 	char *l;
@@ -1132,8 +1132,8 @@ copydel(Alert *a, int choice)
 
 	if(choice != 2)
 		return;
-	if(fcrename(ws, a->path, a->arg, Fcopydel) < 0){
-		alerterr(fcbasename(a->path));
+	if(dcrename(ws, a->path, a->arg, Fcopydel) < 0){
+		alerterr(dcbasename(a->path));
 		return;
 	}
 	for(v = views; v != nil; v = v->next)
@@ -1145,7 +1145,7 @@ copydel(Alert *a, int choice)
 	{
 		char *name;
 
-		name = fcbasename(a->path);
+		name = dcbasename(a->path);
 		it = itembyname(v, name);
 	}
 	if(it != nil){
@@ -1173,10 +1173,10 @@ itemrename(View *v, Item *it, char *newname)
 
 	if(strcmp(it->name, newname) == 0)
 		return;
-	if(fcrename(ws, it->path, newname, 0) == 0){
+	if(dcrename(ws, it->path, newname, 0) == 0){
 		free(it->name);
-		it->name = festrdup(newname);
-		itemsetpath(it, fcjoin(v->path, newname));
+		it->name = destrdup(newname);
+		itemsetpath(it, dcjoin(v->path, newname));
 		l = viewlabel(it);
 		if(v->icons != nil)
 			uxiconset(v->icons, it->id, l, nil, it->pt);
@@ -1191,13 +1191,13 @@ itemrename(View *v, Item *it, char *newname)
 	if(v->icons != nil)
 		uxiconset(v->icons, it->id, l, nil, it->pt);
 	free(l);
-	if(fcerrclass(err) == Enotsup && strstr(err, "copy and delete") != nil){
+	if(dcerrclass(err) == Enotsup && strstr(err, "copy and delete") != nil){
 		msg = smprint("%s can't be renamed in place: %s\n\nMake a copy named %s and delete the original?",
 			it->name, err, newname);
 		a = alert(msg, "Cancel", "Copy and Delete", copydel);
 		free(msg);
-		a->path = festrdup(it->path);
-		a->arg = festrdup(newname);
+		a->path = destrdup(it->path);
+		a->arg = destrdup(newname);
 		a->v = v;
 		return;
 	}
@@ -1262,7 +1262,7 @@ renameend(View *v, int commit)
 static void
 reloadpos(View *v)
 {
-	Fcrec *recs, *r;
+	Dcrec *recs, *r;
 	Item *it;
 	Point p;
 	char *x, *y;
@@ -1274,8 +1274,8 @@ reloadpos(View *v)
 		r = recfor(recs, it->path);
 		if(r == nil)
 			continue;
-		x = fcrecget(r, "x");
-		y = fcrecget(r, "y");
+		x = dcrecget(r, "x");
+		y = dcrecget(r, "y");
 		if(x == nil || y == nil || !x[0] || !y[0])
 			continue;
 		p = Pt(atoi(x), atoi(y));
@@ -1286,7 +1286,7 @@ reloadpos(View *v)
 				uxiconset(v->icons, it->id, nil, nil, p);
 		}
 	}
-	fcrecfree(recs);
+	dcrecfree(recs);
 }
 
 /* a line from uxmeta's changes: SEQ set|del KIND KEY gen=N */
@@ -1297,7 +1297,7 @@ metachange(char *line)
 	int nf, mode, sort;
 	View *v;
 	Item *it;
-	Fcrec *r, *recs;
+	Dcrec *r, *recs;
 
 	nf = tokenize(line, f, nelem(f));
 	if(nf >= 2 && (strcmp(f[1], "lost") == 0 || strcmp(f[1], "resync") == 0)){
@@ -1334,18 +1334,18 @@ metachange(char *line)
 	}
 	if(strcmp(f[2], "item") != 0 || strcmp(f[1], "set") != 0)
 		return;
-	dir = fcdirname(f[3]);
+	dir = dcdirname(f[3]);
 	v = viewbypath(dir);
 	free(dir);
-	if(v == nil || (it = itembyname(v, fcbasename(f[3]))) == nil)
+	if(v == nil || (it = itembyname(v, dcbasename(f[3]))) == nil)
 		return;
 	recs = itemrecs(f[3]);
 	for(r = recs; r != nil; r = r->next)
-		if(strcmp(fcreckey(r), f[3]) == 0)
+		if(strcmp(dcreckey(r), f[3]) == 0)
 			break;
 	if(r != nil){
-		x = fcrecget(r, "x");
-		y = fcrecget(r, "y");
+		x = dcrecget(r, "x");
+		y = dcrecget(r, "y");
 		if(x && y && x[0] && y[0] && !eqpt(it->pt, Pt(atoi(x), atoi(y)))){
 			it->pt = Pt(atoi(x), atoi(y));
 			it->placed = 1;
@@ -1353,7 +1353,7 @@ metachange(char *line)
 				uxiconset(v->icons, it->id, nil, nil, it->pt);
 		}
 	}
-	fcrecfree(recs);
+	dcrecfree(recs);
 }
 
 /* drag and drop */
@@ -1394,7 +1394,7 @@ dragsetup(View *v)
  * their data is only there while the handler runs.
  */
 void
-droplookup(View *v, Uxev *e, Fev *f)
+droplookup(View *v, Uxev *e, Dev *f)
 {
 	Item *it;
 	Uxdropfile *df;
@@ -1404,11 +1404,11 @@ droplookup(View *v, Uxev *e, Fev *f)
 	lock(&itemlk);
 	it = e->item != nil ? itembyid(v, e->item) : nil;
 	if(it != nil && it->trash)
-		f->dest = festrdup("trash");
+		f->dest = destrdup("trash");
 	else if(it != nil && it->dir && it->path[0])
-		f->dest = festrdup(it->path);
+		f->dest = destrdup(it->path);
 	else if(v->kind == Kfolder && v->path != nil)
-		f->dest = festrdup(v->path);
+		f->dest = destrdup(v->path);
 	unlock(&itemlk);
 	if(f->dest == nil){
 		uxdropresult(e, nil, "not supported: drop onto a volume, a folder or the Trash");
@@ -1429,7 +1429,7 @@ droplookup(View *v, Uxev *e, Fev *f)
 	for(i = 0; i < n; i++){
 		if(df[i].dir)
 			continue;
-		p = fcjoin(f->dest, df[i].name);
+		p = dcjoin(f->dest, df[i].name);
 		if(access(p, AEXIST) == 0 || uxdropsave(e, i, p, df[i].mode) < 0){
 			char err[ERRMAX];
 
@@ -1455,23 +1455,23 @@ folderview(char *path)
 
 /* in Desktop's proc: carry out a drop of our own items */
 void
-viewdrop(View *v, Fev *e)
+viewdrop(View *v, Dev *e)
 {
 	View *w;
 	char *p, *dir, *r;
 	int i, move;
-	Fcvol *sv, *dv;
+	Dcvol *sv, *dv;
 
 	if(e->dest == nil)
 		return;
 	move = e->action == nil || strcmp(e->action, "move") == 0;
 	for(i = 0; i < e->npaths; i++){
 		p = e->paths[i];
-		dir = fcdirname(p);
+		dir = dcdirname(p);
 		if(strcmp(e->dest, "trash") == 0){
-			r = fctrash(ws, p, 0);
+			r = dctrash(ws, p, 0);
 			if(r == nil)
-				alerterr(fcbasename(p));
+				alerterr(dcbasename(p));
 			free(r);
 		}else if(strcmp(dir, e->dest) != 0 && strcmp(p, e->dest) != 0){
 			/*
@@ -1479,15 +1479,15 @@ viewdrop(View *v, Fev *e)
 			 * another). 9P can't move between folders, so a move is a
 			 * copy and then a delete; the user asked for exactly that.
 			 */
-			sv = fcvolof(ws, p);
-			dv = fcvolof(ws, e->dest);
+			sv = dcvolof(ws, p);
+			dv = dcvolof(ws, e->dest);
 			if(move && sv == dv){
-				if(fcmove(ws, p, e->dest, Fcopydel) < 0)
-					alerterr(fcbasename(p));
+				if(dcmove(ws, p, e->dest, Fcopydel) < 0)
+					alerterr(dcbasename(p));
 			}else{
-				r = fccopy(ws, p, e->dest, nil);
+				r = dccopy(ws, p, e->dest, nil);
 				if(r == nil)
-					alerterr(fcbasename(p));
+					alerterr(dcbasename(p));
 				free(r);
 			}
 		}

@@ -7,17 +7,17 @@
 #include <draw.h>
 #include <thread.h>
 #include <ux.h>
-#include "fcore.h"
+#include "dcore.h"
 #include "desktop.h"
 
-Fcws	*ws;
-Fcmeta	*meta;
+Dcws	*ws;
+Dcmeta	*meta;
 View	*views;
 View	*desk;
 View	*front;
 int	nodesk;
 
-static Channel	*evc;	/* Fev* from libux handlers */
+static Channel	*evc;	/* Dev* from libux handlers */
 static Channel	*tickc;
 static Channel	*metac;	/* char* lines from /mnt/meta/changes */
 static int	tickms = 1000;
@@ -34,11 +34,11 @@ usage(void)
 static char*
 sdup(char *s)
 {
-	return s != nil ? festrdup(s) : nil;
+	return s != nil ? destrdup(s) : nil;
 }
 
 static void
-handoff(Fev *f, Uxev *e)
+handoff(Dev *f, Uxev *e)
 {
 	f->type = e->type;
 	f->via = e->via;
@@ -56,9 +56,9 @@ handoff(Fev *f, Uxev *e)
 void
 viewhandler(Uxev *e, void *arg)
 {
-	Fev *f;
+	Dev *f;
 
-	f = femalloc(sizeof *f);
+	f = demalloc(sizeof *f);
 	f->v = arg;
 	if(e->type == UXdrop)
 		droplookup(arg, e, f);
@@ -68,9 +68,9 @@ viewhandler(Uxev *e, void *arg)
 void
 alerthandler(Uxev *e, void *arg)
 {
-	Fev *f;
+	Dev *f;
 
-	f = femalloc(sizeof *f);
+	f = demalloc(sizeof *f);
 	f->a = arg;
 	handoff(f, e);
 }
@@ -78,11 +78,11 @@ alerthandler(Uxev *e, void *arg)
 static void
 apphandler(Uxev *e, void*)
 {
-	handoff(femalloc(sizeof(Fev)), e);
+	handoff(demalloc(sizeof(Dev)), e);
 }
 
 static void
-fevfree(Fev *f)
+devfree(Dev *f)
 {
 	int i;
 
@@ -180,7 +180,7 @@ updatemenus(void)
 
 /* the view an action is for: the window it names, or the front one */
 static View*
-target(Fev *e)
+target(Dev *e)
 {
 	View *v;
 
@@ -202,9 +202,9 @@ eachsel(View *v, void (*fn)(View*, Item*))
 	if(n == 0)
 		return;
 	/* fn may change the view; work from copies of the paths */
-	paths = femalloc(n*sizeof(char*));
+	paths = demalloc(n*sizeof(char*));
 	for(i = 0; i < n; i++)
-		paths[i] = festrdup(sel[i]->path);
+		paths[i] = destrdup(sel[i]->path);
 	free(sel);
 	for(i = 0; i < n; i++){
 		Item *it;
@@ -235,13 +235,13 @@ dupitem(View *v, Item *it)
 
 	if(it->vol != nil)
 		return;
-	p = fcduplicate(ws, it->path);
+	p = dcduplicate(ws, it->path);
 	if(p == nil){
 		alerterr(it->name);
 		return;
 	}
 	viewrescan(v);
-	viewselectname(v, fcbasename(p));
+	viewselectname(v, dcbasename(p));
 	free(p);
 }
 
@@ -260,7 +260,7 @@ ejectitem(View*, Item *it)
 		&& (w->path[n] == 0 || w->path[n] == '/' || n == 1))
 			viewclose(w, 0);
 	}
-	if(it->vol->attached && fcvoldetach(it->vol) < 0)
+	if(it->vol->attached && dcvoldetach(it->vol) < 0)
 		alerterr(it->name);
 	deskcheck();
 }
@@ -272,20 +272,20 @@ newfolder(View *v)
 
 	if(v->kind != Kfolder)
 		return;
-	p = fcmkdir(ws, v->path, nil);
+	p = dcmkdir(ws, v->path, nil);
 	if(p == nil){
 		alerterr(v->title);
 		return;
 	}
 	viewrescan(v);
-	viewselectname(v, fcbasename(p));
+	viewselectname(v, dcbasename(p));
 	free(p);
 	if(v->mode == Micons)
 		renamestart(v);
 }
 
 static void
-action(Fev *e)
+action(Dev *e)
 {
 	View *v;
 	char *a;
@@ -343,7 +343,7 @@ action(Fev *e)
 }
 
 static void
-handle(Fev *e)
+handle(Dev *e)
 {
 	View *v;
 
@@ -424,7 +424,7 @@ metareader(void*)
 			buf[n] = 0;
 			for(s = buf; (e = strchr(s, '\n')) != nil; s = e+1){
 				*e = 0;
-				sendp(metac, festrdup(s));
+				sendp(metac, destrdup(s));
 			}
 			off = n - (s-buf);
 			memmove(buf, s, off);
@@ -438,25 +438,25 @@ metareader(void*)
 static void
 reopen(void)
 {
-	Fcrec *r, *recs;
+	Dcrec *r, *recs;
 	char *s;
 
 	if(meta == nil)
 		return;
-	recs = fcmetaquery(meta, "folder open=yes");
+	recs = dcmetaquery(meta, "folder open=yes");
 	for(r = recs; r != nil; r = r->next){
-		s = fcreckey(r);
+		s = dcreckey(r);
 		if(s != nil && access(s, AEXIST) == 0)
 			folderopen(s, 0);
 	}
-	fcrecfree(recs);
+	dcrecfree(recs);
 }
 
 static void
 desktopproc(void*)
 {
 	Alt a[4];
-	Fev *e;
+	Dev *e;
 	char *line;
 	ulong t;
 
@@ -479,7 +479,7 @@ desktopproc(void*)
 		switch(alt(a)){
 		case 0:
 			handle(e);
-			fevfree(e);
+			devfree(e);
 			break;
 		case 1:
 			tick();
@@ -556,25 +556,25 @@ threadmain(int argc, char **argv)
 
 	quotefmtinstall();
 	if(!nometa){
-		meta = fcmetaopen(metaroot);
+		meta = dcmetaopen(metaroot);
 		if(meta == nil)
 			fprint(2, "desktop: %r; running without uxmeta\n");
 	}
-	ws = fcwsopen(wsname, meta);
+	ws = dcwsopen(wsname, meta);
 	if(ws == nil)
 		sysfatal("workspace: %r");
 	for(i = 0; i < nvols; i++){
-		s = festrdup(vols[i]);
+		s = destrdup(vols[i]);
 		e = strchr(s, '=');
 		if(e == nil)
 			sysfatal("-v name=path");
 		*e++ = 0;
-		fcwsaddvol(ws, s, e)->desktop = 1;
+		dcwsaddvol(ws, s, e)->desktop = 1;
 		free(s);
 	}
 	putenv("workspace", ws->name);
 
-	evc = chancreate(sizeof(Fev*), 256);
+	evc = chancreate(sizeof(Dev*), 256);
 	tickc = chancreate(sizeof(ulong), 0);
 	metac = chancreate(sizeof(char*), 256);
 
@@ -583,7 +583,7 @@ threadmain(int argc, char **argv)
 	s = getenv("uxsysres");
 	if(s == nil || *s == 0){
 		free(s);
-		s = festrdup("/lib/ux/system.rsrc");
+		s = destrdup("/lib/ux/system.rsrc");
 	}
 	if(access(s, AREAD) == 0 && uxres(s) < 0)
 		fprint(2, "desktop: system icons: %r\n");

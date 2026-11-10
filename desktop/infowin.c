@@ -1,5 +1,5 @@
 /*
- * Get Info windows: what fcinfo knows about a file, folder or volume,
+ * Get Info windows: what dcinfo knows about a file, folder or volume,
  * with the name editable (Enter renames).
  */
 #include <u.h>
@@ -7,7 +7,7 @@
 #include <draw.h>
 #include <thread.h>
 #include <ux.h>
-#include "fcore.h"
+#include "dcore.h"
 #include "desktop.h"
 #include "uxstyle.h"
 
@@ -69,7 +69,7 @@ modestr(char *buf, ulong m)
 }
 
 static char*
-sizestr(Fcinfo *fi)
+sizestr(Dcinfo *fi)
 {
 	char *s, *t;
 
@@ -86,12 +86,12 @@ sizestr(Fcinfo *fi)
 static void
 fill(View *v)
 {
-	Fcinfo *fi;
+	Dcinfo *fi;
 	char *s, *o;
 	Tm *tm;
 	char buf[64];
 
-	fi = fcinfo(ws, v->path, 1);
+	fi = dcinfo(ws, v->path, 1);
 	if(fi == nil){
 		rerrstr(buf, sizeof buf);
 		set(v, "where", buf);
@@ -118,14 +118,14 @@ fill(View *v)
 	set(v, "writable", fi->writable ? "yes" : "no");
 	o = nil;
 	if(fi->assoc != nil){
-		s = fcrecget(fi->assoc, "open");
+		s = dcrecget(fi->assoc, "open");
 		if(s == nil)
-			s = fcrecget(fi->assoc, "port");
+			s = dcrecget(fi->assoc, "port");
 		if(s != nil)
 			o = s;
 	}
 	set(v, "opens", o != nil ? o : (fi->d->qid.type & QTDIR) ? "Desktop" : "the plumbing rules decide");
-	fcinfofree(fi);
+	dcinfofree(fi);
 }
 
 View*
@@ -136,7 +136,7 @@ infoopen(char *path)
 	int i, y, n;
 	Uxctl *c, *ic;
 	char *t, *icon, kid[32];
-	Fcvol *vol;
+	Dcvol *vol;
 	Dir *d;
 
 	v = infobypath(path);
@@ -146,17 +146,17 @@ infoopen(char *path)
 	}
 	d = dirstat(path);
 	if(d == nil){
-		alerterr(fcbasename(path));
+		alerterr(dcbasename(path));
 		return nil;
 	}
-	v = femalloc(sizeof *v);
+	v = demalloc(sizeof *v);
 	v->kind = Kinfo;
-	v->path = festrdup(path);
-	vol = fcvolof(ws, path);
+	v->path = destrdup(path);
+	vol = dcvolof(ws, path);
 	if(vol != nil && strcmp(vol->path, path) == 0)
-		v->title = festrdup(vol->name);
+		v->title = destrdup(vol->name);
 	else
-		v->title = festrdup(fcbasename(path));
+		v->title = destrdup(dcbasename(path));
 	n = nelem(rows)/2;
 	r = cascade();
 	r.max.x = r.min.x + Width;
@@ -180,7 +180,7 @@ infoopen(char *path)
 	uxhandler(v->name, viewhandler, v);
 
 	/* rows: a key label and a value label each; v->rows holds the values */
-	v->rows = femalloc(n*sizeof(char*));
+	v->rows = demalloc(n*sizeof(char*));
 	y = 2*UXdialogmargin + UXdialogiconsize;
 	for(i = 0; i < n; i++){
 		snprint(kid, sizeof kid, "%s-key", rows[2*i]);
@@ -240,24 +240,24 @@ inforename(View *v)
 	Item *it;
 
 	s = uxgetvalue(v->name);
-	if(s[0] == 0 || strcmp(s, fcbasename(v->path)) == 0){
+	if(s[0] == 0 || strcmp(s, dcbasename(v->path)) == 0){
 		free(s);
 		return;
 	}
-	if(fcrename(ws, v->path, s, 0) < 0){
-		alerterr(fcbasename(v->path));
+	if(dcrename(ws, v->path, s, 0) < 0){
+		alerterr(dcbasename(v->path));
 		uxsetvalue(v->name, v->title);
 		free(s);
 		return;
 	}
-	t = fcdirname(v->path);
-	np = fcjoin(t, s);
+	t = dcdirname(v->path);
+	np = dcjoin(t, s);
 	/* an open folder window shows the new name at once */
-	if((fv = viewbypath(t)) != nil && (it = itembyname(fv, fcbasename(v->path))) != nil){
+	if((fv = viewbypath(t)) != nil && (it = itembyname(fv, dcbasename(v->path))) != nil){
 		free(it->name);
-		it->name = festrdup(s);
+		it->name = destrdup(s);
 		free(it->path);
-		it->path = festrdup(np);
+		it->path = destrdup(np);
 		if(fv->icons != nil)
 			uxiconset(fv->icons, it->id, s, nil, it->pt);
 	}
@@ -273,7 +273,7 @@ inforename(View *v)
 }
 
 void
-infoevent(View *v, Fev *e)
+infoevent(View *v, Dev *e)
 {
 	switch(e->type){
 	case UXsubmit:

@@ -1,20 +1,20 @@
 /*
- * fcore: Desktop's core operations from the shell, for scripts and
+ * dcore: Desktop's core operations from the shell, for scripts and
  * tests. See README.md.
  */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
-#include "fcore.h"
+#include "dcore.h"
 
 Biobuf out;
-Fcws *ws;
+Dcws *ws;
 int interactive;
 
 static void
 usage(void)
 {
-	fprint(2, "usage: fcore [-M] [-m metaroot] [-w workspace] [-v name=path[@addr]]... [verb args...]\n");
+	fprint(2, "usage: dcore [-M] [-m metaroot] [-w workspace] [-v name=path[@addr]]... [verb args...]\n");
 	exits("usage");
 }
 
@@ -26,18 +26,18 @@ err(void)
 		Bprint(&out, "error: %r\n");
 		Bflush(&out);
 	}else
-		fprint(2, "fcore: %r\n");
+		fprint(2, "dcore: %r\n");
 	return -1;
 }
 
-static Fcvol*
+static Dcvol*
 vol(char *name)
 {
-	Fcvol *v;
+	Dcvol *v;
 
-	v = fcvolbyname(ws, name);
+	v = dcvolbyname(ws, name);
 	if(v == nil){
-		v = fcvolof(ws, name);
+		v = dcvolof(ws, name);
 		if(v == nil)
 			werrstr("not found: no volume %s", name);
 	}
@@ -45,9 +45,9 @@ vol(char *name)
 }
 
 static void
-prvol(Fcvol *v)
+prvol(Dcvol *v)
 {
-	Bprint(&out, "%q %q %s desktop=%s", v->name, v->path, fcvolstate(v->state), v->desktop ? "yes" : "no");
+	Bprint(&out, "%q %q %s desktop=%s", v->name, v->path, dcvolstate(v->state), v->desktop ? "yes" : "no");
 	if(v->icon)
 		Bprint(&out, " icon=%q", v->icon);
 	if(v->addr)
@@ -60,12 +60,12 @@ prvol(Fcvol *v)
 }
 
 static void
-prcaps(Fcvol *v)
+prcaps(Dcvol *v)
 {
 	int i;
 
 	for(i = 0; i < Nkind; i++){
-		Bprint(&out, "%s %s", fccapname(i), fccapval(v->caps.c[i]));
+		Bprint(&out, "%s %s", dccapname(i), dccapval(v->caps.c[i]));
 		if(v->caps.c[i] == Cno)
 			Bprint(&out, " %q", v->caps.why[i]);
 		Bprint(&out, "\n");
@@ -98,10 +98,10 @@ run(int argc, char **argv)
 {
 	char *verb, *p, *q, *dst;
 	int i, n, f;
-	Fcvol *v;
-	Fcfolder *fo;
-	Fcchange *c;
-	Fcinfo *fi;
+	Dcvol *v;
+	Dcfolder *fo;
+	Dcchange *c;
+	Dcinfo *fi;
 	Dir **dv;
 
 	if(argc == 0)
@@ -110,37 +110,37 @@ run(int argc, char **argv)
 	argc--;
 	argv++;
 	if(strcmp(verb, "volumes") == 0){
-		if(fcwsload(ws) < 0)
+		if(dcwsload(ws) < 0)
 			return err();
 		for(i = 0; i < ws->nvol; i++){
-			fcvolcheck(ws->vol[i]);
+			dcvolcheck(ws->vol[i]);
 			prvol(ws->vol[i]);
 		}
 	}else if(strcmp(verb, "reload") == 0){
-		if(fcwsload(ws) < 0)
+		if(dcwsload(ws) < 0)
 			return err();
 	}else if(strcmp(verb, "check") == 0){
 		if(need(argc, 1, 1) < 0 || (v = vol(argv[0])) == nil)
 			return err();
-		fcvolcheck(v);
+		dcvolcheck(v);
 		prvol(v);
 		if(v->state != Vonline){
 			werrstr("%s", v->err);
 			return err();
 		}
 	}else if(strcmp(verb, "attach") == 0){
-		if(need(argc, 1, 1) < 0 || (v = vol(argv[0])) == nil || fcvolattach(v) < 0)
+		if(need(argc, 1, 1) < 0 || (v = vol(argv[0])) == nil || dcvolattach(v) < 0)
 			return err();
 		prvol(v);
 	}else if(strcmp(verb, "detach") == 0){
-		if(need(argc, 1, 1) < 0 || (v = vol(argv[0])) == nil || fcvoldetach(v) < 0)
+		if(need(argc, 1, 1) < 0 || (v = vol(argv[0])) == nil || dcvoldetach(v) < 0)
 			return err();
 	}else if(strcmp(verb, "caps") == 0 || strcmp(verb, "probe") == 0){
 		if(need(argc, 1, 2) < 0 || (v = vol(argv[0])) == nil)
 			return err();
 		if(verb[0] == 'p'){
-			p = argc > 1 ? fcresolve(ws, argv[1]) : nil;
-			n = fcprobe(v, p);
+			p = argc > 1 ? dcresolve(ws, argv[1]) : nil;
+			n = dcprobe(v, p);
 			free(p);
 			if(n < 0)
 				return err();
@@ -149,24 +149,24 @@ run(int argc, char **argv)
 	}else if(strcmp(verb, "ls") == 0){
 		if(need(argc, 1, 2) < 0)
 			return err();
-		p = fcresolve(ws, argv[0]);
-		fo = fcfolderopen(p);
+		p = dcresolve(ws, argv[0]);
+		fo = dcfolderopen(p);
 		free(p);
 		if(fo == nil)
 			return err();
-		dv = fcsorted(fo, fcsortby(argc > 1 ? argv[1] : nil));
+		dv = dcsorted(fo, dcsortby(argc > 1 ? argv[1] : nil));
 		for(i = 0; dv[i] != nil; i++)
 			Bprint(&out, "%q %s %lld %luo %lud\n", dv[i]->name,
 				(dv[i]->qid.type&QTDIR) ? "d" : "-", dv[i]->length,
 				dv[i]->mode&0777, dv[i]->mtime);
 		free(dv);
-		fcfolderfree(fo);
+		dcfolderfree(fo);
 	}else if(strcmp(verb, "watch") == 0){
 		/* watch PATH MS N: rescan N times, MS apart, printing changes */
 		if(need(argc, 3, 3) < 0)
 			return err();
-		p = fcresolve(ws, argv[0]);
-		fo = fcfolderopen(p);
+		p = dcresolve(ws, argv[0]);
+		fo = dcfolderopen(p);
 		free(p);
 		if(fo == nil)
 			return err();
@@ -174,7 +174,7 @@ run(int argc, char **argv)
 		Bflush(&out);
 		for(i = 0; i < atoi(argv[2]); i++){
 			sleep(atoi(argv[1]));
-			n = fcrescan(fo, &c);
+			n = dcrescan(fo, &c);
 			if(n < 0){
 				Bprint(&out, "error: %s\n", fo->err);
 				Bflush(&out);
@@ -184,18 +184,18 @@ run(int argc, char **argv)
 				if(c[f].op == Cren)
 					Bprint(&out, "rename %q %q\n", c[f].old, c[f].name);
 				else
-					Bprint(&out, "%s %q\n", fcchangename(c[f].op), c[f].name);
+					Bprint(&out, "%s %q\n", dcchangename(c[f].op), c[f].name);
 			}
 			Bflush(&out);
-			fcchangefree(c, n);
+			dcchangefree(c, n);
 		}
-		fcfolderfree(fo);
+		dcfolderfree(fo);
 	}else if(strcmp(verb, "info") == 0){
 		f = flag(&argc, &argv, "-d");
 		if(need(argc, 1, 1) < 0)
 			return err();
-		p = fcresolve(ws, argv[0]);
-		fi = fcinfo(ws, p, f);
+		p = dcresolve(ws, argv[0]);
+		fi = dcinfo(ws, p, f);
 		free(p);
 		if(fi == nil)
 			return err();
@@ -213,23 +213,23 @@ run(int argc, char **argv)
 		Bprint(&out, "group %q\n", fi->d->gid);
 		Bprint(&out, "modified %lud\n", fi->d->mtime);
 		Bprint(&out, "writable %s\n", fi->writable ? "yes" : "no");
-		if((q = fcrecget(fi->assoc, "type")) != nil)
+		if((q = dcrecget(fi->assoc, "type")) != nil)
 			Bprint(&out, "type %q\n", q);
-		if((q = fcrecget(fi->assoc, "open")) != nil)
+		if((q = dcrecget(fi->assoc, "open")) != nil)
 			Bprint(&out, "open %q\n", q);
-		if((q = fcrecget(fi->assoc, "icon")) != nil)
+		if((q = dcrecget(fi->assoc, "icon")) != nil)
 			Bprint(&out, "icon %q\n", q);
-		fcinfofree(fi);
+		dcinfofree(fi);
 	}else if(strcmp(verb, "rename") == 0 || strcmp(verb, "move") == 0){
 		f = flag(&argc, &argv, "-c") ? Fcopydel : 0;
 		if(need(argc, 2, 2) < 0)
 			return err();
-		p = fcresolve(ws, argv[0]);
+		p = dcresolve(ws, argv[0]);
 		if(verb[0] == 'r')
-			n = fcrename(ws, p, argv[1], f);
+			n = dcrename(ws, p, argv[1], f);
 		else{
-			q = fcresolve(ws, argv[1]);
-			n = fcmove(ws, p, q, f);
+			q = dcresolve(ws, argv[1]);
+			n = dcmove(ws, p, q, f);
 			free(q);
 		}
 		free(p);
@@ -238,18 +238,18 @@ run(int argc, char **argv)
 	}else if(strcmp(verb, "copy") == 0 || strcmp(verb, "dup") == 0 || strcmp(verb, "mkdir") == 0){
 		if(need(argc, 1, verb[0] == 'd' ? 1 : 3) < 0)
 			return err();
-		p = fcresolve(ws, argv[0]);
+		p = dcresolve(ws, argv[0]);
 		if(verb[0] == 'd')
-			dst = fcduplicate(ws, p);
+			dst = dcduplicate(ws, p);
 		else if(verb[0] == 'm')
-			dst = fcmkdir(ws, p, argc > 1 ? argv[1] : nil);
+			dst = dcmkdir(ws, p, argc > 1 ? argv[1] : nil);
 		else if(argc < 2){
 			free(p);
 			werrstr("bad syntax: copy PATH DIR [NAME]");
 			return err();
 		}else{
-			q = fcresolve(ws, argv[1]);
-			dst = fccopy(ws, p, q, argc > 2 ? argv[2] : nil);
+			q = dcresolve(ws, argv[1]);
+			dst = dccopy(ws, p, q, argc > 2 ? argv[2] : nil);
 			free(q);
 		}
 		free(p);
@@ -260,35 +260,35 @@ run(int argc, char **argv)
 	}else if(strcmp(verb, "trash") == 0 || strcmp(verb, "putback") == 0){
 		if(need(argc, 1, 1) < 0)
 			return err();
-		p = fcresolve(ws, argv[0]);
-		dst = verb[0] == 't' ? fctrash(ws, p, 0) : fcputback(ws, p);
+		p = dcresolve(ws, argv[0]);
+		dst = verb[0] == 't' ? dctrash(ws, p, 0) : dcputback(ws, p);
 		free(p);
 		if(dst == nil)
 			return err();
 		Bprint(&out, "%q\n", dst);
 		free(dst);
 	}else if(strcmp(verb, "trashlist") == 0 || strcmp(verb, "emptytrash") == 0 || strcmp(verb, "trashlimit") == 0){
-		Fcvol *tv;
-		Fctrashitem *it;
+		Dcvol *tv;
+		Dctrashitem *it;
 		long i, nt;
 
 		if(need(argc, 1, 1) < 0)
 			return err();
-		tv = fcvolbyname(ws, argv[0]);
+		tv = dcvolbyname(ws, argv[0]);
 		if(tv == nil){
 			werrstr("not found: no volume %s", argv[0]);
 			return err();
 		}
 		if(strcmp(verb, "trashlist") == 0){
-			nt = fctrashlist(ws, tv, &it);
+			nt = dctrashlist(ws, tv, &it);
 			for(i = 0; i < nt; i++)
 				Bprint(&out, "%q %q %ld\n", it[i].path, it[i].origin != nil ? it[i].origin : "", it[i].date);
-			fctrashfree(it, nt);
+			dctrashfree(it, nt);
 		}else if(strcmp(verb, "emptytrash") == 0){
-			if(fcemptytrash(ws, tv) < 0)
+			if(dcemptytrash(ws, tv) < 0)
 				return err();
 		}else{
-			p = fctrashlimit(ws, tv);
+			p = dctrashlimit(ws, tv);
 			Bprint(&out, "%s\n", p);
 			free(p);
 		}
@@ -296,24 +296,24 @@ run(int argc, char **argv)
 		f = flag(&argc, &argv, "-r") ? Frecursive : 0;
 		if(need(argc, 1, 1) < 0)
 			return err();
-		p = fcresolve(ws, argv[0]);
-		n = fcdelete(ws, p, f);
+		p = dcresolve(ws, argv[0]);
+		n = dcdelete(ws, p, f);
 		free(p);
 		if(n < 0)
 			return err();
 	}else if(strcmp(verb, "chmod") == 0){
 		if(need(argc, 2, 2) < 0)
 			return err();
-		p = fcresolve(ws, argv[1]);
-		n = fcchmod(ws, p, strtoul(argv[0], nil, 8));
+		p = dcresolve(ws, argv[1]);
+		n = dcchmod(ws, p, strtoul(argv[0], nil, 8));
 		free(p);
 		if(n < 0)
 			return err();
 	}else if(strcmp(verb, "open") == 0){
 		if(need(argc, 1, 1) < 0)
 			return err();
-		p = fcresolve(ws, argv[0]);
-		n = fcopen(ws, p, &dst);
+		p = dcresolve(ws, argv[0]);
+		n = dcopen(ws, p, &dst);
 		if(n < 0){
 			free(p);
 			return err();
@@ -329,8 +329,8 @@ run(int argc, char **argv)
 	}else if(strcmp(verb, "openwith") == 0){
 		if(need(argc, 2, 2) < 0)
 			return err();
-		p = fcresolve(ws, argv[0]);
-		n = fcopenwith(ws, p, argv[1]);
+		p = dcresolve(ws, argv[0]);
+		n = dcopenwith(ws, p, argv[1]);
 		free(p);
 		if(n < 0)
 			return err();
@@ -338,8 +338,8 @@ run(int argc, char **argv)
 	}else if(strcmp(verb, "launch") == 0){
 		if(need(argc, 1, -1) < 0)
 			return err();
-		p = argc > 1 ? fcresolve(ws, argv[1]) : nil;
-		n = fclaunch(ws, argv[0], p, argc > 2 ? argv+2 : nil);
+		p = argc > 1 ? dcresolve(ws, argv[1]) : nil;
+		n = dclaunch(ws, argv[0], p, argc > 2 ? argv+2 : nil);
 		free(p);
 		if(n < 0)
 			return err();
@@ -357,11 +357,11 @@ main(int argc, char **argv)
 {
 	char *metaroot, *wsname, *p, *line, *args[32];
 	int nometa, n, status;
-	Fcmeta *m;
+	Dcmeta *m;
 	Biobuf in;
 	struct { char *name; char *path; char *addr; } vols[16];
 	int nvols, i;
-	Fcvol *v;
+	Dcvol *v;
 
 	quotefmtinstall();
 	metaroot = "/mnt/meta";
@@ -397,15 +397,15 @@ main(int argc, char **argv)
 	Binit(&out, 1, OWRITE);
 	m = nil;
 	if(!nometa){
-		m = fcmetaopen(metaroot);
+		m = dcmetaopen(metaroot);
 		if(m == nil && strcmp(metaroot, "/mnt/meta") != 0)
 			sysfatal("%r");
 	}
-	ws = fcwsopen(wsname, m);
+	ws = dcwsopen(wsname, m);
 	if(ws == nil)
 		sysfatal("workspace: %r");
 	for(i = 0; i < nvols; i++){
-		v = fcwsaddvol(ws, vols[i].name, vols[i].path);
+		v = dcwsaddvol(ws, vols[i].name, vols[i].path);
 		if(vols[i].addr != nil)
 			v->addr = strdup(vols[i].addr);
 	}

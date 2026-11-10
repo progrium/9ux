@@ -8,7 +8,7 @@
 #include <draw.h>
 #include <thread.h>
 #include <ux.h>
-#include "fcore.h"
+#include "dcore.h"
 #include "desktop.h"
 #include "uxstyle.h"
 
@@ -37,9 +37,9 @@ trashview(void)
 
 /* every trashed item on the desktop's volumes; *sig describes them */
 static long
-listall(Fctrashitem ***all, char **sig)
+listall(Dctrashitem ***all, char **sig)
 {
-	Fctrashitem *t, **a;
+	Dctrashitem *t, **a;
 	long n, m, i;
 	int j;
 	Fmt f;
@@ -50,13 +50,13 @@ listall(Fctrashitem ***all, char **sig)
 	for(j = 0; j < ws->nvol; j++){
 		if(!ws->vol[j]->desktop || ws->vol[j]->state == Voffline)
 			continue;
-		m = fctrashlist(ws, ws->vol[j], &t);
+		m = dctrashlist(ws, ws->vol[j], &t);
 		if(m <= 0)
 			continue;
-		a = realloc(a, (n+m)*sizeof(Fctrashitem*));
+		a = realloc(a, (n+m)*sizeof(Dctrashitem*));
 		for(i = 0; i < m; i++){
 			/* keep the item; the array goes */
-			a[n] = femalloc(sizeof(Fctrashitem));
+			a[n] = demalloc(sizeof(Dctrashitem));
 			*a[n] = t[i];
 			fmtprint(&f, "%s\n", t[i].path);
 			n++;
@@ -69,7 +69,7 @@ listall(Fctrashitem ***all, char **sig)
 }
 
 static void
-freeall(Fctrashitem **a, long n)
+freeall(Dctrashitem **a, long n)
 {
 	long i;
 
@@ -91,7 +91,7 @@ trashstatus(View *v)
 	lim = nil;
 	for(j = 0; j < ws->nvol && lim == nil; j++)
 		if(ws->vol[j]->desktop && ws->vol[j]->state != Voffline)
-			lim = fctrashlimit(ws, ws->vol[j]);
+			lim = dctrashlimit(ws, ws->vol[j]);
 	s = smprint("%d item%s. %s", v->nitem, v->nitem == 1 ? "" : "s", lim != nil ? lim : "");
 	uxsetvalue(v->status, s);
 	free(s);
@@ -103,7 +103,7 @@ trashstatus(View *v)
 void
 trashitems(View *v)
 {
-	Fctrashitem **a;
+	Dctrashitem **a;
 	char *sig;
 	long n, i;
 	Item *it;
@@ -129,14 +129,14 @@ trashitems(View *v)
 	v->nitem = 0;
 	unlock(&itemlk);
 	for(i = 0; i < n; i++){
-		it = femalloc(sizeof *it);
+		it = demalloc(sizeof *it);
 		it->id = smprint("i%d", ++v->nextid);
-		it->name = festrdup(a[i]->name);
-		it->path = festrdup(a[i]->path);
+		it->name = destrdup(a[i]->name);
+		it->path = destrdup(a[i]->path);
 		d = dirstat(it->path);
 		it->dir = d != nil && (d->qid.type & QTDIR);
 		free(d);
-		it->icon = festrdup(it->dir ? "folder" : "doc");
+		it->icon = destrdup(it->dir ? "folder" : "doc");
 		lock(&itemlk);
 		v->item = realloc(v->item, (v->nitem+1)*sizeof(Item*));
 		v->item[v->nitem++] = it;
@@ -159,9 +159,9 @@ trashopen(void)
 		setfront(v);
 		return v;
 	}
-	v = femalloc(sizeof *v);
+	v = demalloc(sizeof *v);
 	v->kind = Ktrash;
-	v->title = festrdup("Trash");
+	v->title = destrdup("Trash");
 	v->mode = Micons;
 	v->w = uxwindow("trash", "Trash", cascade());
 	v->r = uxwinrect(v->w);
@@ -185,7 +185,7 @@ trashopen(void)
 void
 trashcheck(void)
 {
-	Fctrashitem **a;
+	Dctrashitem **a;
 	char *sig, *icon;
 	long n;
 	int i;
@@ -199,7 +199,7 @@ trashcheck(void)
 		for(i = 0; i < desk->nitem; i++)
 			if(desk->item[i]->trash && strcmp(desk->item[i]->icon, icon) != 0){
 				free(desk->item[i]->icon);
-				desk->item[i]->icon = festrdup(icon);
+				desk->item[i]->icon = destrdup(icon);
 				uxiconset(desk->icons, desk->item[i]->id, nil, icon, desk->item[i]->pt);
 			}
 	}
@@ -215,8 +215,8 @@ deleteit(Alert *a, int choice)
 
 	if(choice != 2)
 		return;
-	if(fcdelete(ws, a->path, Frecursive) < 0)
-		alerterr(fcbasename(a->path));
+	if(dcdelete(ws, a->path, Frecursive) < 0)
+		alerterr(dcbasename(a->path));
 	for(v = views; v != nil; v = v->next)
 		if(v == a->v && v->kind == Kfolder)
 			viewrescan(v);
@@ -231,7 +231,7 @@ totrash(View *v, Item *it)
 
 	if(it->vol != nil || it->trash || v->kind == Ktrash)
 		return;
-	r = fctrash(ws, it->path, 0);
+	r = dctrash(ws, it->path, 0);
 	if(r != nil){
 		free(r);
 		viewrescan(v);
@@ -239,11 +239,11 @@ totrash(View *v, Item *it)
 		return;
 	}
 	rerrstr(err, sizeof err);
-	if(fcerrclass(err) == Enotsup){
+	if(dcerrclass(err) == Enotsup){
 		msg = smprint("%s can't go in the Trash: %s\n\nDelete it now? This can't be undone.", it->name, err);
 		a = alert(msg, "Cancel", "Delete", deleteit);
 		free(msg);
-		a->path = festrdup(it->path);
+		a->path = destrdup(it->path);
 		a->v = v;
 		return;
 	}
@@ -260,7 +260,7 @@ putback(View *v, Item *it)
 
 	if(v->kind != Ktrash)
 		return;
-	r = fcputback(ws, it->path);
+	r = dcputback(ws, it->path);
 	if(r == nil){
 		alerterr(it->name);
 		return;
@@ -268,7 +268,7 @@ putback(View *v, Item *it)
 	{
 		char *dir;
 
-		dir = fcdirname(r);
+		dir = dcdirname(r);
 		if((w = viewbypath(dir)) != nil)
 			viewrescan(w);
 		free(dir);
@@ -286,7 +286,7 @@ empty(Alert*, int choice)
 		return;
 	for(j = 0; j < ws->nvol; j++)
 		if(ws->vol[j]->desktop && ws->vol[j]->state != Voffline)
-			if(fcemptytrash(ws, ws->vol[j]) < 0)
+			if(dcemptytrash(ws, ws->vol[j]) < 0)
 				alerterr(ws->vol[j]->name);
 	trashcheck();
 }

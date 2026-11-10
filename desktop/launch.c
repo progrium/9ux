@@ -5,38 +5,38 @@
 #include <u.h>
 #include <libc.h>
 #include <plumb.h>
-#include "fcore.h"
+#include "dcore.h"
 
-static Fcrec*
-resolve(Fcws *w, char *path)
+static Dcrec*
+resolve(Dcws *w, char *path)
 {
-	Fcrec *r;
+	Dcrec *r;
 	char *q;
 
 	if(w == nil || w->meta == nil)
 		return nil;
 	q = quotestrdup(path);
-	r = fcmetaquery(w->meta, "resolve %s", q);
+	r = dcmetaquery(w->meta, "resolve %s", q);
 	free(q);
 	return r;
 }
 
-static Fcrec*
-appreq(Fcws *w, char *app)
+static Dcrec*
+appreq(Dcws *w, char *app)
 {
-	Fcrec *r;
+	Dcrec *r;
 	char *q;
 
 	if(w == nil || w->meta == nil)
 		return nil;
 	q = quotestrdup(app);
-	r = fcmetaquery(w->meta, "app %s", q);
+	r = dcmetaquery(w->meta, "app %s", q);
 	free(q);
 	return r;
 }
 
 static int
-plumbit(Fcws *w, char *path, char *dst)
+plumbit(Dcws *w, char *path, char *dst)
 {
 	Plumbmsg m;
 	Plumbattr a;
@@ -48,7 +48,7 @@ plumbit(Fcws *w, char *path, char *dst)
 		werrstr("not found: the plumber isn't running");
 		return -1;
 	}
-	dir = fcdirname(path);
+	dir = dcdirname(path);
 	memset(&m, 0, sizeof m);
 	m.src = "desktop";
 	m.dst = dst ? dst : "";
@@ -65,7 +65,7 @@ plumbit(Fcws *w, char *path, char *dst)
 	free(dir);
 	if(r < 0){
 		rerrstr(err, sizeof err);
-		werrstr("not found: nothing opens %s: %s", fcbasename(path), err);
+		werrstr("not found: nothing opens %s: %s", dcbasename(path), err);
 		return -1;
 	}
 	return 0;
@@ -75,17 +75,17 @@ plumbit(Fcws *w, char *path, char *dst)
  * Open path the way a double-click does. A folder is Desktop's own
  * business (Ofolder). A program (a file with an execute bit) that no
  * association claims is an application: it's launched (Olaunched), as
- * fclaunch does, in its own folder. Anything else goes to the plumber,
+ * dclaunch does, in its own folder. Anything else goes to the plumber,
  * addressed to the port its association names, if any; otherwise the
  * plumbing rules uxmeta generated (and the user's own) decide. *dst
  * gets the port the message was addressed to ("" for none, or for a
  * launch).
  */
 int
-fcopen(Fcws *w, char *path, char **dst)
+dcopen(Dcws *w, char *path, char **dst)
 {
 	Dir *d;
-	Fcrec *r;
+	Dcrec *r;
 	char *port, *dir, err[ERRMAX];
 	ulong mode;
 	int pid;
@@ -95,7 +95,7 @@ fcopen(Fcws *w, char *path, char **dst)
 	d = dirstat(path);
 	if(d == nil){
 		rerrstr(err, sizeof err);
-		werrstr("%s: %s: %s", fcerrname(fcerrclass(err)), path, err);
+		werrstr("%s: %s: %s", dcerrname(dcerrclass(err)), path, err);
 		return -1;
 	}
 	if(d->qid.type & QTDIR){
@@ -105,11 +105,11 @@ fcopen(Fcws *w, char *path, char **dst)
 	mode = d->mode;
 	free(d);
 	r = resolve(w, path);
-	if((mode & 0111) != 0 && fcrecget(r, "port") == nil
-	&& fcrecget(r, "open") == nil && fcrecget(r, "exec") == nil){
-		fcrecfree(r);
-		dir = fcdirname(path);
-		pid = fclaunch(w, path, dir, nil);
+	if((mode & 0111) != 0 && dcrecget(r, "port") == nil
+	&& dcrecget(r, "open") == nil && dcrecget(r, "exec") == nil){
+		dcrecfree(r);
+		dir = dcdirname(path);
+		pid = dclaunch(w, path, dir, nil);
 		free(dir);
 		if(pid < 0)
 			return -1;
@@ -117,24 +117,24 @@ fcopen(Fcws *w, char *path, char **dst)
 			*dst = strdup("");
 		return Olaunched;
 	}
-	port = fcrecget(r, "port");
-	if(port == nil && fcrecget(r, "exec") == nil)
-		port = fcrecget(r, "open");	/* open names a port, not an app */
+	port = dcrecget(r, "port");
+	if(port == nil && dcrecget(r, "exec") == nil)
+		port = dcrecget(r, "open");	/* open names a port, not an app */
 	if(plumbit(w, path, port) < 0){
-		fcrecfree(r);
+		dcrecfree(r);
 		return -1;
 	}
 	if(dst != nil)
 		*dst = strdup(port ? port : "");
-	fcrecfree(r);
+	dcrecfree(r);
 	return Oplumbed;
 }
 
 /* Open With: a particular application, by its app record */
 int
-fcopenwith(Fcws *w, char *path, char *app)
+dcopenwith(Dcws *w, char *path, char *app)
 {
-	Fcrec *r;
+	Dcrec *r;
 	char *port, *dir, *argv[2];
 	int n;
 
@@ -143,17 +143,17 @@ fcopenwith(Fcws *w, char *path, char *app)
 		werrstr("not found: no application %s", app);
 		return -1;
 	}
-	port = fcrecget(r, "port");
+	port = dcrecget(r, "port");
 	if(port != nil){
 		n = plumbit(w, path, port);
-		fcrecfree(r);
+		dcrecfree(r);
 		return n < 0 ? -1 : Oplumbed;
 	}
-	fcrecfree(r);
+	dcrecfree(r);
 	argv[0] = path;
 	argv[1] = nil;
-	dir = fcdirname(path);
-	n = fclaunch(w, app, dir, argv);
+	dir = dcdirname(path);
+	n = dclaunch(w, app, dir, argv);
 	free(dir);
 	if(n < 0)
 		return -1;
@@ -167,17 +167,17 @@ fcopenwith(Fcws *w, char *path, char *app)
  * if Desktop has one ($wsys), started in dir. Returns the pid.
  */
 int
-fclaunch(Fcws *w, char *app, char *dir, char **argv)
+dclaunch(Dcws *w, char *app, char *dir, char **argv)
 {
-	Fcrec *r;
+	Dcrec *r;
 	char *exec, *cmd, *q, *t, *wsys, *spec;
 	int i, pid, fd;
 
 	r = appreq(w, app);
-	exec = fcrecget(r, "exec");
+	exec = dcrecget(r, "exec");
 	if(exec == nil){
 		if(app[0] != '/'){
-			fcrecfree(r);
+			dcrecfree(r);
 			werrstr("not found: no application %s", app);
 			return -1;
 		}
@@ -192,7 +192,7 @@ fclaunch(Fcws *w, char *app, char *dir, char **argv)
 		free(cmd);
 		cmd = t;
 	}
-	fcrecfree(r);
+	dcrecfree(r);
 	if(dir == nil)
 		dir = "/";
 

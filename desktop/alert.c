@@ -8,7 +8,7 @@
 #include <draw.h>
 #include <thread.h>
 #include <ux.h>
-#include "fcore.h"
+#include "dcore.h"
 #include "desktop.h"
 #include "uxstyle.h"
 
@@ -73,7 +73,7 @@ alert(char *msg, char *def, char *other, void (*fn)(Alert*, int))
 	n = wrap(msg, line, nelem(line));
 	h = UXdialogmargin + (n > 2 ? n : 2)*UXlistrowheight + UXcontrolgroupgap + UXbuttonheight + UXdialogmargin;
 	r = Rect(300, 200, 300+Width, 200+h);
-	a = femalloc(sizeof *a);
+	a = demalloc(sizeof *a);
 	a->fn = fn;
 	a->w = uxdialog("Desktop", r);
 	r = Rect(0, 0, uxwinsize(a->w).x, uxwinsize(a->w).y);
@@ -104,7 +104,7 @@ alert(char *msg, char *def, char *other, void (*fn)(Alert*, int))
 }
 
 void
-alertevent(Alert *a, Fev *e)
+alertevent(Alert *a, Dev *e)
 {
 	Alert **l;
 	int choice;

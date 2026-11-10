@@ -9,7 +9,7 @@
  */
 #include <u.h>
 #include <libc.h>
-#include "fcore.h"
+#include "dcore.h"
 
 static int
 namecmp(void *a, void *b)
@@ -50,7 +50,7 @@ scan(char *path, Dir **dp, Dir **self)
 }
 
 static void
-seterr(Fcfolder *f)
+seterr(Dcfolder *f)
 {
 	char err[ERRMAX];
 
@@ -58,14 +58,14 @@ seterr(Fcfolder *f)
 	if(strncmp(err, "bad value", 9) == 0)
 		snprint(f->err, sizeof f->err, "%s", err);
 	else
-		snprint(f->err, sizeof f->err, "%s: %s: %s", fcerrname(fcerrclass(err)), f->path, err);
+		snprint(f->err, sizeof f->err, "%s: %s: %s", dcerrname(dcerrclass(err)), f->path, err);
 	werrstr("%s", f->err);
 }
 
-Fcfolder*
-fcfolderopen(char *path)
+Dcfolder*
+dcfolderopen(char *path)
 {
-	Fcfolder *f;
+	Dcfolder *f;
 
 	f = mallocz(sizeof *f, 1);
 	f->path = strdup(path);
@@ -73,7 +73,7 @@ fcfolderopen(char *path)
 	f->n = scan(f->path, &f->d, &f->self);
 	if(f->n < 0){
 		seterr(f);
-		fcfolderfree(f);
+		dcfolderfree(f);
 		return nil;
 	}
 	f->scans = 1;
@@ -81,7 +81,7 @@ fcfolderopen(char *path)
 }
 
 void
-fcfolderfree(Fcfolder *f)
+dcfolderfree(Dcfolder *f)
 {
 	if(f == nil)
 		return;
@@ -92,7 +92,7 @@ fcfolderfree(Fcfolder *f)
 }
 
 Dir*
-fcfind(Fcfolder *f, char *name)
+dcfind(Dcfolder *f, char *name)
 {
 	long lo, hi, mid;
 	int r;
@@ -113,7 +113,7 @@ fcfind(Fcfolder *f, char *name)
 }
 
 char*
-fcchangename(int op)
+dcchangename(int op)
 {
 	switch(op){
 	case Cadd:	return "add";
@@ -134,10 +134,10 @@ changed(Dir *a, Dir *b)
 }
 
 static void
-addchg(Fcchange **c, int *n, int op, char *name, char *old)
+addchg(Dcchange **c, int *n, int op, char *name, char *old)
 {
 	if((*n & 15) == 0)
-		*c = realloc(*c, (*n+16)*sizeof(Fcchange));
+		*c = realloc(*c, (*n+16)*sizeof(Dcchange));
 	(*c)[*n].op = op;
 	(*c)[*n].name = strdup(name);
 	(*c)[*n].old = old ? strdup(old) : nil;
@@ -150,12 +150,12 @@ addchg(Fcchange **c, int *n, int op, char *name, char *old)
  * (the old entries are kept, and f->err says why).
  */
 int
-fcrescan(Fcfolder *f, Fcchange **chg)
+dcrescan(Dcfolder *f, Dcchange **chg)
 {
 	Dir *nd, *self, *a, *b;
 	long nn, i, j;
 	int nc, *gone, *born, ng, nb, k, l;
-	Fcchange *c;
+	Dcchange *c;
 
 	*chg = nil;
 	nn = scan(f->path, &nd, &self);
@@ -219,7 +219,7 @@ fcrescan(Fcfolder *f, Fcchange **chg)
 }
 
 void
-fcchangefree(Fcchange *c, int n)
+dcchangefree(Dcchange *c, int n)
 {
 	int i;
 
@@ -304,7 +304,7 @@ cmpsize(void *a, void *b)
  * the Dirs belong to the folder until its next rescan.
  */
 Dir**
-fcsorted(Fcfolder *f, int how)
+dcsorted(Dcfolder *f, int how)
 {
 	Dir **v;
 	long i;
@@ -326,7 +326,7 @@ fcsorted(Fcfolder *f, int how)
 
 /* uxmeta's folder sort= names */
 int
-fcsortby(char *name)
+dcsortby(char *name)
 {
 	if(name == nil)
 		return Sname;

@@ -10,10 +10,10 @@
  */
 #include <u.h>
 #include <libc.h>
-#include "fcore.h"
+#include "dcore.h"
 
 char*
-fcjoin(char *dir, char *name)
+dcjoin(char *dir, char *name)
 {
 	if(name == nil || *name == 0)
 		return strdup(dir);
@@ -23,7 +23,7 @@ fcjoin(char *dir, char *name)
 }
 
 char*
-fcdirname(char *path)
+dcdirname(char *path)
 {
 	char *p, *s;
 
@@ -42,7 +42,7 @@ fcdirname(char *path)
 }
 
 char*
-fcbasename(char *path)
+dcbasename(char *path)
 {
 	char *p;
 
@@ -51,7 +51,7 @@ fcbasename(char *path)
 }
 
 int
-fcvalidname(char *name)
+dcvalidname(char *name)
 {
 	Rune r;
 	char *p;
@@ -75,37 +75,37 @@ fail(char *op, char *path)
 	int class;
 
 	rerrstr(err, sizeof err);
-	class = fcerrclass(err);
-	werrstr("%s: %s %s: %s", fcerrname(class), op, path, err);
+	class = dcerrclass(err);
+	werrstr("%s: %s %s: %s", dcerrname(class), op, path, err);
 	return -1;
 }
 
-static Fccaps*
-capsof(Fcws *w, char *path)
+static Dccaps*
+capsof(Dcws *w, char *path)
 {
-	Fcvol *v;
+	Dcvol *v;
 
-	if(w == nil || (v = fcvolof(w, path)) == nil)
+	if(w == nil || (v = dcvolof(w, path)) == nil)
 		return nil;
 	return &v->caps;
 }
 
 static char*
-volname(Fcws *w, char *path)
+volname(Dcws *w, char *path)
 {
-	Fcvol *v;
+	Dcvol *v;
 
-	if(w == nil || (v = fcvolof(w, path)) == nil)
+	if(w == nil || (v = dcvolof(w, path)) == nil)
 		return "this file server";
 	return v->name;
 }
 
 static int
-isvolroot(Fcws *w, char *path)
+isvolroot(Dcws *w, char *path)
 {
-	Fcvol *v;
+	Dcvol *v;
 
-	if(w == nil || (v = fcvolof(w, path)) == nil)
+	if(w == nil || (v = dcvolof(w, path)) == nil)
 		return 0;
 	return strcmp(v->path, path) == 0;
 }
@@ -122,7 +122,7 @@ exists(char *path)
 
 /* tell uxmeta, so folder and item layout follows the file */
 static void
-metarename(Fcws *w, char *old, char *new)
+metarename(Dcws *w, char *old, char *new)
 {
 	char *qo, *qn;
 
@@ -130,7 +130,7 @@ metarename(Fcws *w, char *old, char *new)
 		return;
 	qo = quotestrdup(old);
 	qn = quotestrdup(new);
-	fcmetactl(w->meta, "rename %s %s\n", qo, qn);
+	dcmetactl(w->meta, "rename %s %s\n", qo, qn);
 	free(qo);
 	free(qn);
 }
@@ -152,7 +152,7 @@ within(char *path, char *dir)
 enum { Bufsize = 64*1024 };
 
 static int
-progress(Fcws *w, char *path, vlong n)
+progress(Dcws *w, char *path, vlong n)
 {
 	if(w != nil && w->progress != nil && w->progress(w->progarg, path, n) != 0){
 		werrstr("cancelled: %s", path);
@@ -162,7 +162,7 @@ progress(Fcws *w, char *path, vlong n)
 }
 
 static void
-keeptimes(Fcws *w, char *dst, Dir *sd)
+keeptimes(Dcws *w, char *dst, Dir *sd)
 {
 	Dir nd;
 	char err[ERRMAX];
@@ -172,13 +172,13 @@ keeptimes(Fcws *w, char *dst, Dir *sd)
 	nd.mtime = sd->mtime;
 	ok = dirwstat(dst, &nd) >= 0;
 	rerrstr(err, sizeof err);
-	fccapnote(capsof(w, dst), Kmtime, ok, err);
+	dccapnote(capsof(w, dst), Kmtime, ok, err);
 }
 
-static int copytree(Fcws*, char*, char*, Dir*);
+static int copytree(Dcws*, char*, char*, Dir*);
 
 static int
-copyfile(Fcws *w, char *src, char *dst, Dir *sd)
+copyfile(Dcws *w, char *src, char *dst, Dir *sd)
 {
 	int in, out;
 	long n;
@@ -190,11 +190,11 @@ copyfile(Fcws *w, char *src, char *dst, Dir *sd)
 	out = create(dst, OWRITE|OEXCL, sd->mode & (0777|DMAPPEND|DMEXCL|DMTMP));
 	if(out < 0){
 		rerrstr(err, sizeof err);
-		fccapnote(capsof(w, dst), Kcreate, 0, err);
+		dccapnote(capsof(w, dst), Kcreate, 0, err);
 		close(in);
 		return fail("create", dst);
 	}
-	fccapnote(capsof(w, dst), Kcreate, 1, nil);
+	dccapnote(capsof(w, dst), Kcreate, 1, nil);
 	buf = malloc(Bufsize);
 	for(;;){
 		n = read(in, buf, Bufsize);
@@ -206,7 +206,7 @@ copyfile(Fcws *w, char *src, char *dst, Dir *sd)
 			break;
 		if(write(out, buf, n) != n){
 			rerrstr(err, sizeof err);
-			fccapnote(capsof(w, dst), Kwrite, 0, err);
+			dccapnote(capsof(w, dst), Kwrite, 0, err);
 			fail("write", dst);
 			goto Err;
 		}
@@ -226,7 +226,7 @@ Err:
 }
 
 static int
-copydir(Fcws *w, char *src, char *dst, Dir *sd)
+copydir(Dcws *w, char *src, char *dst, Dir *sd)
 {
 	int fd;
 	long i, n;
@@ -243,15 +243,15 @@ copydir(Fcws *w, char *src, char *dst, Dir *sd)
 	fd = create(dst, OREAD|OEXCL, DMDIR|(sd->mode&0777));
 	if(fd < 0){
 		rerrstr(err, sizeof err);
-		fccapnote(capsof(w, dst), Kmkdir, 0, err);
+		dccapnote(capsof(w, dst), Kmkdir, 0, err);
 		free(d);
 		return fail("create", dst);
 	}
-	fccapnote(capsof(w, dst), Kmkdir, 1, nil);
+	dccapnote(capsof(w, dst), Kmkdir, 1, nil);
 	close(fd);
 	for(i = 0; i < n; i++){
-		s = fcjoin(src, d[i].name);
-		t = fcjoin(dst, d[i].name);
+		s = dcjoin(src, d[i].name);
+		t = dcjoin(dst, d[i].name);
 		if(copytree(w, s, t, &d[i]) < 0){
 			free(s);
 			free(t);
@@ -269,14 +269,14 @@ copydir(Fcws *w, char *src, char *dst, Dir *sd)
 }
 
 static int
-copytree(Fcws *w, char *src, char *dst, Dir *sd)
+copytree(Dcws *w, char *src, char *dst, Dir *sd)
 {
 	if(sd->qid.type & QTDIR)
 		return copydir(w, src, dst, sd);
 	return copyfile(w, src, dst, sd);
 }
 
-static int removetree(Fcws*, char*, Dir*, int*);
+static int removetree(Dcws*, char*, Dir*, int*);
 
 /*
  * Copy path (a file or a folder and everything in it) into dstdir,
@@ -284,15 +284,15 @@ static int removetree(Fcws*, char*, Dir*, int*);
  * copied is removed again. Returns the new path.
  */
 char*
-fccopy(Fcws *w, char *path, char *dstdir, char *newname)
+dccopy(Dcws *w, char *path, char *dstdir, char *newname)
 {
 	Dir *sd, *dd;
 	char *dst, err[ERRMAX];
 	int n;
 
 	if(newname == nil)
-		newname = fcbasename(path);
-	if(!fcvalidname(newname)){
+		newname = dcbasename(path);
+	if(!dcvalidname(newname)){
 		werrstr("bad value: %q is not a valid name", newname);
 		return nil;
 	}
@@ -314,7 +314,7 @@ fccopy(Fcws *w, char *path, char *dstdir, char *newname)
 		return nil;
 	}
 	free(dd);
-	dst = fcjoin(dstdir, newname);
+	dst = dcjoin(dstdir, newname);
 	if(exists(dst)){
 		free(sd);
 		werrstr("exists: %s", dst);
@@ -353,7 +353,7 @@ fccopy(Fcws *w, char *path, char *dstdir, char *newname)
 /* removing */
 
 static int
-removetree(Fcws *w, char *path, Dir *pd, int *count)
+removetree(Dcws *w, char *path, Dir *pd, int *count)
 {
 	Dir *d, *cd;
 	long i, n;
@@ -381,7 +381,7 @@ removetree(Fcws *w, char *path, Dir *pd, int *count)
 			return fail("read", path);
 		}
 		for(i = 0; i < n; i++){
-			c = fcjoin(path, cd[i].name);
+			c = dcjoin(path, cd[i].name);
 			r = removetree(w, c, d, count);
 			free(c);
 			if(r < 0){
@@ -395,10 +395,10 @@ removetree(Fcws *w, char *path, Dir *pd, int *count)
 	free(d);
 	if(remove(path) < 0){
 		rerrstr(err, sizeof err);
-		fccapnote(capsof(w, path), Kremove, 0, err);
+		dccapnote(capsof(w, path), Kremove, 0, err);
 		return fail("remove", path);
 	}
-	fccapnote(capsof(w, path), Kremove, 1, nil);
+	dccapnote(capsof(w, path), Kremove, 1, nil);
 	(*count)++;
 	return progress(w, path, 0);
 }
@@ -409,7 +409,7 @@ removetree(Fcws *w, char *path, Dir *pd, int *count)
  * and says how much went.
  */
 int
-fcdelete(Fcws *w, char *path, int flags)
+dcdelete(Dcws *w, char *path, int flags)
 {
 	Dir *d, *cd;
 	long n;
@@ -452,12 +452,12 @@ fcdelete(Fcws *w, char *path, int flags)
 
 /* copy, then delete the original; for moves and renames 9P can't do */
 static int
-copydel(Fcws *w, char *path, char *dstdir, char *newname)
+copydel(Dcws *w, char *path, char *dstdir, char *newname)
 {
 	char *dst, err[ERRMAX];
 	int count;
 
-	dst = fccopy(w, path, dstdir, newname);
+	dst = dccopy(w, path, dstdir, newname);
 	if(dst == nil)
 		return -1;
 	count = 0;
@@ -473,13 +473,13 @@ copydel(Fcws *w, char *path, char *dstdir, char *newname)
 }
 
 int
-fcrename(Fcws *w, char *path, char *newname, int flags)
+dcrename(Dcws *w, char *path, char *newname, int flags)
 {
 	Dir nd, *d;
 	char *dir, *dst, err[ERRMAX];
 	int class, r;
 
-	if(!fcvalidname(newname)){
+	if(!dcvalidname(newname)){
 		werrstr("bad value: %q is not a valid name", newname);
 		return -1;
 	}
@@ -495,8 +495,8 @@ fcrename(Fcws *w, char *path, char *newname, int flags)
 		return 0;
 	}
 	free(d);
-	dir = fcdirname(path);
-	dst = fcjoin(dir, newname);
+	dir = dcdirname(path);
+	dst = dcjoin(dir, newname);
 	if(exists(dst)){
 		werrstr("exists: %s", dst);
 		free(dir);
@@ -506,15 +506,15 @@ fcrename(Fcws *w, char *path, char *newname, int flags)
 	nulldir(&nd);
 	nd.name = newname;
 	if(dirwstat(path, &nd) >= 0){
-		fccapnote(capsof(w, path), Krename, 1, nil);
+		dccapnote(capsof(w, path), Krename, 1, nil);
 		metarename(w, path, dst);
 		free(dir);
 		free(dst);
 		return 0;
 	}
 	rerrstr(err, sizeof err);
-	class = fcerrclass(err);
-	fccapnote(capsof(w, path), Krename, 0, err);
+	class = dcerrclass(err);
+	dccapnote(capsof(w, path), Krename, 0, err);
 	if(class != Enotsup){
 		free(dir);
 		free(dst);
@@ -534,7 +534,7 @@ fcrename(Fcws *w, char *path, char *newname, int flags)
 }
 
 int
-fcmove(Fcws *w, char *path, char *dstdir, int flags)
+dcmove(Dcws *w, char *path, char *dstdir, int flags)
 {
 	char *dir, *dst, *src;
 	Dir *d;
@@ -542,7 +542,7 @@ fcmove(Fcws *w, char *path, char *dstdir, int flags)
 
 	src = strdup(path);
 	cleanname(src);
-	dir = fcdirname(src);
+	dir = dcdirname(src);
 	d = dirstat(dstdir);
 	if(d == nil){
 		free(src);
@@ -569,7 +569,7 @@ fcmove(Fcws *w, char *path, char *dstdir, int flags)
 		werrstr("bad value: can't move a folder into itself");
 		goto Out;
 	}
-	dst = fcjoin(dstdir, fcbasename(src));
+	dst = dcjoin(dstdir, dcbasename(src));
 	if(exists(dst)){
 		werrstr("exists: %s", dst);
 		free(dst);
@@ -589,7 +589,7 @@ Out:
 
 /* "name copy.ext", then "name copy 2.ext", ... */
 char*
-fcduplicate(Fcws *w, char *path)
+dcduplicate(Dcws *w, char *path)
 {
 	Dir *d;
 	char *dir, *name, *base, *ext, *e, *cand, *r, err[ERRMAX];
@@ -605,8 +605,8 @@ fcduplicate(Fcws *w, char *path)
 		werrstr("bad value: can't duplicate a volume");
 		return nil;
 	}
-	dir = fcdirname(path);
-	name = strdup(fcbasename(path));
+	dir = dcdirname(path);
+	name = strdup(dcbasename(path));
 	ext = "";
 	if((d->qid.type & QTDIR) == 0 && (e = strrchr(name, '.')) != nil && e != name){
 		ext = strdup(e);
@@ -621,7 +621,7 @@ fcduplicate(Fcws *w, char *path)
 			cand = smprint("%s copy%s", base, ext);
 		else
 			cand = smprint("%s copy %d%s", base, i, ext);
-		r = fccopy(w, path, dir, cand);
+		r = dccopy(w, path, dir, cand);
 		free(cand);
 		if(r != nil)
 			break;
@@ -637,12 +637,12 @@ fcduplicate(Fcws *w, char *path)
 
 /* a new folder in dir, named name or "untitled folder", "untitled folder 2", ... */
 char*
-fcmkdir(Fcws *w, char *dir, char *name)
+dcmkdir(Dcws *w, char *dir, char *name)
 {
 	char *p, *cand, err[ERRMAX];
 	int i, fd;
 
-	if(name != nil && !fcvalidname(name)){
+	if(name != nil && !dcvalidname(name)){
 		werrstr("bad value: %q is not a valid name", name);
 		return nil;
 	}
@@ -653,7 +653,7 @@ fcmkdir(Fcws *w, char *dir, char *name)
 			cand = strdup("untitled folder");
 		else
 			cand = smprint("untitled folder %d", i);
-		p = fcjoin(dir, cand);
+		p = dcjoin(dir, cand);
 		free(cand);
 		if(exists(p)){
 			if(name != nil){
@@ -667,11 +667,11 @@ fcmkdir(Fcws *w, char *dir, char *name)
 		fd = create(p, OREAD|OEXCL, DMDIR|0777);
 		if(fd >= 0){
 			close(fd);
-			fccapnote(capsof(w, p), Kmkdir, 1, nil);
+			dccapnote(capsof(w, p), Kmkdir, 1, nil);
 			return p;
 		}
 		rerrstr(err, sizeof err);
-		fccapnote(capsof(w, p), Kmkdir, 0, err);
+		dccapnote(capsof(w, p), Kmkdir, 0, err);
 		fail("new folder", p);
 		free(p);
 		return nil;
@@ -681,7 +681,7 @@ fcmkdir(Fcws *w, char *dir, char *name)
 }
 
 int
-fcchmod(Fcws *w, char *path, ulong mode)
+dcchmod(Dcws *w, char *path, ulong mode)
 {
 	Dir nd, *d;
 	char err[ERRMAX];
@@ -698,9 +698,9 @@ fcchmod(Fcws *w, char *path, ulong mode)
 	free(d);
 	if(dirwstat(path, &nd) < 0){
 		rerrstr(err, sizeof err);
-		fccapnote(capsof(w, path), Kchmod, 0, err);
+		dccapnote(capsof(w, path), Kchmod, 0, err);
 		return fail("chmod", path);
 	}
-	fccapnote(capsof(w, path), Kchmod, 1, nil);
+	dccapnote(capsof(w, path), Kchmod, 1, nil);
 	return 0;
 }

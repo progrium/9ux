@@ -1,5 +1,5 @@
 /*
- * fcore: Desktop's core, everything in Desktop that isn't drawing.
+ * dcore: Desktop's core, everything in Desktop that isn't drawing.
  *
  * Volumes come from an explicit registry (uxmeta's volume records),
  * never from guessing at the namespace. Folders are directories, read
@@ -12,46 +12,46 @@
  * README.md (Errors), so callers match on the phrase, not the detail.
  */
 
-typedef struct Fcattr Fcattr;
-typedef struct Fcrec Fcrec;
-typedef struct Fcmeta Fcmeta;
-typedef struct Fccaps Fccaps;
-typedef struct Fcvol Fcvol;
-typedef struct Fcws Fcws;
-typedef struct Fcfolder Fcfolder;
-typedef struct Fcchange Fcchange;
-typedef struct Fcinfo Fcinfo;
-typedef struct Fctrashitem Fctrashitem;
+typedef struct Dcattr Dcattr;
+typedef struct Dcrec Dcrec;
+typedef struct Dcmeta Dcmeta;
+typedef struct Dccaps Dccaps;
+typedef struct Dcvol Dcvol;
+typedef struct Dcws Dcws;
+typedef struct Dcfolder Dcfolder;
+typedef struct Dcchange Dcchange;
+typedef struct Dcinfo Dcinfo;
+typedef struct Dctrashitem Dctrashitem;
 
 /* metadata records (meta.c), as uxmeta serves them: ndb text */
-struct Fcattr
+struct Dcattr
 {
 	char	*attr;
 	char	*val;
 };
 
-struct Fcrec
+struct Dcrec
 {
-	Fcattr	*a;	/* a[0] is kind=key */
+	Dcattr	*a;	/* a[0] is kind=key */
 	int	na;
-	Fcrec	*next;
+	Dcrec	*next;
 };
 
-struct Fcmeta
+struct Dcmeta
 {
 	char	*root;	/* where uxmeta is mounted, usually /mnt/meta */
 	vlong	gen;	/* generation of the last query */
 };
 
-Fcmeta*	fcmetaopen(char *root);
-void	fcmetaclose(Fcmeta*);
-Fcrec*	fcmetaquery(Fcmeta*, char *fmt, ...);
-int	fcmetactl(Fcmeta*, char *fmt, ...);
-vlong	fcmetagen(Fcmeta*);
-Fcrec*	fcparserecs(char *text, vlong *gen);
-char*	fcrecget(Fcrec*, char *attr);
-char*	fcreckey(Fcrec*);
-void	fcrecfree(Fcrec*);
+Dcmeta*	dcmetaopen(char *root);
+void	dcmetaclose(Dcmeta*);
+Dcrec*	dcmetaquery(Dcmeta*, char *fmt, ...);
+int	dcmetactl(Dcmeta*, char *fmt, ...);
+vlong	dcmetagen(Dcmeta*);
+Dcrec*	dcparserecs(char *text, vlong *gen);
+char*	dcrecget(Dcrec*, char *attr);
+char*	dcreckey(Dcrec*);
+void	dcrecfree(Dcrec*);
 
 /* errors (caps.c) */
 enum
@@ -63,8 +63,8 @@ enum
 	Enotfound,
 	Eexist,
 };
-int	fcerrclass(char *err);
-char*	fcerrname(int class);
+int	dcerrclass(char *err);
+char*	dcerrname(int class);
 
 /* what a volume's server supports, learned by probing or by use */
 enum
@@ -85,15 +85,15 @@ enum
 	Kmtime,
 	Nkind,
 };
-struct Fccaps
+struct Dccaps
 {
 	char	c[Nkind];
 	char	why[Nkind][ERRMAX];	/* the server's error when c is Cno */
 };
-char*	fccapname(int kind);
-char*	fccapval(int val);
-void	fccapnote(Fccaps*, int kind, int ok, char *err);
-int	fcprobe(Fcvol*, char *dir);
+char*	dccapname(int kind);
+char*	dccapval(int val);
+void	dccapnote(Dccaps*, int kind, int ok, char *err);
+int	dcprobe(Dcvol*, char *dir);
 
 /* volumes and the workspace (vol.c) */
 enum
@@ -102,7 +102,7 @@ enum
 	Vonline,
 	Voffline,
 };
-struct Fcvol
+struct Dcvol
 {
 	char	*name;
 	char	*path;		/* mount point in the session namespace */
@@ -119,32 +119,32 @@ struct Fcvol
 	ushort	type;
 	uint	dev;
 	Qid	qid;
-	Fccaps	caps;
-	int	seen;		/* still in the registry (fcwsload) */
+	Dccaps	caps;
+	int	seen;		/* still in the registry (dcwsload) */
 };
 
-struct Fcws
+struct Dcws
 {
 	char	*name;		/* workspace name, carried by launches */
-	Fcmeta	*meta;		/* nil: no uxmeta; volumes added by hand */
-	Fcvol	**vol;
+	Dcmeta	*meta;		/* nil: no uxmeta; volumes added by hand */
+	Dcvol	**vol;
 	int	nvol;
 	vlong	gen;		/* meta generation volumes were loaded at */
 	int	(*progress)(void *arg, char *path, vlong bytes);	/* nonzero cancels */
 	void	*progarg;
 };
 
-Fcws*	fcwsopen(char *name, Fcmeta*);
-void	fcwsclose(Fcws*);
-int	fcwsload(Fcws*);
-Fcvol*	fcwsaddvol(Fcws*, char *name, char *path);
-Fcvol*	fcvolbyname(Fcws*, char *name);
-Fcvol*	fcvolof(Fcws*, char *path);
-char*	fcvolstate(int state);
-int	fcvolcheck(Fcvol*);
-int	fcvolattach(Fcvol*);
-int	fcvoldetach(Fcvol*);
-char*	fcresolve(Fcws*, char *arg);
+Dcws*	dcwsopen(char *name, Dcmeta*);
+void	dcwsclose(Dcws*);
+int	dcwsload(Dcws*);
+Dcvol*	dcwsaddvol(Dcws*, char *name, char *path);
+Dcvol*	dcvolbyname(Dcws*, char *name);
+Dcvol*	dcvolof(Dcws*, char *path);
+char*	dcvolstate(int state);
+int	dcvolcheck(Dcvol*);
+int	dcvolattach(Dcvol*);
+int	dcvoldetach(Dcvol*);
+char*	dcresolve(Dcws*, char *arg);
 
 /* folders (folder.c) */
 enum
@@ -161,7 +161,7 @@ enum
 	Sdate,
 	Ssize,
 };
-struct Fcfolder
+struct Dcfolder
 {
 	char	*path;
 	Dir	*d;		/* entries, sorted by name */
@@ -170,21 +170,21 @@ struct Fcfolder
 	ulong	scans;
 	char	err[ERRMAX];
 };
-struct Fcchange
+struct Dcchange
 {
 	int	op;
 	char	*name;
 	char	*old;		/* Cren: the previous name */
 };
 
-Fcfolder*	fcfolderopen(char *path);
-void	fcfolderfree(Fcfolder*);
-int	fcrescan(Fcfolder*, Fcchange **chg);
-void	fcchangefree(Fcchange*, int n);
-char*	fcchangename(int op);
-Dir*	fcfind(Fcfolder*, char *name);
-Dir**	fcsorted(Fcfolder*, int how);
-int	fcsortby(char *name);
+Dcfolder*	dcfolderopen(char *path);
+void	dcfolderfree(Dcfolder*);
+int	dcrescan(Dcfolder*, Dcchange **chg);
+void	dcchangefree(Dcchange*, int n);
+char*	dcchangename(int op);
+Dir*	dcfind(Dcfolder*, char *name);
+Dir**	dcsorted(Dcfolder*, int how);
+int	dcsortby(char *name);
 
 /* file operations (ops.c) */
 enum
@@ -192,35 +192,35 @@ enum
 	Fcopydel	= 1<<0,	/* allow copy and delete where rename can't */
 	Frecursive	= 1<<1,	/* delete folders with what's in them */
 };
-int	fcrename(Fcws*, char *path, char *newname, int flags);
-int	fcmove(Fcws*, char *path, char *dstdir, int flags);
-char*	fccopy(Fcws*, char *path, char *dstdir, char *newname);
-char*	fcduplicate(Fcws*, char *path);
-int	fcdelete(Fcws*, char *path, int flags);
-char*	fcmkdir(Fcws*, char *dir, char *name);
-int	fcchmod(Fcws*, char *path, ulong mode);
-int	fcvalidname(char *name);
-char*	fcjoin(char *dir, char *name);
-char*	fcdirname(char *path);
-char*	fcbasename(char *path);
+int	dcrename(Dcws*, char *path, char *newname, int flags);
+int	dcmove(Dcws*, char *path, char *dstdir, int flags);
+char*	dccopy(Dcws*, char *path, char *dstdir, char *newname);
+char*	dcduplicate(Dcws*, char *path);
+int	dcdelete(Dcws*, char *path, int flags);
+char*	dcmkdir(Dcws*, char *dir, char *name);
+int	dcchmod(Dcws*, char *path, ulong mode);
+int	dcvalidname(char *name);
+char*	dcjoin(char *dir, char *name);
+char*	dcdirname(char *path);
+char*	dcbasename(char *path);
 
 /* Get Info (info.c) */
-struct Fcinfo
+struct Dcinfo
 {
 	char	*path;
 	char	*name;
 	char	*where;		/* the folder it's in */
-	Fcvol	*vol;
+	Dcvol	*vol;
 	Dir	*d;
 	char	*kind;		/* folder, volume, application, a type's desc, or document */
-	Fcrec	*assoc;		/* uxmeta's resolve record, or nil */
+	Dcrec	*assoc;		/* uxmeta's resolve record, or nil */
 	int	writable;
 	vlong	size;		/* bytes; for a folder, of everything in it when deep */
 	long	items;		/* for a folder: entries in it, or below it when deep */
 	int	complete;	/* deep count finished within its limit */
 };
-Fcinfo*	fcinfo(Fcws*, char *path, int deep);
-void	fcinfofree(Fcinfo*);
+Dcinfo*	dcinfo(Dcws*, char *path, int deep);
+void	dcinfofree(Dcinfo*);
 
 /* opening and launching (launch.c) */
 enum
@@ -229,24 +229,24 @@ enum
 	Oplumbed,	/* sent to the plumber */
 	Olaunched,
 };
-int	fcopen(Fcws*, char *path, char **dst);
-int	fcopenwith(Fcws*, char *path, char *app);
-int	fclaunch(Fcws*, char *app, char *dir, char **argv);
+int	dcopen(Dcws*, char *path, char **dst);
+int	dcopenwith(Dcws*, char *path, char *app);
+int	dclaunch(Dcws*, char *app, char *dir, char **argv);
 
 /* Trash, one per volume (trash.c) */
-struct Fctrashitem
+struct Dctrashitem
 {
 	char	*path;		/* where it is now, in the Trash */
 	char	*name;
 	char	*origin;	/* where it came from; nil if unknown */
 	long	date;		/* when it was trashed */
-	Fcvol	*vol;
+	Dcvol	*vol;
 };
-char*	fctrash(Fcws*, char *path, int flags);	/* returns where it went */
-long	fctrashlist(Fcws*, Fcvol*, Fctrashitem**);	/* oldest first */
-void	fctrashfree(Fctrashitem*, long);
-char*	fcputback(Fcws*, char *item);		/* returns where it went back to */
-int	fcemptytrash(Fcws*, Fcvol*);
-char*	fctrashlimit(Fcws*, Fcvol*);	/* a sentence for the UI, malloc'd */
-char*	fctrashdir(Fcvol*);
-int	fcintrash(Fcws*, char *path);
+char*	dctrash(Dcws*, char *path, int flags);	/* returns where it went */
+long	dctrashlist(Dcws*, Dcvol*, Dctrashitem**);	/* oldest first */
+void	dctrashfree(Dctrashitem*, long);
+char*	dcputback(Dcws*, char *item);		/* returns where it went back to */
+int	dcemptytrash(Dcws*, Dcvol*);
+char*	dctrashlimit(Dcws*, Dcvol*);	/* a sentence for the UI, malloc'd */
+char*	dctrashdir(Dcvol*);
+int	dcintrash(Dcws*, char *path);

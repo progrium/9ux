@@ -3,7 +3,7 @@
  */
 #include <u.h>
 #include <libc.h>
-#include "fcore.h"
+#include "dcore.h"
 
 enum { Deeplimit = 100000 };
 
@@ -31,7 +31,7 @@ walk(char *path, Dir *pd, vlong *size, long *items)
 		*size += d[i].length;
 		if((d[i].qid.type & QTDIR) == 0)
 			continue;
-		c = fcjoin(path, d[i].name);
+		c = dcjoin(path, d[i].name);
 		sd = dirstat(c);
 		if(sd != nil && sd->type == pd->type && sd->dev == pd->dev)
 		if(walk(c, sd, size, items) < 0){
@@ -68,10 +68,10 @@ canwrite(char *path, Dir *d)
 	return (d->mode & 0002) != 0;
 }
 
-Fcinfo*
-fcinfo(Fcws *w, char *path, int deep)
+Dcinfo*
+dcinfo(Dcws *w, char *path, int deep)
 {
-	Fcinfo *fi;
+	Dcinfo *fi;
 	Dir *d, *cd;
 	char *p, *s;
 	int fd;
@@ -84,16 +84,16 @@ fcinfo(Fcws *w, char *path, int deep)
 		char err[ERRMAX];
 
 		rerrstr(err, sizeof err);
-		werrstr("%s: %s: %s", fcerrname(fcerrclass(err)), p, err);
+		werrstr("%s: %s: %s", dcerrname(dcerrclass(err)), p, err);
 		free(p);
 		return nil;
 	}
 	fi = mallocz(sizeof *fi, 1);
 	fi->path = p;
-	fi->name = strdup(strcmp(p, "/") == 0 ? "/" : fcbasename(p));
-	fi->where = fcdirname(p);
+	fi->name = strdup(strcmp(p, "/") == 0 ? "/" : dcbasename(p));
+	fi->where = dcdirname(p);
 	fi->d = d;
-	fi->vol = w ? fcvolof(w, p) : nil;
+	fi->vol = w ? dcvolof(w, p) : nil;
 	fi->writable = canwrite(p, d);
 	fi->complete = 1;
 	if(fi->vol != nil && strcmp(fi->vol->path, p) == 0)
@@ -123,12 +123,12 @@ fcinfo(Fcws *w, char *path, int deep)
 	fi->size = d->length;
 	if(w != nil && w->meta != nil){
 		s = quotestrdup(p);
-		fi->assoc = fcmetaquery(w->meta, "resolve %s", s);
+		fi->assoc = dcmetaquery(w->meta, "resolve %s", s);
 		free(s);
 	}
-	if((s = fcrecget(fi->assoc, "desc")) != nil)
+	if((s = dcrecget(fi->assoc, "desc")) != nil)
 		fi->kind = strdup(s);
-	else if((s = fcrecget(fi->assoc, "type")) != nil)
+	else if((s = dcrecget(fi->assoc, "type")) != nil)
 		fi->kind = smprint("%s document", s);
 	else if(d->mode & 0111)
 		fi->kind = strdup("program");
@@ -138,7 +138,7 @@ fcinfo(Fcws *w, char *path, int deep)
 }
 
 void
-fcinfofree(Fcinfo *fi)
+dcinfofree(Dcinfo *fi)
 {
 	if(fi == nil)
 		return;
@@ -147,6 +147,6 @@ fcinfofree(Fcinfo *fi)
 	free(fi->where);
 	free(fi->d);
 	free(fi->kind);
-	fcrecfree(fi->assoc);
+	dcrecfree(fi->assoc);
 	free(fi);
 }

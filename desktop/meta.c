@@ -3,7 +3,7 @@
  */
 #include <u.h>
 #include <libc.h>
-#include "fcore.h"
+#include "dcore.h"
 
 static char*
 readall(int fd)
@@ -36,10 +36,10 @@ readall(int fd)
 	return buf;
 }
 
-Fcmeta*
-fcmetaopen(char *root)
+Dcmeta*
+dcmetaopen(char *root)
 {
-	Fcmeta *m;
+	Dcmeta *m;
 	char *p, *v;
 	int fd;
 
@@ -68,7 +68,7 @@ fcmetaopen(char *root)
 }
 
 void
-fcmetaclose(Fcmeta *m)
+dcmetaclose(Dcmeta *m)
 {
 	if(m == nil)
 		return;
@@ -80,7 +80,7 @@ fcmetaclose(Fcmeta *m)
  * Write one line to file and read the reply on the same fid.
  */
 static char*
-transact(Fcmeta *m, char *file, char *line)
+transact(Dcmeta *m, char *file, char *line)
 {
 	char *p, *r;
 	int fd;
@@ -99,12 +99,12 @@ transact(Fcmeta *m, char *file, char *line)
 	return r;
 }
 
-Fcrec*
-fcmetaquery(Fcmeta *m, char *fmt, ...)
+Dcrec*
+dcmetaquery(Dcmeta *m, char *fmt, ...)
 {
 	va_list arg;
 	char *q, *r;
-	Fcrec *recs;
+	Dcrec *recs;
 
 	if(m == nil){
 		werrstr("not found: no metadata service");
@@ -117,7 +117,7 @@ fcmetaquery(Fcmeta *m, char *fmt, ...)
 	free(q);
 	if(r == nil)
 		return nil;
-	recs = fcparserecs(r, &m->gen);
+	recs = dcparserecs(r, &m->gen);
 	free(r);
 	if(recs == nil)
 		werrstr("not found: no records");
@@ -125,7 +125,7 @@ fcmetaquery(Fcmeta *m, char *fmt, ...)
 }
 
 int
-fcmetactl(Fcmeta *m, char *fmt, ...)
+dcmetactl(Dcmeta *m, char *fmt, ...)
 {
 	va_list arg;
 	char *p, *q;
@@ -155,7 +155,7 @@ fcmetactl(Fcmeta *m, char *fmt, ...)
 }
 
 vlong
-fcmetagen(Fcmeta *m)
+dcmetagen(Dcmeta *m)
 {
 	char *p, *r;
 	int fd;
@@ -178,7 +178,7 @@ fcmetagen(Fcmeta *m)
 }
 
 static void
-addattr(Fcrec *r, char *attr, char *val)
+addattr(Dcrec *r, char *attr, char *val)
 {
 	if((r->na & 7) == 0)
 		r->a = realloc(r->a, (r->na+8)*sizeof r->a[0]);
@@ -192,10 +192,10 @@ addattr(Fcrec *r, char *attr, char *val)
  * indented lines; attr=value pairs, values may be "double quoted";
  * # starts a comment. A "# gen N" comment line sets *gen.
  */
-Fcrec*
-fcparserecs(char *text, vlong *gen)
+Dcrec*
+dcparserecs(char *text, vlong *gen)
 {
-	Fcrec *head, **tail, *cur;
+	Dcrec *head, **tail, *cur;
 	char *p, *e, *line, *a, *v;
 
 	head = nil;
@@ -254,7 +254,7 @@ fcparserecs(char *text, vlong *gen)
 }
 
 char*
-fcrecget(Fcrec *r, char *attr)
+dcrecget(Dcrec *r, char *attr)
 {
 	int i;
 
@@ -267,7 +267,7 @@ fcrecget(Fcrec *r, char *attr)
 }
 
 char*
-fcreckey(Fcrec *r)
+dcreckey(Dcrec *r)
 {
 	if(r == nil || r->na == 0)
 		return nil;
@@ -275,9 +275,9 @@ fcreckey(Fcrec *r)
 }
 
 void
-fcrecfree(Fcrec *r)
+dcrecfree(Dcrec *r)
 {
-	Fcrec *n;
+	Dcrec *n;
 	int i;
 
 	for(; r != nil; r = n){

@@ -7,12 +7,12 @@
  * original. Each item goes in its own slot, .trash/STAMP/NAME, with
  * .trash/STAMP/.origin recording where it came from and when, so Put
  * Back can return it. Nothing is ever moved to another volume's Trash:
- * a volume that can't hold one says so (fctrashlimit), and the UI
+ * a volume that can't hold one says so (dctrashlimit), and the UI
  * offers Delete instead.
  */
 #include <u.h>
 #include <libc.h>
-#include "fcore.h"
+#include "dcore.h"
 
 static char trashname[] = ".trash";
 static char originname[] = ".origin";
@@ -31,7 +31,7 @@ isdir(char *path)
 
 /* the path inside the volume, without its mount point: "docs/a.txt" */
 static char*
-relpath(Fcvol *v, char *path)
+relpath(Dcvol *v, char *path)
 {
 	int n;
 
@@ -44,18 +44,18 @@ relpath(Fcvol *v, char *path)
 }
 
 char*
-fctrashdir(Fcvol *v)
+dctrashdir(Dcvol *v)
 {
-	return fcjoin(v->path, trashname);
+	return dcjoin(v->path, trashname);
 }
 
 int
-fcintrash(Fcws *w, char *path)
+dcintrash(Dcws *w, char *path)
 {
-	Fcvol *v;
+	Dcvol *v;
 	char *r;
 
-	if((v = fcvolof(w, path)) == nil || (r = relpath(v, path)) == nil)
+	if((v = dcvolof(w, path)) == nil || (r = relpath(v, path)) == nil)
 		return 0;
 	return strncmp(r, trashname, sizeof trashname-1) == 0
 		&& (r[sizeof trashname-1] == 0 || r[sizeof trashname-1] == '/');
@@ -63,19 +63,19 @@ fcintrash(Fcws *w, char *path)
 
 /* make the volume's trash folder if it isn't there */
 static char*
-ensuretrash(Fcvol *v)
+ensuretrash(Dcvol *v)
 {
 	char *t, err[ERRMAX];
 	int fd;
 
-	t = fctrashdir(v);
+	t = dctrashdir(v);
 	if(isdir(t))
 		return t;
 	fd = create(t, OREAD, DMDIR|0777);
 	if(fd < 0){
 		rerrstr(err, sizeof err);
-		fccapnote(&v->caps, Kmkdir, fcerrclass(err) == Eperm, err);
-		if(fcerrclass(err) == Eperm)
+		dccapnote(&v->caps, Kmkdir, dcerrclass(err) == Eperm, err);
+		if(dcerrclass(err) == Eperm)
 			werrstr("permission denied: can't make %s's Trash: %s", v->name, err);
 		else
 			werrstr("not supported: %s can't hold a Trash (%s); delete instead", v->name, err);
@@ -95,7 +95,7 @@ newslot(char *trash)
 
 	for(i = 0; i < 1000; i++){
 		snprint(stamp, sizeof stamp, "%ld.%d", time(0), i);
-		s = fcjoin(trash, stamp);
+		s = dcjoin(trash, stamp);
 		fd = create(s, OREAD|OEXCL, DMDIR|0777);
 		if(fd >= 0){
 			close(fd);
@@ -108,15 +108,15 @@ newslot(char *trash)
 }
 
 static void
-rmslot(Fcws *w, char *slot)
+rmslot(Dcws *w, char *slot)
 {
-	fcdelete(w, slot, Frecursive);
+	dcdelete(w, slot, Frecursive);
 }
 
 char*
-fctrash(Fcws *w, char *path, int flags)
+dctrash(Dcws *w, char *path, int flags)
 {
-	Fcvol *v;
+	Dcvol *v;
 	char *p, *rel, *trash, *slot, *o, *dst, err[ERRMAX];
 	int fd;
 	Dir *d;
@@ -124,13 +124,13 @@ fctrash(Fcws *w, char *path, int flags)
 	USED(flags);
 	p = strdup(path);
 	cleanname(p);
-	v = fcvolof(w, p);
+	v = dcvolof(w, p);
 	if(v == nil || (rel = relpath(v, p)) == nil){
 		werrstr("not supported: %s isn't on a volume, so it has no Trash; delete instead", p);
 		free(p);
 		return nil;
 	}
-	if(fcintrash(w, p)){
+	if(dcintrash(w, p)){
 		werrstr("bad value: %s is already in the Trash", p);
 		free(p);
 		return nil;
@@ -138,7 +138,7 @@ fctrash(Fcws *w, char *path, int flags)
 	d = dirstat(p);
 	if(d == nil){
 		rerrstr(err, sizeof err);
-		werrstr("%s: %s: %s", fcerrname(fcerrclass(err)), p, err);
+		werrstr("%s: %s: %s", dcerrname(dcerrclass(err)), p, err);
 		free(p);
 		return nil;
 	}
@@ -154,7 +154,7 @@ fctrash(Fcws *w, char *path, int flags)
 		free(p);
 		return nil;
 	}
-	o = fcjoin(slot, originname);
+	o = dcjoin(slot, originname);
 	fd = create(o, OWRITE, 0600);
 	free(o);
 	if(fd < 0 || fprint(fd, "path=%q\ndate=%ld\n", rel, time(0)) < 0){
@@ -164,11 +164,11 @@ fctrash(Fcws *w, char *path, int flags)
 		rmslot(w, slot);
 		free(slot);
 		free(p);
-		werrstr("%s: writing to the Trash: %s", fcerrname(fcerrclass(err)), err);
+		werrstr("%s: writing to the Trash: %s", dcerrname(dcerrclass(err)), err);
 		return nil;
 	}
 	close(fd);
-	dst = fccopy(w, p, slot, nil);
+	dst = dccopy(w, p, slot, nil);
 	if(dst == nil){
 		rerrstr(err, sizeof err);
 		rmslot(w, slot);
@@ -177,7 +177,7 @@ fctrash(Fcws *w, char *path, int flags)
 		werrstr("%s", err);
 		return nil;
 	}
-	if(fcdelete(w, p, Frecursive) < 0){
+	if(dcdelete(w, p, Frecursive) < 0){
 		/* the original stays where it was; so must nothing else */
 		rerrstr(err, sizeof err);
 		if(strncmp(err, "partial", 7) == 0)
@@ -205,7 +205,7 @@ origin(char *slot, char **rel, long *date)
 
 	*rel = nil;
 	*date = 0;
-	o = fcjoin(slot, originname);
+	o = dcjoin(slot, originname);
 	fd = open(o, OREAD);
 	free(o);
 	if(fd < 0)
@@ -244,7 +244,7 @@ slotitem(char *slot)
 	r = nil;
 	for(i = 0; i < n; i++)
 		if(strcmp(d[i].name, originname) != 0){
-			r = fcjoin(slot, d[i].name);
+			r = dcjoin(slot, d[i].name);
 			break;
 		}
 	free(d);
@@ -254,7 +254,7 @@ slotitem(char *slot)
 static int
 itemcmp(void *a, void *b)
 {
-	Fctrashitem *x, *y;
+	Dctrashitem *x, *y;
 
 	x = a;
 	y = b;
@@ -264,18 +264,18 @@ itemcmp(void *a, void *b)
 }
 
 long
-fctrashlist(Fcws *w, Fcvol *v, Fctrashitem **items)
+dctrashlist(Dcws *w, Dcvol *v, Dctrashitem **items)
 {
 	Dir *d;
 	long i, n, k;
 	int fd;
 	char *t, *slot, *rel;
-	Fctrashitem *it;
+	Dctrashitem *it;
 	long date;
 
 	USED(w);
 	*items = nil;
-	t = fctrashdir(v);
+	t = dctrashdir(v);
 	fd = open(t, OREAD);
 	if(fd < 0){
 		free(t);
@@ -288,18 +288,18 @@ fctrashlist(Fcws *w, Fcvol *v, Fctrashitem **items)
 	for(i = 0; i < n; i++){
 		if(!(d[i].qid.type & QTDIR))
 			continue;
-		slot = fcjoin(t, d[i].name);
+		slot = dcjoin(t, d[i].name);
 		it[k].path = slotitem(slot);
 		if(it[k].path == nil){
 			free(slot);
 			continue;
 		}
 		if(origin(slot, &rel, &date) == 0){
-			it[k].origin = fcjoin(v->path, rel);
+			it[k].origin = dcjoin(v->path, rel);
 			free(rel);
 		}
 		it[k].date = date != 0 ? date : d[i].mtime;
-		it[k].name = strdup(fcbasename(it[k].path));
+		it[k].name = strdup(dcbasename(it[k].path));
 		it[k].vol = v;
 		k++;
 		free(slot);
@@ -312,7 +312,7 @@ fctrashlist(Fcws *w, Fcvol *v, Fctrashitem **items)
 }
 
 void
-fctrashfree(Fctrashitem *it, long n)
+dctrashfree(Dctrashitem *it, long n)
 {
 	long i;
 
@@ -325,35 +325,35 @@ fctrashfree(Fctrashitem *it, long n)
 }
 
 char*
-fcputback(Fcws *w, char *item)
+dcputback(Dcws *w, char *item)
 {
 	char *p, *slot, *rel, *orig, *dir, *dst;
-	Fcvol *v;
+	Dcvol *v;
 	long date;
 
 	p = strdup(item);
 	cleanname(p);
-	if(!fcintrash(w, p) || (v = fcvolof(w, p)) == nil){
+	if(!dcintrash(w, p) || (v = dcvolof(w, p)) == nil){
 		werrstr("bad value: %s isn't in a Trash", p);
 		free(p);
 		return nil;
 	}
-	slot = fcdirname(p);
+	slot = dcdirname(p);
 	if(origin(slot, &rel, &date) < 0){
-		werrstr("not found: where %s came from isn't known", fcbasename(p));
+		werrstr("not found: where %s came from isn't known", dcbasename(p));
 		free(slot);
 		free(p);
 		return nil;
 	}
-	orig = fcjoin(v->path, rel);
+	orig = dcjoin(v->path, rel);
 	free(rel);
-	dir = fcdirname(orig);
+	dir = dcdirname(orig);
 	dst = nil;
 	if(access(orig, AEXIST) == 0)
 		werrstr("exists: %s", orig);
 	else if(!isdir(dir))
-		werrstr("not found: the folder %s came from is gone", fcbasename(orig));
-	else if((dst = fccopy(w, p, dir, fcbasename(orig))) != nil)
+		werrstr("not found: the folder %s came from is gone", dcbasename(orig));
+	else if((dst = dccopy(w, p, dir, dcbasename(orig))) != nil)
 		rmslot(w, slot);
 	free(dir);
 	free(orig);
@@ -363,14 +363,14 @@ fcputback(Fcws *w, char *item)
 }
 
 int
-fcemptytrash(Fcws *w, Fcvol *v)
+dcemptytrash(Dcws *w, Dcvol *v)
 {
 	Dir *d;
 	long i, n;
 	int fd, r;
 	char *t, *s, err[ERRMAX];
 
-	t = fctrashdir(v);
+	t = dctrashdir(v);
 	fd = open(t, OREAD);
 	if(fd < 0){
 		free(t);
@@ -380,8 +380,8 @@ fcemptytrash(Fcws *w, Fcvol *v)
 	close(fd);
 	r = 0;
 	for(i = 0; i < n; i++){
-		s = fcjoin(t, d[i].name);
-		if(fcdelete(w, s, Frecursive) < 0 && r == 0){
+		s = dcjoin(t, d[i].name);
+		if(dcdelete(w, s, Frecursive) < 0 && r == 0){
 			rerrstr(err, sizeof err);
 			r = -1;
 		}
@@ -395,7 +395,7 @@ fcemptytrash(Fcws *w, Fcvol *v)
 }
 
 char*
-fctrashlimit(Fcws *w, Fcvol *v)
+dctrashlimit(Dcws *w, Dcvol *v)
 {
 	USED(w);
 	if(v->caps.c[Kremove] == Cno)

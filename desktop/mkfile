@@ -1,7 +1,7 @@
 </$objtype/mkfile
 
-# libfcore: Desktop's core as a library, and fcore, its shell front end.
-LIB=fcore.$O.a
+# libdcore: Desktop's core as a library, and dcore, its shell front end.
+LIB=dcore.$O.a
 OFILES=\
 	meta.$O\
 	caps.$O\
@@ -12,7 +12,7 @@ OFILES=\
 	launch.$O\
 	trash.$O\
 
-HFILES=fcore.h
+HFILES=dcore.h
 BIN=/$objtype/bin
 
 # desktop, the app: on libux, with the look from assets/gen/uxstyle.h
@@ -27,12 +27,12 @@ UIFILES=\
 LIBUX=../libux/libux.a$O
 CFLAGS=$CFLAGS -I../libux -I../assets/gen
 
-all:V: $O.fcore $O.desktop
+all:V: $O.dcore $O.desktop
 
 $LIB: $OFILES
 	ar vu $LIB $OFILES
 
-$O.fcore: fcore.$O $LIB
+$O.dcore: dcore.$O $LIB
 	$LD $LDFLAGS -o $target $prereq
 
 $O.desktop: $UIFILES $LIB $LIBUX
@@ -48,8 +48,8 @@ $UIFILES: desktop.h ../libux/ux.h ../assets/gen/uxstyle.h
 %.$O: %.c
 	$CC $CFLAGS $stem.c
 
-install:V: $O.fcore $O.desktop
-	cp $O.fcore $BIN/fcore
+install:V: $O.dcore $O.desktop
+	cp $O.dcore $BIN/dcore
 	cp $O.desktop $BIN/desktop
 
 test:V: all

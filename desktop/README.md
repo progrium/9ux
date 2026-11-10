@@ -13,11 +13,11 @@ documents open through the plumber.
 Design: [§4 Desktop](../docs/design.md#4-desktop).
 Plan: [Phase 3](../docs/plan.md#phase-3-desktop-mvp).
 
-## Core library (`libfcore`)
+## Core library (`libdcore`)
 
 Everything in Desktop that isn't drawing lives in a library,
-[`fcore.h`](fcore.h), so it can be tested headless and driven from the
-shell through [`fcore`](#fcore-from-the-shell). The UI (S7b) builds on it.
+[`dcore.h`](dcore.h), so it can be tested headless and driven from the
+shell through [`dcore`](#dcore-from-the-shell). The UI (S7b) builds on it.
 
 | File | What it does |
 |---|---|
@@ -32,7 +32,7 @@ shell through [`fcore`](#fcore-from-the-shell). The UI (S7b) builds on it.
 
 ### Volumes and the workspace
 
-A workspace (`Fcws`) has a name, carried by every launch as
+A workspace (`Dcws`) has a name, carried by every launch as
 `$workspace` and as a `workspace=` plumb attribute, and a list of
 volumes. Volumes are only those declared in uxmeta (`volume=NAME
 path=MOUNTPOINT`, with `addr=` or `srv=` and `spec=` for one Desktop
@@ -40,7 +40,7 @@ mounts itself); paths that aren't under a volume still work, but Desktop
 never invents a volume for them. A record whose `path` isn't absolute is
 ignored.
 
-`fcvolcheck` stats the mount point and opens it. While a volume is
+`dcvolcheck` stats the mount point and opens it. While a volume is
 online its identity (server type, device, root qid) is remembered, so if
 its server goes away (`gone: ... i/o on hungup channel`) or its mount is
 replaced by something else, the volume shows **offline** with the
@@ -48,12 +48,12 @@ reason, instead of quietly showing whatever is now at that path.
 
 ### Folders and change detection
 
-`fcfolderopen` reads a directory; `fcrescan` reads it again and returns
+`dcfolderopen` reads a directory; `dcrescan` reads it again and returns
 the changes: `add`, `del`, `mod` (qid version, length, mtime, mode or
 owner changed), and `rename`, when an entry disappears and another with
 the same qid appears in the same scan. Qids are only hints within one
 session (design §4); nothing relies on them across remounts. If the
-folder can't be read, `fcrescan` returns -1, keeps the last entries,
+folder can't be read, `dcrescan` returns -1, keeps the last entries,
 and says why in `f->err`.
 
 ### Honest file operations
@@ -79,7 +79,7 @@ servers have no `wstat` at all. So:
 - After a rename or move, Desktop tells uxmeta (`rename OLD NEW`) so the
   file's layout follows it.
 
-`fcprobe` tests a volume's server on a scratch file (create, write,
+`dcprobe` tests a volume's server on a scratch file (create, write,
 chmod, mtime, rename, mkdir, remove), removing everything it made.
 Operations also update what's known, so a capability can be `yes`, `no`
 (with the server's error), or `unknown`. Permission errors never mark a
@@ -108,44 +108,44 @@ callers match on the phrase. They extend the shared list in
 
 Every volume has its own Trash, `.trash` at its root, and nothing ever
 goes to another volume's Trash. 9P can't move a file between folders,
-so `fctrash` copies the item into a fresh slot of its volume's Trash
+so `dctrash` copies the item into a fresh slot of its volume's Trash
 (`.trash/STAMP/NAME`, next to `.trash/STAMP/.origin`, which records
 `path=` within the volume and `date=`) and then deletes the original;
 if the delete fails, the copy is removed again and the original stays.
-`fcputback` copies an item back where it came from (`exists` if
+`dcputback` copies an item back where it came from (`exists` if
 something has taken its place, `not found` if its folder is gone),
-`fctrashlist` lists a volume's Trash oldest first, and `fcemptytrash`
+`dctrashlist` lists a volume's Trash oldest first, and `dcemptytrash`
 deletes everything in it. A path not on a volume, or a volume that
 can't make the folder, fails with `not supported`, and the UI offers
-Delete instead. `fctrashlimit` gives the sentence the UI shows about a
+Delete instead. `dctrashlimit` gives the sentence the UI shows about a
 volume's Trash: that items are copied then deleted (slow for big
 folders), or why this volume can't have one. Folder views should hide
 `.trash`.
 
 ### Opening and launching
 
-`fcopen` returns `Ofolder` for a folder (Desktop opens it itself). A
+`dcopen` returns `Ofolder` for a folder (Desktop opens it itself). A
 program (a file with an execute bit) that no association claims (no
-`port`, `open` or `exec` from uxmeta) is an application: `fcopen`
-launches it with `fclaunch`, in its own folder, and returns `Olaunched`.
+`port`, `open` or `exec` from uxmeta) is an application: `dcopen`
+launches it with `dclaunch`, in its own folder, and returns `Olaunched`.
 Anything else is sent to the plumber with `src=desktop`, `wdir` the
 file's folder, `type=text`, the path as data and `workspace=NAME`. If
 uxmeta resolves the file to a port, the message is addressed there;
 otherwise the plumbing rules (uxmeta's generated rules and the user's
-own) decide. `fcopenwith` addresses a particular app's port, or runs its
-`exec` with the file. `fclaunch` runs an app record's `exec` (or an
+own) decide. `dcopenwith` addresses a particular app's port, or runs its
+`exec` with the file. `dclaunch` runs an app record's `exec` (or an
 absolute command) in a copy of Desktop's namespace and environment with
 `$workspace` set, in a new rio window when Desktop has one (`$wsys`).
 
-## fcore from the shell
+## dcore from the shell
 
 ```text
-fcore [-M] [-m metaroot] [-w workspace] [-v name=path[@addr]]... [verb args...]
+dcore [-M] [-m metaroot] [-w workspace] [-v name=path[@addr]]... [verb args...]
 ```
 
 `-m` names where uxmeta is mounted (`/mnt/meta`; without it there, no
 registry is used), `-M` uses none, `-v` adds a volume by hand (with `@addr`, one that `attach` dials). A path
-argument may be `VOL:rel/path`. With no verb, fcore reads one command per
+argument may be `VOL:rel/path`. With no verb, dcore reads one command per
 line from standard input and keeps what it learns (capabilities, volume
 identity) between them, printing `> command` before each result and
 `error: ...` for failures.
@@ -252,7 +252,7 @@ draws the mockup's scene for real, with a golden image.
 ## Building and testing
 
 ```sh
-scripts/h9.sh --rc 'cd desktop && mk'        # fcore.$O.a and $O.fcore
+scripts/h9.sh --rc 'cd desktop && mk'        # dcore.$O.a and $O.dcore
 scripts/h9.sh --rc 'cd desktop && mk test'   # unit tests, test/run, then test/ui.rc
 scripts/test.sh gui -- -Dfilter=desktop      # Desktop under rio
 desktop/test/remote_test.sh                       # a remote volume (on the host)
@@ -261,7 +261,7 @@ desktop/test/remote_test.sh                       # a remote volume (on the host
 [`test/unit.c`](test/unit.c) covers the record parser, error classes,
 names, volume lookup, rescans (including renames), sorting, every
 operation and its errors, Get Info, and cancelling a copy.
-[`test/run`](test/run) drives `fcore` against
+[`test/run`](test/run) drives `dcore` against
 [`nowstatfs`](test/nowstatfs.c), a server with no `wstat` (rename and
 chmod are honestly refused, copy and delete works when asked, and the
 volume goes offline as `gone` when the server is killed), and against a
