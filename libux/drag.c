@@ -45,6 +45,14 @@ struct Uxdrag {
 	Uxdrag	*next;
 };
 
+typedef struct Icondrag Icondrag;
+struct Icondrag {
+	ulong	oid;
+	Uxdragfn	*fn;
+	void	*arg;
+	Icondrag	*next;
+};
+
 struct Target {
 	ulong	oid;
 	char	*types;
@@ -81,6 +89,7 @@ static QLock	draglk;
 static Uxdrag	*srcs;
 static Seen	*seen;
 static Target	*targets;	/* uxlk */
+static Icondrag	*icondrags;	/* uxlk */
 static int	dragfd = -1;
 static Dropctx	*curdrop;	/* the drop whose handler is running (UI thread) */
 
@@ -202,6 +211,13 @@ uxdragnew(char *ops, char *label)
 	d->ops = estrdup(ops != nil ? ops : "copy");
 	d->label = label != nil ? estrdup(label) : nil;
 	return d;
+}
+
+void
+uxdragops(Uxdrag *d, char *ops)
+{
+	free(d->ops);
+	d->ops = estrdup(ops != nil ? ops : "copy");
 }
 
 void
@@ -518,6 +534,87 @@ serve(void *v)
 }
 
 /*
+ * Icon views: when selected icons are dragged out of the view, libux
+ * (ctl.c's iconmouse, uxlk held) asks us to take the drag over.
+ */
+static Rectangle	localrect(Uxctl*);
+
+static int
+icondragout(Uxctl *c, Mouse*)
+{
+	Icondrag *g;
+	Uxdrag *d;
+	Fmt f;
+	char **items, *s, *a;
+	int i, n;
+
+	for(g = icondrags; g != nil; g = g->next)
+		if(g->oid == c->oid)
+			break;
+	items = emalloc((c->nicons+1)*sizeof items[0]);
+	n = 0;
+	fmtstrinit(&f);
+	for(i = 0; i < c->nicons; i++)
+		if(c->icons[i].sel){
+			items[n++] = c->icons[i].id;
+			a = _attr("label", c->icons[i].label != nil ? c->icons[i].label : "");
+			fmtprint(&f, "icon id=%s %s\n", c->icons[i].id, a);
+			free(a);
+		}
+	s = fmtstrflush(&f);
+	if(n == 0){
+		free(s);
+		free(items);
+		return 0;
+	}
+	d = uxdragnew("copy,move", n == 1 ? items[0] : nil);
+	uxdragdata(d, "ux.icon", s, strlen(s));
+	free(s);
+	if(g != nil && g->fn != nil)
+		g->fn(d, items, n, g->arg);
+	free(items);
+	return _dragstart(d, c) == 0;
+}
+
+void
+uxicondrag(Uxctl *c, Uxdragfn *fn, void *arg)
+{
+	Icondrag *g;
+
+	qlock(&uxlk);
+	for(g = icondrags; g != nil; g = g->next)
+		if(g->oid == c->oid)
+			break;
+	if(g == nil){
+		g = emalloc(sizeof *g);
+		g->oid = c->oid;
+		g->next = icondrags;
+		icondrags = g;
+	}
+	g->fn = fn;
+	g->arg = arg;
+	_icondragout = icondragout;
+	qunlock(&uxlk);
+}
+
+/* the icon of an icon view at window-local pt, or nil; uxlk held */
+static char*
+iconat(Uxctl *c, Point pt)
+{
+	Rectangle r, ir;
+	int i;
+
+	if(strcmp(c->t->name, "icon-view") != 0)
+		return nil;
+	r = localrect(c);
+	ir = Rect(-UXiconlarge/2, -UXiconlarge/2, UXiconlarge/2, UXiconviewcellh-UXiconlarge/2);
+	for(i = c->nicons-1; i >= 0; i--)
+		if(ptinrect(pt, rectaddpt(ir, subpt(addpt(r.min, c->icons[i].pt), c->origin))))
+			return c->icons[i].id;
+	return nil;
+}
+
+/*
  * Targets
  */
 void
@@ -723,6 +820,7 @@ dropped(int id, int win, Point pt, char *type, char *op)
 	e.action = op;
 	e.pt = pt;
 	e.drag = id;
+	e.item = iconat(c, pt);
 	_notify(dropnote, x, &e);
 	qunlock(&uxlk);
 	kickui();

@@ -177,12 +177,23 @@ struct Uxdropfile {
 	ulong	mode;		/* permission bits */
 };
 
+typedef void Uxdragfn(Uxdrag*, char **items, int nitems, void *arg);
+
 Uxdrag*	uxdragnew(char *ops, char *label);	/* ops: "copy,move"; nil: copy */
+void	uxdragops(Uxdrag*, char *ops);
 void	uxdragdata(Uxdrag*, char *type, void *data, long n);
 void	uxdragfile(Uxdrag*, char *path);	/* offered as type "file" */
 int	uxdragstart(Uxdrag*, Uxctl *src);	/* -1 and errstr on failure; frees the Uxdrag either way */
 
-void	uxdroptypes(Uxctl*, char *types, char *ops);	/* "file,text", "copy"; nil types: no longer a target */
+/*
+ * Icon views start drags themselves when selected icons leave the view:
+ * the offer is "ux.icon" (the items), plus whatever fn adds, such as
+ * uxdragfile for each item's file. fn runs inside libux: it may only
+ * call uxdragdata, uxdragfile and uxdragops.
+ */
+void	uxicondrag(Uxctl *iconview, Uxdragfn *fn, void *arg);
+
+void	uxdroptypes(Uxctl*, char *types, char *ops);	/* on an icon view, UXdrop's Uxev.item is the icon under the pointer */	/* "file,text", "copy"; nil types: no longer a target */
 char*	uxdropdata(Uxev*, char *type, int item, long *n);	/* malloc'd, NUL-terminated; item -1: the whole type */
 int	uxdropfiles(Uxev*, Uxdropfile**);	/* the "file" list; returns how many */
 void	uxdropfilesfree(Uxdropfile*, int);

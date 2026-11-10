@@ -5,6 +5,7 @@
  *		$dragfile as "file" and the text "hello from dragapp"
  *	dst	a label (100,100)-(200,200): a drop target for file and text,
  *		copy only
+ *	icons	an icon view (0,210)-(300,300) taking text, with folder1 at 50,30
  *
  * and writes what happens to files in $dragout: drop (type, op, pt,
  * from self), text (a dropped text), list (a dropped file list),
@@ -106,6 +107,13 @@ dstfn(Uxev *e, void*)
 	note("drop", "drop %s %s %d,%d self=%d\n", e->text, e->action, e->pt.x, e->pt.y, uxdragfromself(e));
 }
 
+static void
+iconfn(Uxev *e, void*)
+{
+	if(e->type == UXdrop)
+		note("icondrop", "drop %s on %s\n", e->text, e->item != nil ? e->item : "nothing");
+}
+
 void
 threadmain(int, char**)
 {
@@ -123,6 +131,10 @@ threadmain(int, char**)
 	c = uxlabel(w, "dst", "Drop here", Rect(100, 100, 200, 200));
 	uxhandler(c, dstfn, nil);
 	uxdroptypes(c, "file,text", "copy");
+	c = uxiconview(w, "icons", Rect(0, 210, 300, 300));
+	uxiconadd(c, "folder1", "Folder", "folder", Pt(50, 30));
+	uxhandler(c, iconfn, nil);
+	uxdroptypes(c, "text", nil);
 	uxmain();
 	threadexitsall(nil);
 }

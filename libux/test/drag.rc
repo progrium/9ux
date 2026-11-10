@@ -73,7 +73,7 @@ rm -f $dragout/end
 	for(i in `{seq 50}) if(! grep -s 'state=over' /dev/ux/drag/state) sleep 0.1
 	fake move 1 'pt=150,150'
 	for(i in `{seq 50}) if(! grep -s 'type=file' /dev/ux/drag/state) sleep 0.1
-	fake move 1 'pt=250,250'	# off the target again
+	fake move 1 'pt=250,150'	# off the target again
 	for(i in `{seq 50}) if(grep -s 'type=file' /dev/ux/drag/state) sleep 0.1
 	fake release
 	waitfile $dragout/end
@@ -106,6 +106,20 @@ same $dragout/drop 'drop text copy 110,190 self=0
 same $dragout/text 'dropped in from rc
 '
 want '^[0-9]+ done id=3 win=1 op=copy$' $out/e
+
+test=icon-under-pointer
+{
+	fake press 5
+	echo start 'win=5' 'types=text' >[1=3]
+	echo 'put 4 text
+x' >/dev/ux/drag/data
+	fake move 1 'pt=52,245'
+	for(i in `{seq 50}) if(! grep -s 'type=text' /dev/ux/drag/state) sleep 0.1
+	fake release
+	waitfile $dragout/icondrop
+} >[3]/dev/ux/drag/ctl
+same $dragout/icondrop 'drop text on folder1
+'
 
 echo quit >$app/ctl >[2]/dev/null
 done
