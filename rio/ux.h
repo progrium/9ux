@@ -9,6 +9,9 @@ typedef struct Uxfid Uxfid;
 typedef struct Uxitem Uxitem;
 typedef struct Uxmenu Uxmenu;
 typedef struct Uxsub Uxsub;
+typedef struct Uxdata Uxdata;
+typedef struct Drag Drag;
+typedef struct Blob Blob;
 
 enum
 {
@@ -16,6 +19,7 @@ enum
 	Sux,		/* /dev/ux/events */
 	Sdesk,		/* /dev/ux/desktop/events */
 	Smenu,		/* /dev/ux/menubar/events */
+	Sdrag,		/* /dev/ux/drag/events */
 	Nstream,
 
 	Maxqueue	= 256,	/* messages per subscription */
@@ -86,6 +90,51 @@ struct Uxfid
 	Uxsub	*sub;
 	Uxapp	*app;	/* menubar/ctl registration session */
 	int		claim;	/* holds the desktop claim */
+	Uxdata	*data;	/* drag/data transfer */
+};
+
+/* drag and drop (uxdrag.c) */
+struct Blob
+{
+	char		*type;
+	int		item;	/* -1: the type as a whole */
+	int		req;	/* 0: put by the source */
+	char		*buf;
+	long		n;
+	int		done;
+	char		*err;
+	int		ref;
+	Drag		*d;		/* nil once the drag has ended */
+	Blob		*next;
+};
+
+struct Drag
+{
+	int		id;
+	int		src;
+	char		*app;
+	char		*types;
+	char		*ops;
+	char		*label;
+	Uxfid	*sess;
+	int		state;
+	int		target;
+	char		*atype;	/* accepted type and op; nil if not accepted */
+	char		*aop;
+	Point	pt;
+	long		total;
+	Blob		*blobs;
+	Drag		*next;
+};
+
+struct Uxdata
+{
+	int		mode;
+	Blob		*b;
+	long		off;
+	Channel	*wake;	/* chan(int)[1] */
+	int		waiting;
+	Uxdata	*nextwait;
 };
 
 /* ux.c */
@@ -128,6 +177,19 @@ void		uxappdelwin(int);
 char*	uxappid(int);
 int		uxforeground(Uxapp**);
 void		uxshortcut(Rune, int, int);
+
+/* uxdrag.c */
+void		uxdraginit(void);
+int		uxdragging(void);
+void		uxdragmouse(Point, int);
+int		uxdragtellsrc(void);
+char*	uxdragctl(Uxfid*, Window*, char*);
+void		uxdragclose(Uxfid*);
+char*	uxdragstate(int*);
+Uxdata*	uxdataopen(void);
+char*	uxdatawrite(Uxdata*, char*, long);
+void		uxdataread(Xfid*, Uxdata*);
+void		uxdataclose(Uxdata*);
 
 /* uxbar.c */
 void		uxbarinit(void);

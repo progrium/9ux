@@ -13,6 +13,7 @@ OFILES=\
 	wind.$O\
 	ux.$O\
 	uxbar.$O\
+	uxdrag.$O\
 	uxfs.$O\
 	uxmenu.$O\
 	uxstyle.$O\

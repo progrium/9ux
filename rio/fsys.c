@@ -574,6 +574,7 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
 	case Qux:
 	case Quxdesk:
 	case Quxmenu:
+	case Quxdrag:
 		d = uxdirtab(FILE(f->qid));
 		d++;	/* skip '.' */
 		for(i=0; d->name!=nil && i<e; d++){

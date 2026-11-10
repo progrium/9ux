@@ -23,6 +23,7 @@ static Dirtab uxdir[] =
 	{ "windows",	QTFILE,	Quxwindows,	0400 },
 	{ "desktop",	QTDIR,	Quxdesk,		0500|DMDIR },
 	{ "menubar",	QTDIR,	Quxmenu,		0500|DMDIR },
+	{ "drag",		QTDIR,	Quxdrag,		0500|DMDIR },
 	{ nil, }
 };
 
@@ -44,11 +45,29 @@ static Dirtab uxmenudir[] =
 	{ nil, }
 };
 
+static Dirtab uxdragdir[] =
+{
+	{ ".",		QTDIR,	Quxdrag,		0500|DMDIR },
+	{ "ctl",		QTFILE,	Quxdragctl,	0600 },
+	{ "state",	QTFILE,	Quxdragstate,	0400 },
+	{ "events",	QTFILE,	Quxdragevents,	0400 },
+	{ "data",		QTFILE,	Quxdragdata,	0600 },
+	{ nil, }
+};
+
 static char version[] =
-	"devux 1.0\n"
+	"devux 1.1\n"
 	"feature focus\n"
 	"feature desktop\n"
-	"feature menubar\n";
+	"feature menubar\n"
+	"feature drag\n";
+
+static char draghelp[] =
+	"start -\n"
+	"accept -\n"
+	"refuse -\n"
+	"done -\n"
+	"cancel -\n";
 
 static char ctlhelp[] =
 	"mode -\n"
@@ -87,7 +106,7 @@ char*	uxdeskstate(int*);
 int
 uxisqid(int q)
 {
-	return q >= Qux && q <= Quxmenuevents;
+	return q >= Qux && q <= Quxdragdata;
 }
 
 Dirtab*
@@ -97,6 +116,7 @@ uxdirtab(int q)
 	case Qux:	return uxdir;
 	case Quxdesk:	return uxdeskdir;
 	case Quxmenu:	return uxmenudir;
+	case Quxdrag:	return uxdragdir;
 	}
 	return nil;
 }
@@ -196,6 +216,19 @@ uxopen(Xfid *x)
 	case Quxmenuevents:
 		u->sub = uxsubscribe(Smenu);
 		break;
+	case Quxdragctl:
+		snap(u, estrdup(draghelp), strlen(draghelp));
+		break;
+	case Quxdragstate:
+		s = uxdragstate(&n);
+		snap(u, s, n);
+		break;
+	case Quxdragevents:
+		u->sub = uxsubscribe(Sdrag);
+		break;
+	case Quxdragdata:
+		u->data = uxdataopen();
+		break;
 	}
 	t.qid = x->f->qid;
 	t.iounit = messagesize-IOHDRSZ;
@@ -284,6 +317,10 @@ uxread(Xfid *x)
 		readsub(x, u->sub);
 		return;
 	}
+	if(u->data != nil){
+		uxdataread(x, u->data);
+		return;
+	}
 	s = u->snap;
 	n = u->nsnap;
 	off = x->offset;
@@ -311,6 +348,17 @@ uxwrite(Xfid *x)
 	u = uxfid(x);
 	q = FILE(x->f->qid);
 	own = x->f->w;
+	if(q == Quxdragdata){
+		err = uxdatawrite(u->data, (char*)x->data, x->count);
+		uxchanged();
+		if(err != nil){
+			filsysrespond(x->fs, x, &t, err);
+			return;
+		}
+		t.count = x->count;
+		filsysrespond(x->fs, x, &t, nil);
+		return;
+	}
 	buf = emalloc(x->count+1);
 	memmove(buf, x->data, x->count);
 	buf[x->count] = 0;
@@ -330,6 +378,9 @@ uxwrite(Xfid *x)
 			break;
 		case Quxmenuctl:
 			err = uxmenuctl(u, own, p);
+			break;
+		case Quxdragctl:
+			err = uxdragctl(u, own, p);
 			break;
 		default:
 			err = "permission denied";
@@ -360,6 +411,9 @@ uxclose(Xfid *x)
 		uxunsubscribe(u->sub);
 	uxmenuclose(u);
 	uxdeskclose(u);
+	uxdragclose(u);
+	if(u->data != nil)
+		uxdataclose(u->data);
 	free(u->snap);
 	free(u);
 	uxchanged();

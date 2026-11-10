@@ -562,6 +562,20 @@ mousethread(void*)
 			uxchanged();	/* 9/UX */
 			moving = FALSE;
 			winput = input;
+			/* 9/UX: a drag in flight has the pointer; its source sees the button go up */
+			if(uxdragging()){
+				if(uxdragtellsrc() && sending && winput!=nil && !winput->deleted && winput->i!=nil){
+					tmp = mousectl->Mouse;
+					tmp.buttons = 0;
+					tmp.xy.x = mouse->xy.x + (winput->i->r.min.x-winput->screenr.min.x);
+					tmp.xy.y = mouse->xy.y + (winput->i->r.min.y-winput->screenr.min.y);
+					send(winput->mc.c, &tmp);
+				}
+				sending = FALSE;
+				scrolling = FALSE;
+				uxdragmouse(mouse->xy, mouse->buttons);
+				break;
+			}
 			/* 9/UX: the menu bar comes first */
 			if(!sending && uxbarhit(mouse->xy)){
 				if(mouse->buttons)

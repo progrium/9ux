@@ -64,6 +64,7 @@ uxinit(int on)
 	threadcreate(uxsyncthread, nil, STACK);
 	lastscreen = screen->r;
 	lastdeskr = uxdeskrect();
+	uxdraginit();
 	if(uxmode)
 		uxbarinit();
 }

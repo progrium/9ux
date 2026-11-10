@@ -147,7 +147,7 @@ wsetcursor(Window *w, int force)
 {
 	Cursor *p;
 
-	if(menuing || sweeping || (w!=input && wpointto(mouse->xy)!=w))
+	if(menuing || sweeping || uxdragging() || (w!=input && wpointto(mouse->xy)!=w))	/* 9/UX: uxdragging */
 		return;
 	if(w==nil)
 		p = nil;

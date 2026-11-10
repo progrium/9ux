@@ -123,7 +123,7 @@ test "version and ctl" {
     defer s.stop();
     const v = try s.readFile("/dev/ux/version");
     defer gpa.free(v);
-    try std.testing.expectEqualStrings("devux 1.0\nfeature focus\nfeature desktop\nfeature menubar\n", v);
+    try std.testing.expectEqualStrings("devux 1.1\nfeature focus\nfeature desktop\nfeature menubar\nfeature drag\n", v);
     const c = try s.readFile("/dev/ux/ctl");
     defer gpa.free(c);
     try std.testing.expectEqualStrings("mode on\ncmdkey mod4\n", c);

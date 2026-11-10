@@ -22,6 +22,11 @@ enum
 	Quxmenuctl,
 	Quxmenumenus,
 	Quxmenuevents,
+	Quxdrag,
+	Quxdragctl,
+	Quxdragstate,
+	Quxdragevents,
+	Quxdragdata,
 
 	Qcons,
 	Qconsctl,
