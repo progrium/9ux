@@ -230,6 +230,91 @@ radio buttons, static and edit text have `text`. Controls, icons and
 pictures have `id`, the resource ID they draw. Other items with data
 have `data`, the bytes in lowercase hex.
 
+## Resource source
+
+`rescomp` compiles a text source into a resource file, so apps and
+9/UX's own assets need no classic Mac tools; `rescomp -d` turns a
+resource file back into source. The bodies are the text forms above,
+so whatever resfs serves as `text` can be pasted back in.
+
+```text
+rescomp [-o out.rsrc] file.res     compile (to standard output without -o)
+rescomp -d file.rsrc               decompile to standard output
+```
+
+A source file is lines. Blank lines and lines starting with `#` are
+ignored between resources. Two commands:
+
+```text
+resource TYPE ID [name=...] [attr=flags] [hex=... | file=PATH | image=PATH [bw=PATH] [hotspot=X,Y]]
+icon ID [name=...] [large=PATH] [large1=PATH] [small=PATH] [small1=PATH]
+```
+
+`TYPE` is escaped as in the tree (`STR%20`), `ID` is decimal, `name`
+is escaped text like any other value, and `attr` takes the flags the
+index uses. Paths are relative to the source file.
+
+How the resource's bytes are given:
+
+| Form | Bytes |
+|---|---|
+| `hex=0001ff` | the bytes, in hex |
+| `file=PATH` | the file's contents |
+| `image=PATH` | an icon type (`ICN#`, `icl4`, `icl8`, `ics#`, `ics4`, `ics8`) or `CURS`, from an uncompressed image(6) file |
+| none of these | a text form: the following lines, up to a line that is just `end`, as served in `text` for `STR `, `STR#`, `MENU`, `DLOG`, `DITL` and `ALRT` |
+
+```text
+resource STR# 128 name=Messages
+First
+Two\nlines
+end
+
+resource MENU 128
+menu id=128 title=File
+item title=New key=N
+item title=- enabled=off
+end
+
+resource CURS 128 image=cursors/cross.img hotspot=8,7
+icon 128 name=Document large=icons/doc.32.img large1=icons/doc.32.1.img small=icons/doc.16.img
+```
+
+`icon` makes a whole family: `ICN#`, `icl4` and `icl8` from `large`,
+and `ics#`, `ics4` and `ics8` from `small`, each with that ID, and
+`name` on the `ICN#`. `large1` and `small1` give the 1-bit forms;
+without them the 1-bit form is the colour image thresholded on
+brightness.
+
+In text forms, attributes may be left out where they have a natural
+default: `enabled=on`, `visible=on`, `goaway=off`, `proc=0`,
+`refcon=0`, `stages=0`, and no `position`. A DITL item's `n` is ignored
+(items are numbered by order), and a MENU item past the 31st can't be
+disabled, as on the Mac. A `MENU` sets the enable flags of items it
+doesn't list, as Rez does. In a string, `\n` is written as CR, the
+Mac line break. A string whose text is `end` is written `en\x64`;
+`\xHH` takes any ASCII byte except NUL.
+
+Images are converted like this:
+
+- A pixel is in the mask when its alpha is at least half; the mask of
+  `ICN#`/`ics#` and of `CURS` comes from the image's alpha. `icl4`,
+  `icl8` and their small forms use the matching `ICN#`/`ics#` as their
+  mask, as on the Mac, so a family's images should share one mask.
+- In 1-bit forms a pixel is set (black) when it's in the mask and its
+  brightness is under half. A `bw` (or `large1`/`small1`) image must
+  not draw outside the colour image's mask.
+- Colour pixels map to the nearest colour (by RGB distance) in the
+  classic 16- or 256-colour palette; pixels outside the mask are
+  written as palette index 0.
+- `CURS`: black where the image is dark and opaque, white where it is
+  light and opaque, clear elsewhere. The hot spot defaults to `0,0`.
+
+What a round trip keeps: `rescomp -d` writes a text form only when
+compiling it gives back exactly the same bytes; otherwise it writes
+`hex=`. Icons and cursors always decompile to `hex=`. Compiling from
+images loses whatever lies under a clear mask, and the Mac's
+inverted cursor pixels.
+
 ## Safety
 
 Resource files are untrusted. The parser checks every offset, length
@@ -243,5 +328,4 @@ type before reading. The parser and decoders are fuzzed on the host
 ## Not yet
 
 - AppleSingle and AppleDouble input.
-- A text resource format compiled to `.rsrc` (design open question 4).
 - `PICT`, `cicn`, `crsr`, and `BNDL`/`FREF` as import hints.
