@@ -1,0 +1,15 @@
+</$objtype/mkfile
+
+TARG=uxmeta
+BIN=/$objtype/bin
+OFILES=\
+	fs.$O\
+	ndb.$O\
+	layer.$O\
+	view.$O\
+	txn.$O\
+	plumb.$O\
+
+HFILES=meta.h
+
+</sys/src/cmd/mkone
