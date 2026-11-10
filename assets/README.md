@@ -58,7 +58,8 @@ is the value to pass to `allocimage`.
 | grey5 | `5` | `444444` | black | secondary text, grow box ridges |
 
 `palette.ndb` also names **roles** (`titlebar`, `desktop`, `select`,
-`focus`, ...), which `gen/uxstyle.h` has as `UXtitlebar` and so on.
+`focus`, ...), which `gen/uxstyle.h` has as `UXcoltitlebar`,
+`UXcolselect` and so on.
 rio and libux should draw with the roles, so a theme change is an edit
 to `palette.ndb`.
 
