@@ -9,7 +9,11 @@
 #   unit    `mk test` in every component, and in every test/*/ directory
 #           with a mkfile (unit and rc interface tests, inside h9; 9front's
 #           mkone runs a component's test/mkfile for it)
-#   gui     the Zig harness's tests (test/harness: test/rio/*.zig, ...)
+#   system  every executable */test/*_test.sh and test/*/*_test.sh, run on
+#           the host from the repository root after the build (tests that
+#           drive several h9 machines, such as a --serve server and a
+#           client); exit status 0 is a pass
+#   gui     the Zig harness's tests (test/harness: test/rio/*_test.zig, ...)
 #
 # Arguments after -- go to `zig build test` for the gui layer, such as
 # -Dfilter=window or -Dupdate-golden.
@@ -24,13 +28,13 @@ layers=
 while [ $# -gt 0 ]; do
 	case $1 in
 	--) shift; break ;;
-	build|host|unit|gui) layers="$layers $1" ;;
-	-h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-	*) echo "test.sh: unknown layer '$1' (build, host, unit, gui)" >&2; exit 2 ;;
+	build|host|unit|system|gui) layers="$layers $1" ;;
+	-h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	*) echo "test.sh: unknown layer '$1' (build, host, unit, system, gui)" >&2; exit 2 ;;
 	esac
 	shift
 done
-[ -n "$layers" ] || layers="build host unit gui"
+[ -n "$layers" ] || layers="build host unit system gui"
 
 h9() { "$top/scripts/h9.sh" "$@"; }
 
@@ -73,6 +77,14 @@ for layer in $layers; do
 			note "unit: mk test in $d"
 			h9 --rc "cd $d && mk test"
 			result "unit:$d" $?
+		done
+		;;
+	system)
+		for t in */test/*_test.sh test/*/*_test.sh; do
+			[ -x "$t" ] || continue
+			note "system: $t"
+			"$t"
+			result "system:$t" $?
 		done
 		;;
 	gui)

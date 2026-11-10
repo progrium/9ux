@@ -3,7 +3,7 @@
 One command builds everything and runs every test, locally and in CI:
 
 ```sh
-scripts/test.sh                     # build, host, unit, gui
+scripts/test.sh                     # build, host, unit, system, gui
 scripts/test.sh unit                # just one layer (or several)
 scripts/test.sh gui -- -Dfilter=wctl          # GUI tests whose names match
 scripts/test.sh gui -- -Dupdate-golden        # rewrite golden images
@@ -21,9 +21,10 @@ makes the 9front root. See [development.md](development.md) for h9.
 | `build` | `mk` at the top: every component's mkfile | inside h9 | each component |
 | `host` | `make test` in each component with a host `Makefile` that has a `test:` target: portable parsers built with ASan and UBSan | host | each component |
 | `unit` | `mk test` in each component, and in each `test/*/` with a mkfile (such as `test/fakes`). 9front's mkone/mkmany/mklib run a component's `test/mkfile` for `mk test`; put unit tests and rc interface tests there | inside h9 | each component |
+| `system` | each executable `*/test/*_test.sh` and `test/*/*_test.sh`, from the repository root, after the build: tests that drive several h9 machines (a `--serve` server and a client, say) through `scripts/h9.sh`. Exit 0 passes | host, running h9 | each component |
 | `gui` | the Zig harness: every `test/*/*_test.zig` | h9 embedded, headless screen | S0 (`test/rio`), and anyone adding a directory |
 
-CI (`.github/workflows/ci.yml`) runs all four on Linux x86_64 on every
+CI (`.github/workflows/ci.yml`) runs all five on Linux x86_64 on every
 push to `dev` and `main`, and a `fuzz` job runs `make fuzz FUZZTIME=300`
 in each component whose `Makefile` has a `fuzz:` target. Keep those
 target names and a component is in CI with no workflow changes.
