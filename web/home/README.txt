@@ -5,9 +5,10 @@ This is 9front's own userland and the 9/UX desktop, compiled for 386 and run by 
 Some things to try:
 
 - Double-click a folder to open it, and a .txt file to open it in acme, through the plumber (you just did).
+- Open the Applications disk on the desktop and double-click Sample, the libux sample app that shows every control, or Acme or Shell.
 - Drag icons between folder windows, or onto the sample app's text field.
 - Select an icon and choose Get Info, Rename or Duplicate from the File menu.
-- Every app's windows and controls are files too. Choose New from the Glenda menu at the left of the menu bar, sweep out a window, and type in it:
+- Every app's windows and controls are files too. With Sample running, open Shell (or choose New from the Glenda menu at the left of the menu bar and sweep out a window) and type:
 
 	ls /mnt/ux/apps
 	cd /mnt/ux/apps/sample-1/windows/*/controls

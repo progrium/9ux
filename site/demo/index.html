@@ -71,12 +71,6 @@ const print = (s) => {
 };
 document.getElementById('restart').onclick = () => location.reload();
 
-// The screen's size in its own pixels, as h9-web.js computes it, so
-// boot.rc can place windows: CSS pixels at scale 1, device pixels at 0,
-// device pixels / N at N.
-const screenSize = (c, scale) => [c.clientWidth, c.clientHeight].map((v) =>
-  String(Math.floor(scale === 1 ? v : v * devicePixelRatio / (scale || 1))));
-
 async function main() {
   if (!haveJSPI || typeof OffscreenCanvas === 'undefined') {
     say('This demo needs a browser with JavaScript Promise Integration and OffscreenCanvas: ' +
@@ -94,7 +88,7 @@ async function main() {
   m.addEventListener('snarf', (e) => print(`[the clipboard refused: ${JSON.stringify(e.text)}]\n`));
   say('Loading 9/UX… (about 17 MB, once)');
   canvas.focus();
-  const code = await m.run(['rc', '/9ux/web/boot.rc', ...(params.has('debug') ? ['-d'] : []), ...screenSize(canvas, scale)]).catch((e) => { print(`${e.message}\n`); return null; });
+  const code = await m.run(['rc', '/9ux/web/boot.rc', ...(params.has('debug') ? ['-d'] : [])]).catch((e) => { print(`${e.message}\n`); return null; });
   say(`9/UX stopped${code !== null ? ` (${code || 'exit 0'})` : ''}. <a href="" target="_self">Start it again</a>`);
 }
 main().catch((e) => say(`Couldn't start the demo: ${e.message}`));

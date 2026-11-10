@@ -124,7 +124,10 @@ folders), or why this volume can't have one. Folder views should hide
 
 ### Opening and launching
 
-`fcopen` returns `Ofolder` for a folder (Finder opens it itself).
+`fcopen` returns `Ofolder` for a folder (Finder opens it itself). A
+program (a file with an execute bit) that no association claims (no
+`port`, `open` or `exec` from uxmeta) is an application: `fcopen`
+launches it with `fclaunch`, in its own folder, and returns `Olaunched`.
 Anything else is sent to the plumber with `src=finder`, `wdir` the
 file's folder, `type=text`, the path as data and `workspace=NAME`. If
 uxmeta resolves the file to a port, the message is addressed there;
@@ -163,7 +166,7 @@ identity) between them, printing `> command` before each result and
 | `trashlist VOL` | `TRASHPATH ORIGIN DATE` per item, oldest first |
 | `emptytrash VOL` | nothing |
 | `trashlimit VOL` | the sentence the UI shows about the volume's Trash |
-| `open PATH` | `folder PATH` or `plumbed PATH PORT` |
+| `open PATH` | `folder PATH`, `launched PATH` or `plumbed PATH PORT` |
 | `openwith PATH APP`, `launch APP [DIR [ARGS...]]` | `plumbed`, `launched` or `launched PID` |
 
 ## The Finder app

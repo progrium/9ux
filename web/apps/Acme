@@ -1,0 +1,3 @@
+#!/bin/rc
+# acme, in the window Finder opens for it.
+exec acme -c 1

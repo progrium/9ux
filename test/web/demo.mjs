@@ -1,9 +1,11 @@
 // The website's live demo (site/demo/, scripts/web.sh) in Chromium: serves
 // the built demo directory, opens its page, and waits for the session to
 // say it's ready (web/session.rc: Finder registered with uxd and showing
-// the home volume's window, and the sample app registered). Then it
-// double-clicks README.txt in that window and checks that acme opened
-// it, through the plumber. The Pages workflow runs it before deploying.
+// the home volume's window). Then it double-clicks README.txt in that
+// window and checks that acme opened it, through the plumber, and that
+// opening Sample in the Applications volume (which session.rc's -d does
+// through Finder's files) launches the sample app. The Pages workflow
+// runs it before deploying.
 //
 //     node test/web/demo.mjs DIR [SCREENSHOT.png]
 //
@@ -58,7 +60,7 @@ try {
   await step('the services keep running', async () => {
     await page.waitForFunction(() => /uxmeta\.glenda/.test(document.getElementById('log').textContent), null, { timeout: 60_000 });
     const t = await log();
-    for (const want of [/\/srv\/uxd\.glenda\b/, /\/srv\/plumb\./, /\/mnt\/ux\/apps\/finder-/, /\/mnt\/ux\/apps\/sample-/, / 8\.finder\n/])
+    for (const want of [/\/srv\/uxd\.glenda\b/, /\/srv\/plumb\./, /\/mnt\/ux\/apps\/finder-/, / 8\.finder\n/])
       if (!want.test(t)) throw new Error(`no ${want} in the log`);
   });
   await step('a double-click in Finder plumbs README.txt to acme', async () => {
@@ -73,6 +75,8 @@ try {
     await page.mouse.click(box.x + 284, box.y + 98);
     await page.waitForFunction(() => /\bacme\n/.test(document.getElementById('log').textContent), null, { timeout: 60_000 });
   });
+  await step('opening Sample in Applications launches the sample app', () =>
+    page.waitForFunction(() => /debug: sample\n/.test(document.getElementById('log').textContent), null, { timeout: 60_000 }));
   if (errors.length) throw new Error(`page errors:\n${errors.join('\n')}`);
   if (shot) await page.screenshot({ path: shot });
 } catch (e) {

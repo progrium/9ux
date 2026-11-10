@@ -73,6 +73,7 @@ esac
 "$top/scripts/h9.sh" --readable "$root386/386" --rc "
 	bind $g386 /386
 	objtype=386
+	@{ cd libux && mk } || exit 1
 	for(d in rio uxd uxmeta clipd apps/sample) @{ cd \$d && mk 8.out } || exit 1
 	@{ cd resfs && mk 8.resfs } || exit 1
 	@{ cd finder && mk 8.finder } || exit 1
@@ -93,7 +94,7 @@ cp_tree() { # cp_tree PATH...: from the checkout into /9ux, keeping paths
 cp_tree rio/8.out uxd/8.out uxmeta/8.out clipd/8.out resfs/8.resfs \
 	finder/8.finder apps/sample/8.out apps/sample/sample.rsrc \
 	assets/gen/system.rsrc assets/gen/patterns web/boot.rc web/session.rc \
-	web/finder.rc web/sample.rc web/home
+	web/finder.rc web/sample.rc web/home web/apps
 list="$local/root.list"
 {
 	cat "$src/src/web/root.list"
