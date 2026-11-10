@@ -65,6 +65,6 @@ metric=iconview.cellw       value=76
 metric=iconview.cellh       value=60
 metric=iconview.labelgap    value=3
 metric=iconview.labelpad    value=2    # plate padding around a label
-metric=iconview.labelmax    value=72   # wrap or elide past this width
+metric=iconview.labelmax    value=76   # elide past this width: the cell's width, so "Applications" (75) fits
 metric=desktop.margin       value=12
 metric=desktop.cellh        value=64

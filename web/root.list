@@ -16,3 +16,38 @@ mnt/clip/
 
 # The fonts libux and the rio fork open (assets/fonts.ndb).
 lib/font/bit/lucidasans
+# Their subfonts above Latin-1: 9front's lucidasans .font files take
+# U+0100 and up from ../fixed, and a missing subfont draws as the PJW
+# face. The UI's own strings need U+2000 (the … in "Empty Trash…" and in
+# Finder's truncated labels, the ‑ in names); the rest of U+0100-U+28FF
+# (Latin Extended, Greek, Cyrillic, punctuation, arrows, math, ⌘, box
+# drawing) is about 70 KB, for file names and documents. unicode.7.font
+# and boldunicode.7.font use 7x14, unicode.6.font uses 6x12.
+lib/font/bit/fixed/7x14.0100
+lib/font/bit/fixed/7x14.0200
+lib/font/bit/fixed/7x14.0300
+lib/font/bit/fixed/7x14.0400
+lib/font/bit/fixed/7x14.0500
+lib/font/bit/fixed/7x14.1E00
+lib/font/bit/fixed/7x14.2000
+lib/font/bit/fixed/7x14.2100
+lib/font/bit/fixed/7x14.2200
+lib/font/bit/fixed/7x14.2300
+lib/font/bit/fixed/7x14.2400
+lib/font/bit/fixed/7x14.2500
+lib/font/bit/fixed/7x14.2600
+lib/font/bit/fixed/7x14.2800
+lib/font/bit/fixed/6x12.0100
+lib/font/bit/fixed/6x12.0200
+lib/font/bit/fixed/6x12.0300
+lib/font/bit/fixed/6x12.0400
+lib/font/bit/fixed/6x12.0500
+lib/font/bit/fixed/6x12.1E00
+lib/font/bit/fixed/6x12.2000
+lib/font/bit/fixed/6x12.2100
+lib/font/bit/fixed/6x12.2200
+lib/font/bit/fixed/6x12.2300
+lib/font/bit/fixed/6x12.2400
+lib/font/bit/fixed/6x12.2500
+lib/font/bit/fixed/6x12.2600
+lib/font/bit/fixed/6x12.2800
