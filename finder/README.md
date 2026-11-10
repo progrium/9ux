@@ -166,11 +166,72 @@ identity) between them, printing `> command` before each result and
 | `open PATH` | `folder PATH` or `plumbed PATH PORT` |
 | `openwith PATH APP`, `launch APP [DIR [ARGS...]]` | `plumbed`, `launched` or `launched PID` |
 
+## The Finder app
+
+```sh
+finder [-D] [-M] [-m metaroot] [-w workspace] [-i ms] [-v name=path]...
+```
+
+Run under rio, Finder claims the desktop (`/dev/ux/desktop/ctl claim`),
+turns off its own window's chrome, and shows the workspace's volumes
+down the right edge with the Trash in the bottom right corner. A double
+click opens a volume or folder in its own window; opening it again
+brings that window forward. `-D` leaves the desktop alone (the desktop
+becomes an ordinary window), `-M` runs without uxmeta, `-m` names
+uxmeta's mount (default `/mnt/meta`), `-w` the workspace, `-i` how often
+open folders are rescanned, and `-v` adds a volume by hand. The look
+comes from `uxstyle.h` and the system icons from
+`$uxsysres` (default `/lib/ux/system.rsrc`).
+
+The menus:
+
+| Menu | Items |
+|---|---|
+| File | New Folder (n), Open (o), Close Window (w), Get Info (i), Duplicate (d), Rename (r), Move to Trash, Put Back, Eject (e) |
+| Edit | Select All (a) |
+| View | as Icons, as List, by Name, by Kind, by Date, by Size, Clean Up |
+| Special | Empty Trash |
+
+Items are selected by clicking or with a rubber band from empty space,
+and moved by dragging. Dragging onto a folder, another window or the
+Trash moves within a volume and copies across volumes; other apps can
+drop files in through rio's drag layer. Rename edits the label in place;
+Get Info is a window per item with an editable name, and it refreshes
+when the file changes. When a rename or move has to copy and delete
+(a server with no `wstat`), Finder asks first. A volume whose Trash
+can't work offers Delete, after a warning, instead.
+
+### Layout in uxmeta
+
+Finder keeps all its layout in uxmeta's workspace layer and reads it
+back on start:
+
+- `folder=PATH x= y= width= height= view= sort= open=yes|no`: a
+  window's rectangle, view and sort, and whether it was open when
+  Finder last ran. Windows with `open=yes` are reopened at start.
+- `item=PATH x= y=`: an icon's centre, in its window or on the desktop.
+- `volume=NAME x= y=`: a volume icon on the desktop.
+
+Finder follows uxmeta's `changes` stream, so an edit to the ndb file by
+hand, or by another program, moves icons at once; a resync reloads
+every position. Items without a position go in the first free cell.
+
+### Limits
+
+- Mouse events carry no modifiers, so there is no shift-click to extend
+  a selection; use the rubber band or Select All.
+- Icon views don't scroll; items past the window's edge are out of
+  reach until the window is made bigger or cleaned up.
+- An external edit to a window's geometry takes effect the next time it
+  opens, not live.
+- List view is rows of text in the icon view, not a table control.
+
 ## Building and testing
 
 ```sh
 scripts/h9.sh --rc 'cd finder && mk'        # fcore.$O.a and $O.fcore
-scripts/h9.sh --rc 'cd finder && mk test'   # unit tests, then test/run
+scripts/h9.sh --rc 'cd finder && mk test'   # unit tests, test/run, then test/ui.rc
+scripts/test.sh gui -- -Dfilter=finder      # Finder under rio
 finder/test/remote_test.sh                       # a remote volume (on the host)
 ```
 
@@ -188,5 +249,9 @@ uxmeta part is skipped if `uxmeta/` isn't built.
 [`test/remote_test.sh`](test/remote_test.sh) starts a second h9 with `--serve` as
 a remote volume, does the operations over it, then stops it and checks
 the volume reports `gone`.
-
-
+[`test/ui.rc`](test/ui.rc) runs the Finder app headless and drives its
+published UI tree: the desktop, opening, renaming in place and from Get
+Info, moving, new folders, duplicates, list view, the Trash, an external
+edit to the layout, a restart, and copy and delete over `nowstatfs`.
+[`../test/finder`](../test/finder) runs it under rio: the desktop claim,
+a double click, a drag saved to uxmeta and a rubber band.
