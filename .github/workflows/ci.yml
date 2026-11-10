@@ -27,8 +27,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache Zig, h9 and the 9front root
-        uses: actions/cache@v4
+      # Restored and saved separately so a failing test still saves them.
+      - name: Restore Zig, h9 and the 9front root
+        id: h9-cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             .local/zig
@@ -36,8 +38,9 @@ jobs:
             !.local/hyper9/.zig-cache
           key: h9-${{ runner.os }}-${{ hashFiles('scripts/pins.sh', 'scripts/h9.sh', 'scripts/zig.sh') }}
 
-      - name: Cache the harness build
-        uses: actions/cache@v4
+      - name: Restore the harness build
+        id: harness-cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             ~/.cache/zig
@@ -49,8 +52,27 @@ jobs:
       - name: Set up h9 and the root
         run: scripts/h9.sh --setup && scripts/h9.sh --check
 
+      - name: Save Zig, h9 and the 9front root
+        if: steps.h9-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .local/zig
+            .local/hyper9
+            !.local/hyper9/.zig-cache
+          key: ${{ steps.h9-cache.outputs.cache-primary-key }}
+
       - name: Test
         run: scripts/test.sh
+
+      - name: Save the harness build
+        if: always() && steps.harness-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cache/zig
+            test/harness/.zig-cache
+          key: ${{ steps.harness-cache.outputs.cache-primary-key }}
 
       - name: Upload screenshots from failed GUI tests
         if: failure()
