@@ -1,0 +1,115 @@
+#!/bin/rc
+# Registration by hand through /mnt/ux/register (ux.md, Registration
+# with uxd), against fakeapp and ramfs posted under /srv/ux.*.
+rfork ne
+suite=register
+. ../test/fakes/test/lib.rc
+. test/setup.rc
+startuxd
+u=/mnt/ux
+s1=ux.$user.$pid.1
+s2=ux.$user.$pid.2
+$fakeapp -w 7 -s $s1
+$fakeapp -w 8 -s $s2
+
+# reg 'command': write it on a fresh register fid, close it
+fn reg {
+	<>[3]$u/register echo $* >[1=3]
+}
+
+test=bad-registrations
+fails 'bad value' reg register 'name=Bad' 'srv=/srv/'^$s1
+fails 'bad value' reg register 'name=x' 'srv=/tmp/x'
+fails 'bad value' reg register 'name=x' 'srv=/srv/ux.a/b'
+fails 'not found' reg register 'name=x' 'srv=/srv/ux.nosuch'
+fails 'bad syntax' reg register 'name=x'
+fails 'bad value' reg register 'name=x' 'srv=/srv/'^$s1 'id=y-1'
+fails 'bad value' reg window 3
+test -e /srv/$s1 || { echo FAIL $test: a refused registration took the srv; failed=1 }
+
+test=version-mismatch
+mkdir -p $out/v2
+echo ux 2.0 >$out/v2/version
+srvfs ux.$user.$pid.v2 $out/v2
+fails 'version mismatch' reg register 'name=old' 'srv=/srv/ux.'^$user^.$pid^.v2
+
+test=lifetime
+{
+	<>[3]$u/register {
+		echo register 'name=manual' 'srv=/srv/'^$s1 '''title=By Hand''' 'win=7' >[1=3]
+		dd -quiet 1 -bs 8192 -count 1 -if /fd/3 >$out/id
+		same $out/id 'manual-1
+'
+		if(test -e /srv/$s1){
+			echo FAIL $test: srv entry not removed
+			failed=1
+		}
+		same $u/apps/manual-1/name 'fake
+'
+		same $u/windows 'window win=7 app=manual-1
+'
+		echo window 9 >[1=3]
+		echo unwindow 7 >[1=3]
+		echo title Other >[1=3]
+		same $u/windows 'window win=9 app=manual-1
+'
+		fails 'not found' echo unwindow 7 >[1=3]
+		fails 'bad value' echo register 'name=again' 'srv=/srv/'^$s2 >[1=3]
+		fails 'unknown command' echo frob >[1=3]
+
+		# a second app can't take a mapped window
+		fails 'in use' reg register 'name=other' 'srv=/srv/'^$s2 'win=9'
+		test -e /srv/$s2 && { echo FAIL $test: srv entry kept; failed=1 }
+	}
+	drain 4 $out/e
+} <[4]$u/events
+want '^[0-9]+ register app=manual-1 name=manual$' $out/e
+want '^[0-9]+ window win=7 app=manual-1$' $out/e
+want '^[0-9]+ window win=9 app=manual-1$' $out/e
+want '^[0-9]+ window win=7$' $out/e
+want '^[0-9]+ window win=9$' $out/e
+want '^[0-9]+ unregister app=manual-1$' $out/e
+if(test -e $u/apps/manual-1){
+	echo FAIL $test: still registered after close
+	failed=1
+}
+
+test=requested-id
+$fakeapp -w 10 -s $s1
+<>[3]$u/register {
+	echo register 'name=manual' 'srv=/srv/'^$s1 'id=manual-7' >[1=3]
+	dd -quiet 1 -bs 8192 -count 1 -if /fd/3 >$out/id
+	same $out/id 'manual-7
+'
+	$fakeapp -w 11 -s $s2
+	<>[4]$u/register {
+		# taken: uxd picks the next free number
+		echo register 'name=manual' 'srv=/srv/'^$s2 'id=manual-7' >[1=4]
+		dd -quiet 1 -bs 8192 -count 1 -if /fd/4 >$out/id
+		same $out/id 'manual-8
+'
+	}
+}
+
+test=end-read
+# the second read blocks until the registration ends, then EOF
+$fakeapp -w 12 -s $s1
+<>[3]$u/register {
+	echo register 'name=ender' 'srv=/srv/'^$s1 >[1=3]
+	dd -quiet 1 -bs 8192 -count 1 -if /fd/3 >/dev/null
+	{ cat /fd/3; echo eof >$out/eof } &
+	sleep 0.5
+	if(test -e $out/eof){
+		echo FAIL $test: second read did not block
+		failed=1
+	}
+	echo quit >$u/apps/ender-1/ctl
+	sleep 0.5
+	if(! test -e $out/eof){
+		echo FAIL $test: second read still blocked after the app went away
+		failed=1
+	}
+}
+
+cleanup
+done

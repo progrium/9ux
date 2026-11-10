@@ -1,0 +1,56 @@
+# Common setup for uxd's tests: source after lib.rc, from uxd/.
+# Starts uxd (as $out/uxd, so `kill uxd` finds it) with the session
+# service on /mnt/ux, and fakeapp registered through it.
+O=`{sed -n 's/^O=//p' /$objtype/mkfile}
+bin=$O.out
+fakes=../test/fakes
+fakeapp=$fakes/$O.fakeapp
+cp $bin $out/uxd
+grants=$out/grants
+mkdir -p /mnt/ux >[2]/dev/null
+
+fn startuxd {
+	$out/uxd -m /mnt/ux -g $grants $uxdflags
+}
+
+# waitfor file: until it exists (up to 5s)
+fn waitfor {
+	n=0
+	while(! test -e $1 && ! ~ $n 50){
+		sleep 0.1
+		n=`{echo $n+1 | hoc}
+	}
+	if(! test -e $1){
+		echo 'FAIL '^$test^': '^$1^' never appeared'
+		failed=1
+	}
+}
+
+# waitgone file
+fn waitgone {
+	n=0
+	while(test -e $1 && ! ~ $n 50){
+		sleep 0.1
+		n=`{echo $n+1 | hoc}
+	}
+	if(test -e $1){
+		echo 'FAIL '^$test^': '^$1^' still there'
+		failed=1
+	}
+}
+
+# startapp winid: fakeapp registered with uxd; its log in $out/app.winid
+fn startapp {
+	$fakeapp -r -w $1 >[2]$out/app.$1 &
+}
+
+# fakeapp -r's quit ends its server but not its registering proc,
+# so stop apps by name
+fn killapps {
+	kill $O.fakeapp | rc >[2]/dev/null
+}
+
+fn cleanup {
+	killapps
+	kill uxd | rc >[2]/dev/null
+}

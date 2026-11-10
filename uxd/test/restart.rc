@@ -1,0 +1,58 @@
+#!/bin/rc
+# Restarts: uxd restarting loses no app state, apps register again
+# with their old IDs, grants survive; an app restarting comes back
+# (ux.md, Registration with uxd; workplan acceptance criterion 8).
+rfork ne
+suite=restart
+. ../test/fakes/test/lib.rc
+. test/setup.rc
+startuxd
+u=/mnt/ux
+startapp 15
+waitfor $u/apps/fake-1
+c=$u/apps/fake-1/windows/15/controls
+echo 'set ''keep me''' >$c/name/ctl
+echo toggle >$c/agree/ctl
+token=`{<>[3]$u/grants/new {
+	echo grant 'rights=activate' >[1=3]
+	dd -quiet 1 -bs 8192 -count 1 -if /fd/3
+}}
+
+test=uxd-restart
+kill uxd | rc >[2]/dev/null
+waitgone /srv/uxd.$user
+waitgone /srv/uxd.$user.admin
+startuxd
+waitfor $u/apps/fake-1
+same $c/name/value 'keep me
+'
+same $c/agree/value 'on
+'
+same $u/windows 'window win=15 app=fake-1
+'
+want 'registered as fake-1' $out/app.15
+grep -c 'registered as fake-1' $out/app.15 >$out/n
+same $out/n '2
+'
+
+test=grants-survive
+want $token $u/grants/list
+p=$out/gmnt
+mkdir -p $p
+mount /srv/uxd.$user $p $token
+same $p/rights 'read activate
+'
+echo activate >$p/apps/fake-1/windows/15/controls/ok/ctl
+unmount $p
+
+test=app-restart
+killapps
+waitgone $u/apps/fake-1
+same $u/windows ''
+startapp 15
+waitfor $u/apps/fake-2
+same $u/windows 'window win=15 app=fake-2
+'
+
+cleanup
+done

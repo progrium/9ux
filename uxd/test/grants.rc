@@ -1,0 +1,71 @@
+#!/bin/rc
+# Grants: minted on the session service, attached with as the aname,
+# scoped by app, revocable, and kept in the grants file (ux.md, Grants).
+rfork ne
+suite=grants
+. ../test/fakes/test/lib.rc
+. test/setup.rc
+startuxd
+startapp 6
+waitfor /mnt/ux/apps/fake-1
+u=/mnt/ux
+c=$u/apps/fake-1/windows/6/controls
+p=$out/gmnt
+mkdir -p $p
+
+# mint 'grant ...': the token, in $token
+fn mint {
+	token=`{<>[3]$u/grants/new {
+		echo $* >[1=3]
+		dd -quiet 1 -bs 8192 -count 1 -if /fd/3
+	}}
+}
+
+test=mint
+mint grant 'rights=activate' 'app=fake*' '''note=test client'''
+if(! echo $token | grep -s '^[0-9a-f]+$' || ! ~ `{echo -n $token | wc -c} 32){
+	echo FAIL $test: bad token $token
+	failed=1
+}
+want '^grant token='^$token^' rights=activate app=fake\* ''note=test client''$' $u/grants/list
+want 'token='^$token $grants
+
+test=attach
+mount /srv/uxd.$user $p $token
+same $p/rights 'read activate
+'
+ls $p >$out/l
+dontwant grants $out/l
+{
+	echo activate >$p/apps/fake-1/windows/6/controls/ok/ctl
+	drain 4 $out/e
+} <[4]$c/ok/events
+want 'activate ctl=windows/6/controls/ok via=ctl$' $out/e
+echo focus >$p/apps/fake-1/windows/6/controls/name/ctl
+fails 'permission denied' echo set x >$p/apps/fake-1/windows/6/controls/name/ctl
+
+test=revoke
+echo revoke $token >$u/grants/ctl
+same $p/rights 'read
+'
+fails 'permission denied' echo activate >$p/apps/fake-1/windows/6/controls/ok/ctl
+dontwant $token $u/grants/list
+dontwant $token $grants
+unmount $p
+fails 'permission denied' mount /srv/uxd.$user $p $token
+
+test=app-scope
+mint grant 'rights=activate,edit' 'app=other-*'
+mount /srv/uxd.$user $p $token
+fails 'permission denied' echo activate >$p/apps/fake-1/windows/6/controls/ok/ctl
+unmount $p
+
+test=bad-grants
+fails 'bad value' rc -c 'echo grant ''rights=admin'' >'$u/grants/new
+fails 'bad value' rc -c 'echo grant ''rights=fly'' >'$u/grants/new
+fails 'bad syntax' rc -c 'echo grant >'$u/grants/new
+fails 'not found' rc -c 'echo revoke 0123456789abcdef0123456789abcdef >'$u/grants/ctl
+fails 'permission denied' mount /srv/uxd.$user $p 0123456789abcdef0123456789abcdef
+
+cleanup
+done
