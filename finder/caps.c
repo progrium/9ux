@@ -59,7 +59,7 @@ fcerrclass(char *err)
 	if(has(err, "hungup") || has(err, "hangup") || has(err, "mount rpc")
 	|| has(err, "phase error") || has(err, "unmounted") || has(err, "connection refused")
 	|| has(err, "connection reset") || has(err, "server gone") || has(err, "eof on mount")
-	|| has(err, "clone failed"))
+	|| has(err, "clone failed") || has(err, "broken pipe") || has(err, "timed out"))
 		return Egone;
 	if(has(err, "not supported") || has(err, "unsupported") || has(err, "prohibited")
 	|| has(err, "not implemented") || has(err, "read only") || has(err, "read-only")

@@ -118,11 +118,11 @@ absolute command) in a copy of Finder's namespace and environment with
 ## fcore from the shell
 
 ```text
-fcore [-M] [-m metaroot] [-w workspace] [-v name=path]... [verb args...]
+fcore [-M] [-m metaroot] [-w workspace] [-v name=path[@addr]]... [verb args...]
 ```
 
 `-m` names where uxmeta is mounted (`/mnt/meta`; without it there, no
-registry is used), `-M` uses none, `-v` adds a volume by hand. A path
+registry is used), `-M` uses none, `-v` adds a volume by hand (with `@addr`, one that `attach` dials). A path
 argument may be `VOL:rel/path`. With no verb, fcore reads one command per
 line from standard input and keeps what it learns (capabilities, volume
 identity) between them, printing `> command` before each result and

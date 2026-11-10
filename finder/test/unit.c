@@ -158,6 +158,8 @@ testerr(void)
 	check(fcerrclass("wstat -- not owner") == Eperm);
 	check(fcerrclass("i/o on hungup channel") == Egone);
 	check(fcerrclass("mount rpc error") == Egone);
+	check(fcerrclass("Broken pipe") == Egone);
+	check(fcerrclass("clone failed: '/n/x'") == Egone);
 	check(fcerrclass("'/x' file does not exist") == Enotfound);
 	check(fcerrclass("file already exists") == Eexist);
 	check(fcerrclass("create/wstat -- file exists") == Eexist);

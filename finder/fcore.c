@@ -14,7 +14,7 @@ int interactive;
 static void
 usage(void)
 {
-	fprint(2, "usage: fcore [-M] [-m metaroot] [-w workspace] [-v name=path]... [verb args...]\n");
+	fprint(2, "usage: fcore [-M] [-m metaroot] [-w workspace] [-v name=path[@addr]]... [verb args...]\n");
 	exits("usage");
 }
 
@@ -322,8 +322,9 @@ main(int argc, char **argv)
 	int nometa, n, status;
 	Fcmeta *m;
 	Biobuf in;
-	struct { char *name; char *path; } vols[16];
+	struct { char *name; char *path; char *addr; } vols[16];
 	int nvols, i;
+	Fcvol *v;
 
 	quotefmtinstall();
 	metaroot = "/mnt/meta";
@@ -347,6 +348,9 @@ main(int argc, char **argv)
 		vols[nvols].name = p;
 		vols[nvols].path = strchr(p, '=')+1;
 		*strchr(p, '=') = 0;
+		vols[nvols].addr = strchr(vols[nvols].path, '@');
+		if(vols[nvols].addr != nil)
+			*vols[nvols].addr++ = 0;
 		nvols++;
 		break;
 	default:
@@ -363,8 +367,11 @@ main(int argc, char **argv)
 	ws = fcwsopen(wsname, m);
 	if(ws == nil)
 		sysfatal("workspace: %r");
-	for(i = 0; i < nvols; i++)
-		fcwsaddvol(ws, vols[i].name, vols[i].path);
+	for(i = 0; i < nvols; i++){
+		v = fcwsaddvol(ws, vols[i].name, vols[i].path);
+		if(vols[i].addr != nil)
+			v->addr = strdup(vols[i].addr);
+	}
 
 	if(argc > 0){
 		if(run(argc, argv) < 0)
