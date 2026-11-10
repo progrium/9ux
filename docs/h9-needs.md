@@ -84,9 +84,8 @@ the end.
 
 ## Resolved
 
-Fixed in h9 by [progrium/hyper9#153](https://github.com/progrium/hyper9/pull/153)
-(pinned here from that branch's head until it merges), or found not to be
-a gap.
+Fixed in h9 by [progrium/hyper9#153](https://github.com/progrium/hyper9/pull/153),
+or found not to be a gap.
 
 - **Occasional faults on fresh heap pages under load** (S2, S9). The
   guess was right. When one process of an `RFMEM` group grew the shared

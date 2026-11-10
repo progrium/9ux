@@ -4,7 +4,7 @@
 # pins a known-good commit. scripts/h9.sh builds it into .local/hyper9.
 # To use your own checkout instead, set H9=/path/to/zig-out/bin/h9.
 H9_REPO=https://github.com/progrium/hyper9
-H9_REV=c63e30f27c9a2dc6b353a0bc40bcc51ab256d843
+H9_REV=178dcfb9147ed9e3be9127b8ab72c546c44ddb2a
 
 # 9front release: must match h9's NINEFRONT_RELEASE and rio/UPSTREAM.
 NINEFRONT_RELEASE=11952
