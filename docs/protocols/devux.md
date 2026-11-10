@@ -171,7 +171,7 @@ windows.
 | Command | Meaning |
 |---|---|
 | `claim [winid]` | Make the window (default: the fid's own window) the desktop window. Fails with `in use` if another fid holds the claim |
-| `release` | Give up the claim; the window becomes an ordinary window again |
+| `release` | Give up the claim. The window becomes an ordinary window again, where it is, at the desktop's size (and shown again if mode off had hidden it); the client should move, resize or delete it |
 
 The claim belongs to the fid, as described in
 [README.md](README.md#lifetimes-and-ownership): closing it, or the window
@@ -202,6 +202,10 @@ win=3 rect=0,20,1024,768
 `rect` is the desktop rectangle. `win=0` when nobody holds the claim.
 
 ### desktop/events
+
+A claim or release is reported both here (`claim`, `release`) and on
+`/dev/ux/events` (`desktop`). They are separate messages with their
+own sequence numbers.
 
 | Event | Attributes | When |
 |---|---|---|
@@ -246,7 +250,7 @@ before it.
 | `window [winid]` | Add a window to this app (default: the fid's own window). A window belongs to at most one app: `in use` if another session has it. The window leaving (`unwindow`, deletion, or the session ending) is reported as an `app` event |
 | `unwindow winid` | Remove a window from this app |
 | `menu menuid title=text [win=winid] [after=menuid] [top=off]` | Define or replace a menu. Menus appear in the order defined, or right after `after`. `win=` makes it a **window override**: shown only while that window has focus, replacing the app-wide menu with the same ID (or added, if there's none). `top=off` defines a menu that only appears as a submenu |
-| `item menuid actionid [label=text] [key=shortcut] [enabled=on/off] [check=on/off/mixed] [sub=menuid] [sep=on] [after=actionid]` | Add or replace an item in a menu. Items appear in the order added, or after `after`. `sep=on` makes a separator (its other attributes are ignored, but it still needs an ID). `sub=` opens another menu as a submenu. The default is `enabled=on`, `check=off`, no key |
+| `item menuid actionid [label=text] [key=shortcut] [enabled=on/off] [check=on/off/mixed] [sub=menuid] [sep=on] [after=actionid] [win=winid]` | Add or replace an item in a menu. `win=` picks that window's override of `menuid`. Items appear in the order added, or after `after`. `sep=on` makes a separator (its other attributes are ignored, but it still needs an ID). `sub=` opens another menu as a submenu. The default is `enabled=on`, `check=off`, no key |
 | `set actionid attr...` | Change `label`, `key`, `enabled` or `check` on every item with that action ID, in any menu |
 | `del menuid [actionid]` | Remove a whole menu, or one item from it |
 | `clear` | Remove all of this app's menus (windows stay claimed) |
@@ -254,6 +258,12 @@ before it.
 | `commit` | End the batch and show the result |
 | `abort` | Discard everything since `begin` |
 | `invoke appid actionid [win=winid]` | Fire an action as if chosen from the bar. Works on any fid, with or without `app`. `not found` if the app has no such action, `disabled` if every item for it is disabled |
+
+**Replacing.** `menu` with an existing menu ID (and the same `win=`)
+drops the old menu, items included, and adds the new definition; `item`
+with an existing action ID in that menu drops the old item and adds the
+new one. Either goes at the end unless `after=` places it. `title=` is
+required on `menu`.
 
 A batch may span several writes. If a command in a batch fails, the
 write returns the error and the batch stays open; the client should
@@ -290,7 +300,7 @@ window 9
 window 12
 menu file title=File
 item file new label=New key=n
-item file open 'label=Open…' key=o
+item file open label=Open… key=o
 item file s1 sep=on
 item file close label=Close key=w
 menu edit title=Edit
