@@ -1,0 +1,20 @@
+</$objtype/mkfile
+
+TARG=resfs rescat
+OFILES=\
+	res.$O\
+	rbuf.$O\
+	macroman.$O\
+	icon.$O\
+	text.$O\
+	resload.$O\
+
+HFILES=res.h rescompat.h
+BIN=/$objtype/bin
+
+</sys/src/cmd/mkmany
+
+# golden tests through rescat; the host runs the same cases (make test)
+test:V: $O.rescat $O.resfs
+	cd test
+	rc run.rc ../$O.rescat && rc server.rc ../$O.resfs

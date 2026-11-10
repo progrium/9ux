@@ -61,6 +61,9 @@ Res	*reslookupcode(Resfile *rf, uchar type[4], int id);
 int	resunescname(char *s, uchar type[4]);
 void	resindex(Resfile *rf, Rbuf *out);
 
+/* resload.c */
+uchar	*resreadfile(char *path, u32int *n, char *err, int nerr);
+
 /* macroman.c */
 int	macromanrune(int c);
 void	macroman2utf(Rbuf *b, uchar *s, u32int n);
@@ -78,6 +81,8 @@ void	rbufrune(Rbuf *b, long r);
 void	rbufquote(Rbuf *b, char *s);
 void	rbufkv(Rbuf *b, char *key, char *val);
 void	rbufkvint(Rbuf *b, char *key, long v);
+void	rbufkvbool(Rbuf *b, char *key, int v);
+void	rbufuint(Rbuf *b, u32int v);
 void	rbufesc(Rbuf *b, char *s);
 int	resescname(uchar type[4], char *out, int nout);
 

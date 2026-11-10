@@ -1,1 +1,1 @@
-dlog rect=30,40,330,140 proc=1 visible=1 goaway=0 refcon=0x12345678 ditl=128 title='Find File' position=0x300a
+dlog rect=30,40,330,140 proc=1 visible=on goaway=off refcon=305419896 ditl=128 'title=Find File' position=12298

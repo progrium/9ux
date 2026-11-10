@@ -1,0 +1,48 @@
+#!/bin/rc
+# Run the rescat golden tests in 9front or h9: cd test; rc run.rc rescat
+# The cases file is shared with run.sh, which runs them on the host.
+rfork e
+if(! ~ $#* 1){
+	echo 'usage: run.rc rescat' >[1=2]
+	exit usage
+}
+rescat=$1
+tmp=/tmp/resfstest.$pid
+npass=()
+nfail=()
+ifs='
+' lines=`{grep -v '^#' cases}
+for(line in $lines){
+	ifs=' ' {args=`{echo $line}}
+	name=$args(1)
+	fixture=$args(2)
+	rest=$args(3-)
+	if(~ $name fail){
+		if($rescat fixtures/$fixture $rest >/dev/null >[2]/dev/null){
+			echo FAIL: rescat $fixture $rest: succeeded, expected an error
+			nfail=($nfail x)
+		}
+		if not
+			npass=($npass x)
+	}
+	if not{
+		ok=1
+		if(! $rescat fixtures/$fixture $rest >$tmp){
+			echo FAIL: rescat $fixture $rest: exited with an error
+			ok=0
+		}
+		if(~ $ok 1 && ! cmp -s $tmp golden/$name){
+			echo FAIL: rescat $fixture $rest: differs from golden/$name
+			ok=0
+		}
+		if(~ $ok 1)
+			npass=($npass x)
+		if not
+			nfail=($nfail x)
+	}
+}
+rm -f $tmp
+echo $#npass passed, $#nfail failed
+if(! ~ $#nfail 0)
+	exit fail
+exit ''

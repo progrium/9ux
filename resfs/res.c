@@ -294,13 +294,18 @@ resunescname(char *s, uchar type[4])
 	return *s == 0 ? 0 : -1;
 }
 
-/* one line a resource: type id size=n attr=0xNN [name=...] */
+static char *attrnames[] = {
+	nil, "changed", "preload", "protected",
+	"locked", "purgeable", "sysheap", "sysref",
+};
+
+/* one line a resource: type id size=n [attr=flags] [name=...] */
 void
 resindex(Resfile *rf, Rbuf *out)
 {
 	char t[16];
 	Res *r;
-	int i;
+	int i, j, first;
 
 	for(i = 0; i < rf->nres; i++){
 		r = &rf->res[i];
@@ -309,8 +314,18 @@ resindex(Resfile *rf, Rbuf *out)
 		rbufc(out, ' ');
 		rbufint(out, r->id);
 		rbufkvint(out, "size", r->len);
-		rbufs(out, " attr=0x");
-		rbufhex(out, r->attr, 2);
+		if((r->attr & 0xFE) != 0){
+			rbufs(out, " attr=");
+			first = 1;
+			for(j = 7; j >= 1; j--){
+				if((r->attr & (1<<j)) == 0)
+					continue;
+				if(!first)
+					rbufc(out, ',');
+				first = 0;
+				rbufs(out, attrnames[j]);
+			}
+		}
 		if(r->name != nil)
 			rbufkv(out, "name", r->name);
 		rbufc(out, '\n');

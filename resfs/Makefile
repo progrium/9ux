@@ -10,7 +10,7 @@ CC ?= cc
 CFLAGS ?= -O1 -g -Wall -Wextra -Wno-sign-compare -Wno-unused-parameter
 SAN ?= -fsanitize=address,undefined -fno-sanitize-recover=all
 O = host
-LIBSRC = res.c rbuf.c macroman.c icon.c text.c
+LIBSRC = res.c rbuf.c macroman.c icon.c text.c resload.c
 HDR = rescompat.h res.h
 FUZZTIME ?= 60
 FUZZRUNS ?= 200000

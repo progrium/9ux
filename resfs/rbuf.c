@@ -177,7 +177,7 @@ rbufquote(Rbuf *b, char *s)
 
 	need = *s == 0;
 	for(p = s; *p; p++)
-		if((uchar)*p <= ' ' || *p == '\'' || *p == '=' || *p == '#')
+		if((uchar)*p <= ' ' || *p == '\'')
 			need = 1;
 	if(!need){
 		rbufs(b, s);
@@ -192,23 +192,45 @@ rbufquote(Rbuf *b, char *s)
 	rbufc(b, '\'');
 }
 
-/* " key=value", value escaped then quoted */
+/* " key=value", value escaped, the whole token quoted as needed */
 void
 rbufkv(Rbuf *b, char *key, char *val)
 {
 	Rbuf e;
 
 	rbufinit(&e);
+	rbufs(&e, key);
+	rbufc(&e, '=');
 	rbufesc(&e, val);
 	rbufc(&e, 0);
 	rbufc(b, ' ');
-	rbufs(b, key);
-	rbufc(b, '=');
 	if(e.err)
 		b->err = 1;
 	else
 		rbufquote(b, (char*)e.p);
 	rbuffree(&e);
+}
+
+void
+rbufkvbool(Rbuf *b, char *key, int v)
+{
+	rbufc(b, ' ');
+	rbufs(b, key);
+	rbufs(b, v ? "=on" : "=off");
+}
+
+void
+rbufuint(Rbuf *b, u32int v)
+{
+	char tmp[16];
+	int i;
+
+	i = sizeof tmp;
+	do{
+		tmp[--i] = '0' + v%10;
+		v /= 10;
+	}while(v != 0);
+	rbufput(b, tmp+i, sizeof tmp - i);
 }
 
 void

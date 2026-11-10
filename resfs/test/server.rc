@@ -1,0 +1,77 @@
+#!/bin/rc
+# Interface test for the 9P server: cd test; rc server.rc resfs
+# Serves the sample fixture and checks the tree against the goldens.
+rfork en
+if(! ~ $#* 1){
+	echo 'usage: server.rc resfs' >[1=2]
+	exit usage
+}
+mnt=/n/resfstest
+mkdir -p $mnt >[2]/dev/null
+nfail=()
+fn check {
+	if(! cmp -s $1 $2){
+		echo FAIL: $1 differs from $2
+		nfail=($nfail x)
+	}
+}
+fn exists {
+	if(! test -e $1){
+		echo FAIL: $1 missing
+		nfail=($nfail x)
+	}
+}
+fn absent {
+	if(test -e $1){
+		echo FAIL: $1 should not exist
+		nfail=($nfail x)
+	}
+}
+if(! $1 -m $mnt fixtures/sample.rsrc empty=fixtures/empty.rsrc){
+	echo FAIL: resfs did not start
+	exit fail
+}
+s=$mnt/sample
+ver=`{cat $mnt/version}
+if(! ~ $"ver 'res 1.0'){
+	echo FAIL: version
+	nfail=($nfail x)
+}
+check $s/index golden/sample.index
+check $mnt/empty/index golden/empty.index
+check $s/icon/128/image golden/icon128.image
+check $s/icon/128/small golden/icon128.small
+check $s/icon/129/image golden/icon129.image
+absent $s/icon/129/small
+check $s/icon/130/image golden/icl8-130.image
+check $s/ICN'#'/128/image golden/ICN-128.image
+check $s/ICN'#'/128/raw golden/ICN-128.raw
+check $s/icl8/128/image golden/icl8-128.image
+check $s/CURS/128/image golden/CURS128.image
+check $s/CURS/128/cursor golden/CURS128.cursor
+check $s/STR%20/128/text golden/STR128.text
+check $s/STR'#'/128/text golden/STRlist128.text
+check $s/MENU/128/text golden/MENU128.text
+check $s/DLOG/128/text golden/DLOG128.text
+check $s/DITL/128/text golden/DITL128.text
+check $s/ALRT/129/text golden/ALRT129.text
+check $s/zzzz/-16455/raw golden/zzzz.raw
+if(! ~ `{cat $s/CURS/128/name} Cross){
+	echo FAIL: CURS name
+	nfail=($nfail x)
+}
+absent $s/MENU/128/name
+absent $s/MENU/128/image
+absent $s/zzzz/-16455/text
+exists $s/zzzz/-16455/name
+if(test -w $s/index){
+	echo FAIL: index is writable
+	nfail=($nfail x)
+}
+unmount $mnt
+if(! ~ $#nfail 0){
+	echo server: $#nfail failed
+	exit fail
+}
+echo server: ok
+exit ''

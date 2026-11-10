@@ -254,18 +254,18 @@ def main():
         (b"ICN#", 129, None, 0, packbits1(bwL) + packbits1(mL)),   # 1-bit only
         (b"icl8", 130, None, 0, pack8(c8L)),                       # colour, no mask
         (b"CURS", 128, "Cross", 0x20, cr),
-        (b"STR ", 128, None, 0, pstr("Hello, 9/UX café — résumé")),
+        (b"STR ", 128, None, 0, pstr("Hello, 9/UX caf\u00e9 \u2014 r\u00e9sum\u00e9")),
         (b"STR#", 128, "Messages", 0, struct.pack(">H", 4) + pstr("First") + pstr("Two\rlines")
          + pstr("") + pstr("tab\there \\ back")),
         (b"MENU", 128, None, 0, menu(128, "File", [
             ("New", 0, ord("N"), 0, 0),
-            ("Open…", 0, ord("O"), 0, 0),
+            ("Open\u2026", 0, ord("O"), 0, 0),
             ("-", 0, 0, 0, 0),
             ("Recent", 0, 0x1B, 130, 0),
             ("Bold item", 3, 0, 0x12, 1 | 4),
             ("Quit", 0, ord("Q"), 0, 0),
         ], enable=0xFFFFFFFF & ~(1 << 3))),
-        (b"MENU", 1, None, 0, menu(1, b"\x14", [("About This Thing…", 0, 0, 0, 0)])),
+        (b"MENU", 1, None, 0, menu(1, b"\x14", [("About This Thing\u2026", 0, 0, 0, 0)])),
         (b"DLOG", 128, "Find", 0, dlog((40, 30, 140, 330), 1, 1, 0, 0x12345678, 128, "Find File", 0x300A)),
         (b"DITL", 128, None, 0, ditl([
             ((70, 220, 90, 290), 4, b"OK"),
@@ -279,24 +279,24 @@ def main():
         ])),
         (b"ALRT", 129, None, 0, alrt((60, 80, 160, 400), 129, 0x5555, 0x300A)),
         (b"ALRT", 130, None, 0, alrt((60, 80, 160, 400), 129, 0x5555)),
-        (b"DITL", 129, None, 0, ditl([((70, 300, 90, 370), 4, b"OK"), ((10, 60, 60, 370), 8, "Can’t do that.".encode("mac_roman"))])),
-        (b"zzzz", -16455, "Opaque é", 0, b"\x00\x01\x02\xff"),
+        (b"DITL", 129, None, 0, ditl([((70, 300, 90, 370), 4, b"OK"), ((10, 60, 60, 370), 8, "Can\u2019t do that.".encode("mac_roman"))])),
+        (b"zzzz", -16455, "Opaque \u00e9", 0, b"\x00\x01\x02\xff"),
     ]
     open(os.path.join(FIX, "sample.rsrc"), "wb").write(rsrc(res))
 
     size = {(t, i): len(d) for t, i, _, _, d in res}
     index = [
-        "ALRT 129 size=14 attr=0x00", "ALRT 130 size=12 attr=0x00",
-        "CURS 128 size=68 attr=0x20 name=Cross",
-        "DITL 128 size=%d attr=0x00" % size[(b"DITL", 128)], "DITL 129 size=%d attr=0x00" % size[(b"DITL", 129)],
-        "DLOG 128 size=%d attr=0x00 name=Find" % size[(b"DLOG", 128)],
-        "ICN# 128 size=256 attr=0x00 name=Sample", "ICN# 129 size=256 attr=0x00",
-        "MENU 1 size=%d attr=0x00" % size[(b"MENU", 1)], "MENU 128 size=%d attr=0x00" % size[(b"MENU", 128)],
-        "STR%%20 128 size=%d attr=0x00" % size[(b"STR ", 128)],
-        "STR# 128 size=%d attr=0x00 name=Messages" % size[(b"STR#", 128)],
-        "icl4 128 size=512 attr=0x00", "icl8 128 size=1024 attr=0x00", "icl8 130 size=1024 attr=0x00",
-        "ics# 128 size=64 attr=0x00", "ics4 128 size=128 attr=0x00", "ics8 128 size=256 attr=0x00",
-        "zzzz -16455 size=4 attr=0x00 name='Opaque é'",
+        "ALRT 129 size=14", "ALRT 130 size=12",
+        "CURS 128 size=68 attr=purgeable name=Cross",
+        "DITL 128 size=%d" % size[(b"DITL", 128)], "DITL 129 size=%d" % size[(b"DITL", 129)],
+        "DLOG 128 size=%d name=Find" % size[(b"DLOG", 128)],
+        "ICN# 128 size=256 name=Sample", "ICN# 129 size=256",
+        "MENU 1 size=%d" % size[(b"MENU", 1)], "MENU 128 size=%d" % size[(b"MENU", 128)],
+        "STR%%20 128 size=%d" % size[(b"STR ", 128)],
+        "STR# 128 size=%d name=Messages" % size[(b"STR#", 128)],
+        "icl4 128 size=512", "icl8 128 size=1024", "icl8 130 size=1024",
+        "ics# 128 size=64", "ics4 128 size=128", "ics8 128 size=256",
+        "zzzz -16455 size=4 'name=Opaque \u00e9'",
     ]
     gold("sample.index", "\n".join(index) + "\n", "sample.rsrc")
 
@@ -320,36 +320,36 @@ def main():
     fail("sample.rsrc", "MENU", "128", "image")
     fail("sample.rsrc", "MENU", "999")
 
-    gold("STR128.text", "Hello, 9/UX café — résumé\n", "sample.rsrc", "STR%20", "128", "text")
+    gold("STR128.text", "Hello, 9/UX caf\u00e9 \u2014 r\u00e9sum\u00e9\n", "sample.rsrc", "STR%20", "128", "text")
     gold("STRlist128.text", "First\nTwo\\nlines\n\ntab\\there \\\\ back\n", "sample.rsrc", "STR#", "128", "text")
     gold("MENU128.text", "\n".join([
-        "menu id=128 title=File proc=0 enabled=1",
-        "item title=New key=N enabled=1",
-        "item title=Open… key=O enabled=1",
-        "item title=- enabled=0",
-        "item title=Recent submenu=130 enabled=1",
-        "item title='Bold item' mark=✓ icon=3 style=bold,underline enabled=1",
-        "item title=Quit key=Q enabled=1",
+        "menu id=128 title=File proc=0 enabled=on",
+        "item title=New key=N enabled=on",
+        "item title=Open\u2026 key=O enabled=on",
+        "item title=- enabled=off",
+        "item title=Recent submenu=130 enabled=on",
+        "item 'title=Bold item' mark=\u2713 icon=3 style=bold,underline enabled=on",
+        "item title=Quit key=Q enabled=on",
     ]) + "\n", "sample.rsrc", "MENU", "128", "text")
-    gold("MENU1.text", "menu id=1 title= proc=0 enabled=1\nitem title='About This Thing…' enabled=1\n",
+    gold("MENU1.text", "menu id=1 title=\uf8ff proc=0 enabled=on\nitem 'title=About This Thing\u2026' enabled=on\n",
          "sample.rsrc", "MENU", "1", "text")
-    gold("DLOG128.text", "dlog rect=30,40,330,140 proc=1 visible=1 goaway=0 refcon=0x12345678 ditl=128 "
-         "title='Find File' position=0x300a\n", "sample.rsrc", "DLOG", "128", "text")
+    gold("DLOG128.text", "dlog rect=30,40,330,140 proc=1 visible=on goaway=off refcon=305419896 ditl=128 "
+         "'title=Find File' position=12298\n", "sample.rsrc", "DLOG", "128", "text")
     gold("DITL128.text", "\n".join([
-        "item n=1 type=button rect=220,70,290,90 enabled=1 text=OK",
-        "item n=2 type=button rect=130,70,200,90 enabled=1 text=Cancel",
-        "item n=3 type=text rect=10,10,100,26 enabled=0 text='Find what:'",
-        "item n=4 type=edit rect=110,10,290,26 enabled=1 text=''",
-        "item n=5 type=checkbox rect=10,40,120,56 enabled=1 text='Match case'",
-        "item n=6 type=icon rect=10,70,42,102 enabled=0 id=128",
-        "item n=7 type=user rect=0,0,0,0 enabled=0",
-        "item n=8 type=help rect=2,1,4,3 enabled=1 data=00010080",
+        "item n=1 type=button rect=220,70,290,90 enabled=on text=OK",
+        "item n=2 type=button rect=130,70,200,90 enabled=on text=Cancel",
+        "item n=3 type=text rect=10,10,100,26 enabled=off 'text=Find what:'",
+        "item n=4 type=edit rect=110,10,290,26 enabled=on text=",
+        "item n=5 type=checkbox rect=10,40,120,56 enabled=on 'text=Match case'",
+        "item n=6 type=icon rect=10,70,42,102 enabled=off id=128",
+        "item n=7 type=user rect=0,0,0,0 enabled=off",
+        "item n=8 type=help rect=2,1,4,3 enabled=on data=00010080",
     ]) + "\n", "sample.rsrc", "DITL", "128", "text")
-    gold("ALRT129.text", "alrt rect=80,60,400,160 ditl=129 stages=0x5555 position=0x300a\n",
+    gold("ALRT129.text", "alrt rect=80,60,400,160 ditl=129 stages=21845 position=12298\n",
          "sample.rsrc", "ALRT", "129", "text")
-    gold("ALRT130.text", "alrt rect=80,60,400,160 ditl=129 stages=0x5555\n", "sample.rsrc", "ALRT", "130", "text")
-    gold("DITL129.text", "item n=1 type=button rect=300,70,370,90 enabled=1 text=OK\n"
-         "item n=2 type=text rect=60,10,370,60 enabled=1 text='Can’t do that.'\n",
+    gold("ALRT130.text", "alrt rect=80,60,400,160 ditl=129 stages=21845\n", "sample.rsrc", "ALRT", "130", "text")
+    gold("DITL129.text", "item n=1 type=button rect=300,70,370,90 enabled=on text=OK\n"
+         "item n=2 type=text rect=60,10,370,60 enabled=on 'text=Can\u2019t do that.'\n",
          "sample.rsrc", "DITL", "129", "text")
     gold("zzzz.raw", b"\x00\x01\x02\xff", "sample.rsrc", "zzzz", "-16455")
 
@@ -390,7 +390,7 @@ def main():
     b[ref1 + 12 + 5:ref1 + 12 + 8] = b"\xff\xff\xf0"   # ref for id 2: data offset out of range
     b[ref1 + 24 + 2:ref1 + 24 + 4] = b"\x7f\x00"       # ref for id 3: name outside the map
     open(os.path.join(FIX, "badrefs.rsrc"), "wb").write(bytes(b))
-    gold("badrefs.index", "STR%20 1 size=4 attr=0x00\nSTR%20 3 size=6 attr=0x00\n", "badrefs.rsrc")
+    gold("badrefs.index", "STR%20 1 size=4\nSTR%20 3 size=6\n", "badrefs.rsrc")
     gold("badrefs1.text", "one\n", "badrefs.rsrc", "STR%20", "1", "text")
 
     # decoders on short data

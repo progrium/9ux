@@ -151,12 +151,12 @@ kvrect(Rbuf *b, Rd *r)
 }
 
 static void
-kvhex(Rbuf *b, char *key, u32int v, int ndig)
+kvuint(Rbuf *b, char *key, u32int v)
 {
 	rbufc(b, ' ');
 	rbufs(b, key);
-	rbufs(b, "=0x");
-	rbufhex(b, v, ndig);
+	rbufc(b, '=');
+	rbufuint(b, v);
 }
 
 static void
@@ -235,7 +235,7 @@ decmenu(Rd *r, Rbuf *b)
 	rbufkv(b, "title", s);
 	free(s);
 	rbufkvint(b, "proc", proc);
-	rbufkvint(b, "enabled", enable & 1);
+	rbufkvbool(b, "enabled", enable & 1);
 	rbufc(b, '\n');
 	for(item = 1; r->off < r->n && r->p[r->off] != 0; item++){
 		s = rdpstr(r);
@@ -279,7 +279,7 @@ decmenu(Rd *r, Rbuf *b)
 					rbufs(b, "128");
 			}
 		}
-		rbufkvint(b, "enabled", item > 31 || (enable & (1UL<<item)) != 0);
+		rbufkvbool(b, "enabled", item > 31 || (enable & (1UL<<item)) != 0);
 		rbufc(b, '\n');
 	}
 	return r->err ? -1 : 0;
@@ -305,15 +305,15 @@ decdlog(Rd *r, Rbuf *b)
 	if(s == nil)
 		return -1;
 	rbufkvint(b, "proc", proc);
-	rbufkvint(b, "visible", vis != 0);
-	rbufkvint(b, "goaway", goaway != 0);
-	kvhex(b, "refcon", refcon, 8);
+	rbufkvbool(b, "visible", vis != 0);
+	rbufkvbool(b, "goaway", goaway != 0);
+	kvuint(b, "refcon", refcon);
 	rbufkvint(b, "ditl", ditl);
 	rbufkv(b, "title", s);
 	free(s);
 	align2(r);
 	if(r->off <= r->n && r->n - r->off >= 2)
-		kvhex(b, "position", rd16(r), 4);
+		kvuint(b, "position", rd16(r));
 	rbufc(b, '\n');
 	return r->err ? -1 : 0;
 }
@@ -330,9 +330,9 @@ decalrt(Rd *r, Rbuf *b)
 	if(r->err)
 		return -1;
 	rbufkvint(b, "ditl", ditl);
-	kvhex(b, "stages", stages, 4);
+	kvuint(b, "stages", stages);
 	if(r->n - r->off >= 2)
-		kvhex(b, "position", rd16(r), 4);
+		kvuint(b, "position", rd16(r));
 	rbufc(b, '\n');
 	return r->err ? -1 : 0;
 }
@@ -394,7 +394,7 @@ decditl(Rd *r, Rbuf *b)
 		if(!need(r, len))
 			return -1;
 		d = r->p + r->off;
-		rbufkvint(b, "enabled", (type & 0x80) == 0);
+		rbufkvbool(b, "enabled", (type & 0x80) == 0);
 		switch(t){
 		case 4:
 		case 5:

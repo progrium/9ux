@@ -26,44 +26,6 @@ fatal(char *msg, char *arg)
 	exits("error");
 }
 
-static uchar*
-readall(char *path, u32int *np)
-{
-	uchar *buf, *nb;
-	u32int n, cap;
-	int fd;
-	long r;
-
-	fd = open(path, OREAD);
-	if(fd < 0)
-		fatal("cannot open", path);
-	n = 0;
-	cap = 8192;
-	buf = malloc(cap);
-	if(buf == nil)
-		fatal("out of memory", nil);
-	for(;;){
-		if(n == cap){
-			if(cap >= Resmaxfile)
-				fatal("file too large", path);
-			cap *= 2;
-			nb = realloc(buf, cap);
-			if(nb == nil)
-				fatal("out of memory", nil);
-			buf = nb;
-		}
-		r = read(fd, buf+n, cap-n);
-		if(r < 0)
-			fatal("read error", path);
-		if(r == 0)
-			break;
-		n += r;
-	}
-	close(fd);
-	*np = n;
-	return buf;
-}
-
 static void
 out(Rbuf *b)
 {
@@ -104,7 +66,9 @@ main(int argc, char **argv)
 
 	if(argc != 2 && argc != 4 && argc != 5)
 		fatal("usage: rescat file [type id [form]]", nil);
-	buf = readall(argv[1], &n);
+	buf = resreadfile(argv[1], &n, err, sizeof err);
+	if(buf == nil)
+		fatal(err, argv[1]);
 	if(resparse(buf, n, &rf, err, sizeof err) < 0)
 		fatal(err, argv[1]);
 	rbufinit(&b);
