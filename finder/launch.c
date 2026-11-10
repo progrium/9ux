@@ -73,17 +73,22 @@ plumbit(Fcws *w, char *path, char *dst)
 
 /*
  * Open path the way a double-click does. A folder is Finder's own
- * business (Ofolder). Anything else goes to the plumber, addressed to
- * the port its association names, if any; otherwise the plumbing
- * rules uxmeta generated (and the user's own) decide. *dst gets the
- * port the message was addressed to ("" for none).
+ * business (Ofolder). A program (a file with an execute bit) that no
+ * association claims is an application: it's launched (Olaunched), as
+ * fclaunch does, in its own folder. Anything else goes to the plumber,
+ * addressed to the port its association names, if any; otherwise the
+ * plumbing rules uxmeta generated (and the user's own) decide. *dst
+ * gets the port the message was addressed to ("" for none, or for a
+ * launch).
  */
 int
 fcopen(Fcws *w, char *path, char **dst)
 {
 	Dir *d;
 	Fcrec *r;
-	char *port, err[ERRMAX];
+	char *port, *dir, err[ERRMAX];
+	ulong mode;
+	int pid;
 
 	if(dst != nil)
 		*dst = nil;
@@ -97,8 +102,21 @@ fcopen(Fcws *w, char *path, char **dst)
 		free(d);
 		return Ofolder;
 	}
+	mode = d->mode;
 	free(d);
 	r = resolve(w, path);
+	if((mode & 0111) != 0 && fcrecget(r, "port") == nil
+	&& fcrecget(r, "open") == nil && fcrecget(r, "exec") == nil){
+		fcrecfree(r);
+		dir = fcdirname(path);
+		pid = fclaunch(w, path, dir, nil);
+		free(dir);
+		if(pid < 0)
+			return -1;
+		if(dst != nil)
+			*dst = strdup("");
+		return Olaunched;
+	}
 	port = fcrecget(r, "port");
 	if(port == nil && fcrecget(r, "exec") == nil)
 		port = fcrecget(r, "open");	/* open names a port, not an app */
@@ -165,7 +183,8 @@ fclaunch(Fcws *w, char *app, char *dir, char **argv)
 		}
 		exec = app;
 	}
-	cmd = strdup(exec);
+	/* a command line from an app record; a path, quoted as rc needs */
+	cmd = exec == app ? quotestrdup(app) : strdup(exec);
 	for(i = 0; argv != nil && argv[i] != nil; i++){
 		q = quotestrdup(argv[i]);
 		t = smprint("%s %s", cmd, q);

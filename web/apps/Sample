@@ -1,0 +1,3 @@
+#!/bin/rc
+# The libux sample app, which shows every control.
+exec rc /9ux/web/sample.rc

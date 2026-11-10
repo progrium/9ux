@@ -1,8 +1,9 @@
 #!/bin/rc
 # rio's -i command for the demo (boot.rc). Starts the plumber here, so
 # what it starts has rio's $wsys, then Finder, which takes the desktop,
-# opens the home volume, and starts the libux sample app, each in a window in this namespace (window
-# -m), which has the plumber's /mnt/plumb.
+# in a window in this namespace (window -m), which has the plumber's
+# /mnt/plumb, and opens the home volume. The sample app isn't started:
+# it's in the Applications volume, for a double-click.
 rfork e
 debug=$1
 fn say { echo 9ux: $* >/dev/cons; if(~ $debug -d) date -n >/dev/cons }
@@ -17,7 +18,6 @@ plumber -p $t/lib/plumbing
 
 say starting Finder
 window -m -r 40 60 560 400 rc /9ux/web/finder.rc
-# Finder first: the sample's window opens once Finder has the desktop.
 for(i in `{seq 1 300})
 	if(! ls -p /mnt/ux/apps | grep -s '^finder-')
 		sleep 0.1
@@ -32,24 +32,12 @@ for(i in `{seq 1 100})
 	if(! test -e $f/windows/2)
 		sleep 0.1
 
-say starting the sample app
-# Its window goes at the bottom right of the screen, whose size boot.rc
-# has in $uxscreen (the page's canvas), unless that's smaller than it.
-x=40 y=200
-if(~ $#uxscreen 2){
-	x=`{echo $uxscreen(1) - 540 | hoc}
-	y=`{echo $uxscreen(2) - 440 | hoc}
-	if(test $x -lt 40) x=40
-	if(test $y -lt 60) y=60
-}
-window -m -r $x $y `{echo $x + 520 | hoc} `{echo $y + 420 | hoc} rc /9ux/web/sample.rc
-for(i in `{seq 1 300})
-	if(! ls -p /mnt/ux/apps | grep -s '^sample-')
-		sleep 0.1
 say ready
 
-# -d: what's running, a few seconds after ready, and then when acme
-# starts (test/web/demo.mjs waits for these).
+# -d: what's running, a few seconds after ready; then when acme starts
+# (test/web/demo.mjs double-clicks README.txt); then a double-click on
+# Sample in the Applications volume, through Finder's files, and when
+# the sample app has registered.
 if(~ $debug -d){
 	sleep 5
 	date -n
@@ -59,4 +47,19 @@ if(~ $debug -d){
 	while(! ps | grep -s ' acme$')
 		sleep 0.5
 	echo debug: acme
+	echo open `{sed -n 's/^item ([^ ]+) label=Applications .*/\1/p' $d/items} >$d/ctl
+	w=()
+	for(i in `{seq 1 100})
+		if(~ $#w 0){
+			w=`{grep -l '^Applications$' $f/windows/*/title >[2]/dev/null | sed 1q}
+			sleep 0.1
+		}
+	a=`{basename -d $w}^/controls/icons
+	for(i in `{seq 1 100})
+		if(! grep -s 'label=Sample ' $a/items)
+			sleep 0.1
+	echo open `{sed -n 's/^item ([^ ]+) label=Sample .*/\1/p' $a/items} >$a/ctl
+	while(! ls -p /mnt/ux/apps | grep -s '^sample-')
+		sleep 0.5
+	echo debug: sample
 } >/dev/cons >[2=1]

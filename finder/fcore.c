@@ -320,6 +320,8 @@ run(int argc, char **argv)
 		}
 		if(n == Ofolder)
 			Bprint(&out, "folder %q\n", p);
+		else if(n == Olaunched)
+			Bprint(&out, "launched %q\n", p);
 		else
 			Bprint(&out, "plumbed %q %q\n", p, dst);
 		free(dst);

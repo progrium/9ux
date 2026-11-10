@@ -10,16 +10,14 @@
 # with session.rc as its -i command. Lines on the console that start
 # "9ux: " are progress the page shows over the screen.
 #
-#	rc boot.rc [-d] [WIDTH HEIGHT]
+#	rc boot.rc [-d]
 #
-# WIDTH and HEIGHT are the screen's size, for placing windows; -d (the
-# page's ?debug) has session.rc print what it started.
+# -d (the page's ?debug) has session.rc print what it started.
 debug=()
 if(~ $1 -d){
 	debug=-d
 	shift
 }
-uxscreen=($*)
 user=glenda
 home=/usr/glenda
 workspace=demo
@@ -41,7 +39,10 @@ mkdir -p $t/sys $t/apps $t/user $t/lib
 
 echo 'ext=.txt type=text
 type=text open=edit icon=doc-text desc="Plain text"' >$t/sys/base.ndb
-echo 'volume=home path='$home' icon=disk desktop=yes' >$t/user/meta.ndb
+# Two volumes on the desktop: the home folder, and Applications, whose
+# programs (web/apps) Finder launches on a double-click.
+echo 'volume=home path='$home' icon=disk desktop=yes
+volume=Applications path=/9ux/web/apps icon=disk desktop=yes' >$t/user/meta.ndb
 /9ux/uxmeta/8.out -s uxmeta.$user -m /mnt/meta -d $t/sys -a $t/apps -u $t/user -w $workspace -i 500
 
 for(f in /mnt/ux/register /mnt/meta/ctl)

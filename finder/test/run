@@ -246,6 +246,15 @@ $F openwith scratch:docs/readme.txt hello > $t/out >[2=1]
 sleep 0.3
 has $t/out '^launched$'
 has $t/vol/docs/launched '^args '^$t^'/vol/docs/readme.txt$'
+# a double-click on a program no association claims launches it, in
+# its own folder (and a space in its name survives)
+echo '#!/bin/rc
+echo ran in `{pwd} > ran' > $t/vol/docs/'my app'
+chmod +x $t/vol/docs/'my app'
+$F open 'scratch:docs/my app' > $t/out >[2=1]
+sleep 0.3
+has $t/out '^launched '
+has $t/vol/docs/ran '^ran in '^$t^'/vol/docs$'
 $F launch nosuch > $t/out >[2=1]
 has $t/out 'not found: no application nosuch'
 
