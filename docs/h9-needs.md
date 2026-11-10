@@ -88,3 +88,20 @@ takes them upstream.
   saves the screen as `start-failed.png` if a start times out.
 - **h9 would need:** to be looked at if it happens again; record the
   run here.
+
+## --gfx on X11 crashes when /dev/mouse is bound before /dev/draw
+
+- **Found by:** S3 (libux), at H9_REV b27cacd, Linux x86\_64, h9 built
+  with `-Dgfx=x11` (which needs `libxt-dev` for `X11/IntrinsicP.h`), under
+  Xvfb, native backend.
+- **What happens:** `h9 --backend native --gfx rio` segfaults at start in
+  drawterm's `gui-x11/x11.c` `setcursor`, called from `mouseattach` while
+  the namespace is bound, because `xdisplay` is still 0: `/dev/mouse` is
+  attached before `/dev/draw` has opened the display.
+- **Workaround:** a local `if(xdisplay == 0) return;` at the top of
+  `setcursor` in the h9 checkout; then rio and libux apps draw under Xvfb
+  (screenshots with `import -window root`). Nothing in this repo depends
+  on it: the GUI tests use the headless backend.
+- **h9 would need:** `setcursor` (and anything else `mouseattach` calls)
+  to wait for or skip a display that isn't open yet, in the X11 backend.
+
