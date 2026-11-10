@@ -47,10 +47,10 @@ The protocol is [ux.md](../docs/protocols/ux.md); uxd implements its
   answering, holds up only the requests waiting on it.
 - **Policy at the boundary.** Reads are open to every attach, except the
   `value`, `items` and `selection` of controls whose `state` says
-  `sensitive`, and `value=` in their events, which are replaced with
-  `redacted=on`. `ctl` writes are checked line by line against the
+  `sensitive`, and `value=`, `sel=`, `item=` and `items=` in their
+  events, which are replaced with `redacted=on`. `ctl` writes are checked line by line against the
   control's own `ctl` help (cached per file, re-read once for an
-  unlisted verb); `value` writes need `edit`; other writes, creates and
+  unlisted verb; a `-` class counts as unlisted); `value` writes need `edit`; other writes, creates and
   removes are refused. The session service skips these checks and lets
   the app decide.
 - **Lifetimes.** A registration lives as long as the app's `register`

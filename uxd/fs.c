@@ -446,7 +446,7 @@ static int
 helpright(char *class)
 {
 	if(strcmp(class, "-") == 0)
-		return 0;
+		return -1;	/* counts as unlisted (ux.md, Rights) */
 	return rightbit(class);
 }
 
@@ -718,6 +718,14 @@ fixdir(App *a, uchar *p, long n)
 	}
 }
 
+/* attributes that carry a sensitive control's contents */
+static int
+issecretattr(char *t)
+{
+	return strncmp(t, "value=", 6) == 0 || strncmp(t, "sel=", 4) == 0
+		|| strncmp(t, "item=", 5) == 0 || strncmp(t, "items=", 6) == 0;
+}
+
 /* events lines with sensitive values removed (ux.md, Sensitive and secret controls) */
 static char*
 redact(Fx *f, char *line, Op *op)
@@ -732,7 +740,7 @@ redact(Fx *f, char *line, Op *op)
 	for(i = 2; i < n; i++){
 		if(strncmp(tok[i], "ctl=", 4) == 0)
 			ctl = tok[i]+4;
-		if(strncmp(tok[i], "value=", 6) == 0)
+		if(issecretattr(tok[i]))
 			has = 1;
 	}
 	if(!has || ctl == nil){
@@ -749,7 +757,7 @@ redact(Fx *f, char *line, Op *op)
 	/* sensitive, or we can't tell: leave the value out */
 	s = estrdup9p("");
 	for(i = 0; i < n; i++){
-		if(strncmp(tok[i], "value=", 6) == 0 || strncmp(tok[i], "redacted=", 9) == 0)
+		if(issecretattr(tok[i]) || strncmp(tok[i], "redacted=", 9) == 0)
 			continue;
 		q = qtok(tok[i]);
 		t = smprint("%s%s%s", s, *s ? " " : "", q);

@@ -44,10 +44,11 @@ fn startapp {
 	$fakeapp -r -w $1 >[2]$out/app.$1 &
 }
 
-# fakeapp -r's quit ends its server but not its registering proc,
-# so stop apps by name
+# quit every registered fakeapp
 fn killapps {
-	kill $O.fakeapp | rc >[2]/dev/null
+	for(f in /mnt/ux/apps/*/fakectl)
+		if(test -e $f)
+			echo quit >$f >[2]/dev/null
 }
 
 fn cleanup {

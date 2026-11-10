@@ -10,8 +10,8 @@ startuxd
 u=/mnt/ux
 $fakeapp -r -q 8 -w 13 >[2]$out/app.13 &
 waitfor $u/apps/fake-1
-cp $fakeapp $out/stuckapp
-$out/stuckapp -r -w 14 >[2]$out/app.14 &
+
+$fakeapp -r -w 14 >[2]$out/app.14 &
 waitfor $u/apps/fake-2
 a=$u/apps/fake-1
 c=$a/windows/13/controls
@@ -92,6 +92,6 @@ srvfs ux.$user.$pid.slow $out/slow
 '
 }
 
-kill stuckapp | rc >[2]/dev/null
+
 cleanup
 done
