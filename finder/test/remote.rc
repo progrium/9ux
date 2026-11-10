@@ -1,8 +1,8 @@
 #!/bin/rc
-# The client half of remote.sh, run inside h9 from the repository's top:
+# The client half of remote_test.sh, run inside h9 from the repository's top:
 # rc finder/test/remote.rc ADDR SYNCDIR
 # Attaches the remote volume at ADDR, works on it, then waits for
-# remote.sh to stop the server and checks the volume goes offline.
+# remote_test.sh to stop the server and checks the volume goes offline.
 rfork ne
 O=`{sed -n 's/^O=//p' /$objtype/mkfile}
 fcore=`{pwd}^/finder/$O.fcore

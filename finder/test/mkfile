@@ -1,7 +1,7 @@
 </$objtype/mkfile
 
 # Finder core tests: unit tests in C, then rc interface tests through
-# fcore. Run from ../ as mk test. remote.sh (on the host) adds the
+# fcore. Run from ../ as mk test. remote_test.sh (on the host) adds the
 # remote-volume test, which needs two h9 machines.
 
 TARG=unit nowstatfs

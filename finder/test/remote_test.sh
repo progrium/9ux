@@ -2,7 +2,7 @@
 # A remote volume (acceptance criterion 7, without the UI): a second h9
 # serves a directory over 9P with --serve; Finder's core attaches it as
 # a volume (addr=), works on it, then the server stops and the volume
-# must report it's gone. Run on the host: finder/test/remote.sh
+# must report it's gone. Run on the host: finder/test/remote_test.sh
 # Needs finder built (scripts/h9.sh --rc 'cd finder && mk').
 set -u
 top=$(cd "$(dirname "$0")/../.." && pwd)
@@ -28,7 +28,7 @@ for i in $(seq 1 100); do
 	sleep 0.1
 done
 if [ -z "$addr" ]; then
-	echo "remote.sh: the server didn't start" >&2
+	echo "remote_test.sh: the server didn't start" >&2
 	cat "$work/serve.log" >&2
 	exit 1
 fi
@@ -84,7 +84,7 @@ done
 if [ $fail != 0 ]; then
 	echo '--- client output' >&2
 	cat "$out" >&2
-	echo "remote.sh: FAIL" >&2
+	echo "remote_test.sh: FAIL" >&2
 	exit 1
 fi
-echo "remote.sh: ok"
+echo "remote_test.sh: ok"

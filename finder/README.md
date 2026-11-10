@@ -148,7 +148,7 @@ identity) between them, printing `> command` before each result and
 ```sh
 scripts/h9.sh --rc 'cd finder && mk'        # fcore.$O.a and $O.fcore
 scripts/h9.sh --rc 'cd finder && mk test'   # unit tests, then test/run
-finder/test/remote.sh                       # a remote volume (on the host)
+finder/test/remote_test.sh                       # a remote volume (on the host)
 ```
 
 [`test/unit.c`](test/unit.c) covers the record parser, error classes,
@@ -162,7 +162,7 @@ real uxmeta and plumber: volumes from the registry and from an edit to
 the ndb file, associations in Get Info, layout following a rename,
 opening through the plumber, and launching in the workspace. The
 uxmeta part is skipped if `uxmeta/` isn't built.
-[`test/remote.sh`](test/remote.sh) starts a second h9 with `--serve` as
+[`test/remote_test.sh`](test/remote_test.sh) starts a second h9 with `--serve` as
 a remote volume, does the operations over it, then stops it and checks
 the volume reports `gone`.
 
