@@ -358,7 +358,7 @@ _setsel(Uxctl *c, uchar *sel, int via)
 	_event(c, "select", "sel", s, nil);
 	free(s);
 	memset(&e, 0, sizeof e);
-	e.type = UXselect;
+	e.type = UXselection;
 	e.via = via;
 	e.win = c->w;
 	e.ctl = c;
@@ -419,9 +419,9 @@ vlistopen(Uxctl *c, int, char **argv)
 }
 
 static int
-lineheight(Uxctl *c)
+lineheight(Uxctl*)
 {
-	return c->w->font ? c->w->font->height + 2 : 16;
+	return UXlistrowheight;
 }
 
 static int
@@ -434,7 +434,9 @@ listmouse(Uxctl *c, Mouse *m)
 	if(!(m->buttons & 1))
 		return 0;
 	r = _abs(c);
-	n = c->top + (m->xy.y - r.min.y - 2) / lineheight(c);
+	if(c->t == ctltypes[8])
+		r.min.y += UXlistrowheight + 1;
+	n = c->top + (m->xy.y - r.min.y - 1) / lineheight(c);
 	if(n < 0 || n >= c->nitems)
 		return 0;
 	if(c->lastitem == n && m->msec - c->lastclick < 400){
@@ -529,7 +531,7 @@ _iconsel(Uxctl *c, int via)
 	_event(c, "select", "sel", s, nil);
 	free(s);
 	memset(&e, 0, sizeof e);
-	e.type = UXselect;
+	e.type = UXselection;
 	e.via = via;
 	e.win = c->w;
 	e.ctl = c;
@@ -663,8 +665,8 @@ iconat(Uxctl *c, Point p)
 
 	r = _abs(c);
 	for(i = c->nicons-1; i >= 0; i--){
-		ir = Rect(0, 0, 64, 56);
-		ir = rectaddpt(ir, addpt(subpt(addpt(r.min, c->icons[i].pt), c->origin), Pt(-32, -16)));
+		ir = Rect(-UXiconviewcellw/2, -UXiconlarge/2, UXiconviewcellw/2, UXiconviewcellh-UXiconlarge/2);
+		ir = rectaddpt(ir, subpt(addpt(r.min, c->icons[i].pt), c->origin));
 		if(ptinrect(p, ir))
 			return i;
 	}

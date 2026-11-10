@@ -170,20 +170,20 @@ threadmain(int argc, char *argv[])
 			break;
 
 	win = uxwindow("window", "Sample", Rect(0, 0, 480, 400));
-	uxlabel(win, "name-label", "Name:", Rect(16, 18, 70, 34));
-	name = uxtextfield(win, "name", "Name", Rect(80, 14, 300, 36), 0);
-	save = uxbutton(win, "save", "Save", Rect(316, 14, 396, 38));
+	uxlabel(win, "name-label", "Name:", Rect(16, 16, 70, 36));
+	name = uxtextfield(win, "name", "Name", Rect(80, 16, 300, 36), 0);
+	save = uxbutton(win, "save", "Save", Rect(316, 16, 396, 36));
 	uxhandler(save, saved, nil);
 	uxdefault(win, save);
-	pass = uxtextfield(win, "password", "Password", Rect(80, 46, 300, 68), UXsecret);
-	agree = uxcheckbox(win, "agree", "I agree", Rect(316, 46, 460, 68));
+	pass = uxtextfield(win, "password", "Password", Rect(80, 48, 300, 68), UXsecret);
+	agree = uxcheckbox(win, "agree", "I agree", Rect(316, 48, 460, 68));
 	notes = uxtextfield(win, "notes", "Notes", Rect(16, 80, 300, 160), UXmultiline);
 	list = uxlist(win, "colors", Rect(316, 80, 460, 190));
 	uxsetitems(list, colors, ncolors);
 	uxhandler(list, listev, nil);
 	scroll = uxscrollview(win, "files", Rect(16, 200, 460, 340));
 	uxsetextent(scroll, Rect(0, 0, 440, 400));
-	icons = uxiconview(win, "icons", Rect(17, 201, 447, 339));
+	icons = uxiconview(win, "icons", Rect(17, 201, 443, 339));
 	uxsetparent(icons, scroll);
 	uxiconadd(icons, "readme", "Read Me", "doc-text", Pt(48, 40));
 	uxiconadd(icons, "tmp", "tmp", "folder", Pt(140, 40));

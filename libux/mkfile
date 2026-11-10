@@ -13,8 +13,10 @@ OFILES=\
 	res.$O\
 	srv.$O\
 	win.$O\
+	uxglyphs.$O\
 
-HFILES=ux.h impl.h
+HFILES=ux.h impl.h ../assets/gen/uxstyle.h ../assets/gen/uxglyphs.h
+CFLAGS=$CFLAGS -I../assets/gen
 
 all:V: $LIB
 
@@ -23,6 +25,9 @@ $LIB: $OFILES
 
 %.$O: %.c $HFILES
 	$CC $CFLAGS $stem.c
+
+uxglyphs.$O: ../assets/gen/uxglyphs.c
+	$CC $CFLAGS -o $target ../assets/gen/uxglyphs.c
 
 test:V: all
 	cd test && mk test

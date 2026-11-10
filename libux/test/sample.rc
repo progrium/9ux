@@ -37,7 +37,7 @@ same $c/save/state 'enabled visible default
 '
 same $c/name/state 'enabled visible focused
 '
-same $c/name/rect '80 14 300 36
+same $c/name/rect '80 16 300 36
 '
 same $c/icons/parent 'files
 '

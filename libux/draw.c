@@ -1,6 +1,6 @@
 /*
- * Drawing controls with libdraw. Placeholder look until the visual
- * design (assets/) lands: black on white, classic proportions.
+ * Drawing controls with libdraw, in the 9/UX look (assets/README.md,
+ * Controls and Windows). Colours are by role from assets/gen/uxstyle.h.
  */
 #include <u.h>
 #include <libc.h>
@@ -13,22 +13,93 @@
 #include "ux.h"
 #include "impl.h"
 
-static ulong colors[Ncolor] = {
-	[Cwhite]	DWhite,
-	[Cblack]	DBlack,
-	[Cgray]	0x888888FF,
-	[Cdark]	0x444444FF,
-	[Clight]	0xDDDDDDFF,
-	[Csel]	DBlack,
-	[Cshade]	0x00000080,	/* half black, premultiplied: darkens a selected icon */
+static ulong palette[] = {
+	UXink, UXpaper, UXcream, UXbutter, UXolive, UXmist, UXsea, UXteal,
+	UXdeep, UXnavy, UXred, UXgrey1, UXgrey2, UXgrey3, UXgrey4, UXgrey5,
 };
 
+/* a solid colour on w's display, cached per window */
 Image*
-_color(Uxwin *w, int i)
+_color(Uxwin *w, ulong rgba)
 {
+	int i;
+
+	for(i = 0; i < nelem(palette); i++)
+		if(palette[i] == rgba)
+			break;
+	if(i == nelem(palette))
+		return allocimage(w->d, Rect(0,0,1,1), w->img->chan, 1, rgba);	/* not cached */
 	if(w->col[i] == nil)
-		w->col[i] = allocimage(w->d, Rect(0,0,1,1), i == Cshade ? RGBA32 : w->img->chan, 1, colors[i]);
+		w->col[i] = allocimage(w->d, Rect(0,0,1,1), w->img->chan, 1, rgba);
 	return w->col[i];
+}
+
+/* the system and body fonts (assets/fonts.ndb), falling back to the window's font */
+void
+_winfonts(Uxwin *w)
+{
+	Font *f;
+
+	f = openfont(w->d, "/lib/font/bit/lucidasans/unicode.7.font");
+	if(f != nil)
+		w->font = f;
+	w->sysfont = openfont(w->d, "/lib/font/bit/lucidasans/boldunicode.7.font");
+	if(w->sysfont == nil)
+		w->sysfont = w->font;
+}
+
+static int
+active(Uxwin *w)
+{
+	return ux.front == nil || ux.front == w;
+}
+
+/* a glyph from assets/gen/uxglyphs.c as a mask, cached per window */
+static Image*
+glyphmask(Uxwin *w, char *name, Point *sz)
+{
+	UXglyph *g;
+	Image *m;
+	int i;
+
+	for(i = 0; uxglyphs[i].name != nil; i++)
+		if(strcmp(uxglyphs[i].name, name) == 0)
+			break;
+	g = &uxglyphs[i];
+	if(g->name == nil || i >= nelem(w->glyph))
+		return nil;
+	*sz = Pt(g->w, g->h);
+	if(w->glyph[i] == nil){
+		m = allocimage(w->d, Rect(0, 0, g->w, g->h), GREY1, 0, DBlack);
+		if(m == nil)
+			return nil;
+		loadimage(m, m->r, g->black, ((g->w+7)/8)*g->h);
+		w->glyph[i] = m;
+	}
+	return w->glyph[i];
+}
+
+/* draw glyph name with its top left at p */
+static void
+glyph(Uxwin *w, char *name, Point p, Image *col)
+{
+	Image *m;
+	Point sz;
+
+	m = glyphmask(w, name, &sz);
+	if(m != nil)
+		draw(w->img, Rpt(p, addpt(p, sz)), col, m, ZP);
+}
+
+/* glyph name centred in r */
+static void
+glyphin(Uxwin *w, char *name, Rectangle r, Image *col)
+{
+	Point sz;
+
+	if(glyphmask(w, name, &sz) == nil)
+		return;
+	glyph(w, name, Pt(r.min.x + (Dx(r)-sz.x)/2, r.min.y + (Dy(r)-sz.y)/2), col);
 }
 
 /* c's rectangle in screen coordinates, scrolled by its parents' scroll views */
@@ -42,103 +113,159 @@ _abs(Uxctl *c)
 	for(p = c->parent; p != nil; p = p->parent)
 		if(strcmp(p->t->name, "scroll-view") == 0)
 			r = rectsubpt(r, p->origin);
-	return rectaddpt(r, insetrect(c->w->img->r, 0).min);
+	return rectaddpt(r, c->w->img->r.min);
 }
 
 static void
-text(Uxwin *w, Point p, char *s, Image *col)
+fill(Uxwin *w, Rectangle r, ulong col)
 {
-	string(w->img, p, col, ZP, w->font, s);
+	draw(w->img, r, _color(w, col), nil, ZP);
+}
+
+static void
+frame(Uxwin *w, Rectangle r, int n, ulong col)
+{
+	border(w->img, r, n, _color(w, col), ZP);
 }
 
 static Point
-centered(Uxwin *w, Rectangle r, char *s)
+centred(Font *f, Rectangle r, char *s)
 {
 	Point sz;
 
-	sz = stringsize(w->font, s);
+	sz = stringsize(f, s);
 	return Pt(r.min.x + (Dx(r)-sz.x)/2, r.min.y + (Dy(r)-sz.y)/2);
+}
+
+/* a rounded rectangle: fill (if any) inside a thick outline of radius rad */
+static void
+roundrect(Uxwin *w, Rectangle r, int rad, int thick, ulong fillc, ulong line)
+{
+	Image *f, *l;
+	int i, d;
+
+	l = _color(w, line);
+	f = fillc ? _color(w, fillc) : nil;
+	for(i = 0; i < thick; i++){
+		/* each pass is a 1 px outline, inset by one */
+		d = rad - i < 1 ? 1 : rad - i;
+		/* straight edges */
+		draw(w->img, Rect(r.min.x+d, r.min.y, r.max.x-d, r.min.y+1), l, nil, ZP);
+		draw(w->img, Rect(r.min.x+d, r.max.y-1, r.max.x-d, r.max.y), l, nil, ZP);
+		draw(w->img, Rect(r.min.x, r.min.y+d, r.min.x+1, r.max.y-d), l, nil, ZP);
+		draw(w->img, Rect(r.max.x-1, r.min.y+d, r.max.x, r.max.y-d), l, nil, ZP);
+		/* corners: quarter arcs */
+		arc(w->img, Pt(r.min.x+d, r.min.y+d), d, d, 0, l, ZP, 90, 90);
+		arc(w->img, Pt(r.max.x-1-d, r.min.y+d), d, d, 0, l, ZP, 0, 90);
+		arc(w->img, Pt(r.min.x+d, r.max.y-1-d), d, d, 0, l, ZP, 180, 90);
+		arc(w->img, Pt(r.max.x-1-d, r.max.y-1-d), d, d, 0, l, ZP, 270, 90);
+		r = insetrect(r, 1);
+	}
+	if(f != nil){
+		d = rad - thick < 0 ? 0 : rad - thick;
+		draw(w->img, Rect(r.min.x+d, r.min.y, r.max.x-d, r.max.y), f, nil, ZP);
+		draw(w->img, Rect(r.min.x, r.min.y+d, r.max.x, r.max.y-d), f, nil, ZP);
+		if(d > 0){
+			fillellipse(w->img, Pt(r.min.x+d, r.min.y+d), d, d, f, ZP);
+			fillellipse(w->img, Pt(r.max.x-1-d, r.min.y+d), d, d, f, ZP);
+			fillellipse(w->img, Pt(r.min.x+d, r.max.y-1-d), d, d, f, ZP);
+			fillellipse(w->img, Pt(r.max.x-1-d, r.max.y-1-d), d, d, f, ZP);
+		}
+	}
 }
 
 static void
 drawbutton(Uxctl *c, Rectangle r)
 {
 	Uxwin *w;
-	Image *fg, *bg;
+	ulong fg, bg, line;
+	int en;
 
 	w = c->w;
-	if(c->state & Cdefault){
-		border(w->img, insetrect(r, -4), 3, _color(w, Cblack), ZP);
-	}
-	bg = _color(w, c->pressed == 1 ? Cblack : Cwhite);
-	fg = _color(w, (c->state & Cenabled) ? (c->pressed == 1 ? Cwhite : Cblack) : Cgray);
-	draw(w->img, insetrect(r, 1), bg, nil, ZP);
-	border(w->img, r, 1, _color(w, Cblack), ZP);
-	/* round the corners */
-	draw(w->img, Rect(r.min.x, r.min.y, r.min.x+1, r.min.y+1), _color(w, Cwhite), nil, ZP);
-	draw(w->img, Rect(r.max.x-1, r.min.y, r.max.x, r.min.y+1), _color(w, Cwhite), nil, ZP);
-	draw(w->img, Rect(r.min.x, r.max.y-1, r.min.x+1, r.max.y), _color(w, Cwhite), nil, ZP);
-	draw(w->img, Rect(r.max.x-1, r.max.y-1, r.max.x, r.max.y), _color(w, Cwhite), nil, ZP);
-	if(w->focus == c && c->pressed == 0)
-		border(w->img, insetrect(r, 2), 1, _color(w, Clight), ZP);
-	text(w, centered(w, r, c->label), c->label, fg);
+	en = (c->state & Cenabled) != 0;
+	if((c->state & Cdefault) && en)
+		/* a 2 px ring with a 1 px gap outside the button */
+		roundrect(w, insetrect(r, -UXbuttondefaultring), UXbuttonradius+UXbuttondefaultring, 2, 0, UXink);
+	line = en ? UXink : UXcoldisabled;
+	bg = c->pressed == 1 ? UXcolselect : UXpaper;
+	fg = !en ? UXcoldisabled : c->pressed == 1 ? UXcolselecttext : UXink;
+	roundrect(w, r, UXbuttonradius, 1, bg, line);
+	if(w->focus == c && c->pressed == 0 && !(c->state & Cdefault))
+		roundrect(w, insetrect(r, 2), UXbuttonradius-1, 1, 0, UXcolfocus);
+	string(w->img, centred(w->sysfont, r, c->label), _color(w, fg), ZP, w->sysfont, c->label);
+}
+
+static void
+bullets(Uxwin *w, Point p, int n, int ht, Image *col)
+{
+	int i;
+
+	for(i = 0; i < n; i++)
+		fillellipse(w->img, Pt(p.x + i*7 + 3, p.y + ht/2), 2, 2, col, ZP);
 }
 
 static void
 drawtext(Uxctl *c, Rectangle r)
 {
 	Uxwin *w;
-	Image *fg;
+	Image *fg, *bg, *selbg;
+	Font *f;
 	Point p;
-	Rune bullet, *s;
-	int i, q, x, ht, focused;
+	int q, x, ht, focused, cw;
 	Rectangle in;
 
 	w = c->w;
-	ht = w->font->height;
-	fg = _color(w, (c->state & Cenabled) ? Cblack : Cgray);
-	draw(w->img, r, _color(w, Cwhite), nil, ZP);
-	border(w->img, r, 1, _color(w, (c->state & UXreadonly) ? Cgray : Cblack), ZP);
-	in = insetrect(r, 3);
-	focused = w->focus == c;
-	bullet = L'*';
-	s = c->text;
+	f = w->font;
+	ht = f->height;
+	focused = w->focus == c && active(w);
+	fg = _color(w, (c->state & Cenabled) ? UXink : UXcoldisabled);
+	bg = _color(w, UXcolfield);
+	selbg = _color(w, UXcoltextselect);
+	if(focused)
+		frame(w, insetrect(r, -UXfieldfocusring), UXfieldfocusring, UXcolfocus);
+	draw(w->img, r, bg, nil, ZP);
+	frame(w, r, 1, (c->state & UXreadonly) ? UXcoldisabled : UXink);
+	in = insetrect(r, 1);
+	in.min.x += UXfieldpad-1;
+	in.max.x -= UXfieldpad-1;
+	in.min.y += (c->state & UXmultiline) ? 2 : (Dy(in)-ht)/2;
+	replclipr(w->img, 0, insetrect(r, 1));
 	if(c->state & UXsecret){
-		s = emalloc((c->ntext+1)*sizeof(Rune));
-		for(i = 0; i < c->ntext; i++)
-			s[i] = bullet;
+		bullets(w, in.min, c->ntext, ht, fg);
+		if(focused)
+			draw(w->img, Rect(in.min.x + c->q0*7, in.min.y, in.min.x + c->q0*7 + 1, in.min.y+ht), _color(w, UXink), nil, ZP);
+		replclipr(w->img, 0, w->img->r);
+		return;
 	}
 	/* one-line: keep the caret in view */
 	if(!(c->state & UXmultiline)){
 		if(c->q1 < c->org)
 			c->org = c->q1;
-		while(c->org < c->q1 && runestringnwidth(w->font, s+c->org, c->q1-c->org) > Dx(in)-2)
+		while(c->org < c->q1 && runestringnwidth(f, c->text+c->org, c->q1-c->org) > Dx(in)-2)
 			c->org++;
 	}else
 		c->org = 0;
 	p = in.min;
 	x = p.x;
 	for(q = c->org; q <= c->ntext; q++){
-		if(focused && q >= c->q0 && q < c->q1)
-			draw(w->img, Rect(x, p.y, x+runestringnwidth(w->font, s+q, 1), p.y+ht), _color(w, Clight), nil, ZP);
 		if(focused && q == c->q0 && c->q0 == c->q1)
-			draw(w->img, Rect(x, p.y, x+1, p.y+ht), _color(w, Cblack), nil, ZP);
+			draw(w->img, Rect(x, p.y, x+1, p.y+ht), _color(w, UXink), nil, ZP);
 		if(q == c->ntext)
 			break;
-		if(s[q] == '\n'){
+		if(c->text[q] == '\n'){
 			p.y += ht;
 			x = p.x;
 			if(p.y+ht > in.max.y)
 				break;
 			continue;
 		}
-		if(x+runestringnwidth(w->font, s+q, 1) > in.max.x)
-			continue;
-		x = runestringnbg(w->img, Pt(x, p.y), fg, ZP, w->font, s+q, 1,
-			focused && q >= c->q0 && q < c->q1 ? _color(w, Clight) : _color(w, Cwhite), ZP).x;
+		cw = runestringnwidth(f, c->text+q, 1);
+		if(x+cw > in.max.x && !(c->state & UXmultiline))
+			break;
+		x = runestringnbg(w->img, Pt(x, p.y), fg, ZP, f, c->text+q, 1,
+			q >= c->q0 && q < c->q1 && focused ? selbg : bg, ZP).x;
 	}
-	if(s != c->text)
-		free(s);
+	replclipr(w->img, 0, w->img->r);
 }
 
 static void
@@ -146,21 +273,28 @@ drawcheck(Uxctl *c, Rectangle r)
 {
 	Uxwin *w;
 	Rectangle b;
-	Image *fg;
+	ulong ink;
 
 	w = c->w;
-	fg = _color(w, (c->state & Cenabled) ? Cblack : Cgray);
-	b = Rect(r.min.x, r.min.y + (Dy(r)-12)/2, r.min.x+12, r.min.y + (Dy(r)-12)/2 + 12);
-	draw(w->img, b, _color(w, Cwhite), nil, ZP);
-	border(w->img, b, 1, fg, ZP);
-	if(c->check == 1){
-		line(w->img, addpt(b.min, Pt(2,2)), subpt(b.max, Pt(3,3)), 0, 0, 0, fg, ZP);
-		line(w->img, Pt(b.max.x-3, b.min.y+2), Pt(b.min.x+2, b.max.y-3), 0, 0, 0, fg, ZP);
-	}else if(c->check == 2)
-		draw(w->img, Rect(b.min.x+3, b.min.y+5, b.max.x-3, b.min.y+7), fg, nil, ZP);
-	if(w->focus == c)
-		border(w->img, insetrect(b, -2), 1, _color(w, Clight), ZP);
-	text(w, Pt(b.max.x+6, r.min.y + (Dy(r)-w->font->height)/2), c->label, fg);
+	ink = (c->state & Cenabled) ? UXink : UXcoldisabled;
+	b = Rect(0, 0, UXchecksize, UXchecksize);
+	b = rectaddpt(b, Pt(r.min.x, r.min.y + (Dy(r)-UXchecksize)/2));
+	if(c->pressed){
+		fill(w, b, UXcoltrack);
+		frame(w, b, 1, ink);
+		frame(w, insetrect(b, 1), 1, ink);
+	}else{
+		fill(w, b, UXpaper);
+		frame(w, b, 1, ink);
+	}
+	if(c->check == 1)
+		glyphin(w, "check", insetrect(b, 1), _color(w, ink));
+	else if(c->check == 2)
+		glyphin(w, "mixed", b, _color(w, ink));
+	if(w->focus == c && active(w))
+		frame(w, insetrect(b, -2), 1, UXcolfocus);
+	string(w->img, Pt(b.max.x+UXcheckgap, r.min.y + (Dy(r)-w->sysfont->height)/2),
+		_color(w, ink), ZP, w->sysfont, c->label);
 }
 
 static void
@@ -169,8 +303,17 @@ drawlabel(Uxctl *c, Rectangle r)
 	char *s;
 
 	s = _runestr(c->text, c->ntext);
-	text(c->w, r.min, s, _color(c->w, (c->state & Cenabled) ? Cblack : Cgray));
+	string(c->w->img, Pt(r.min.x, r.min.y + (Dy(r)-c->w->sysfont->height)/2),
+		_color(c->w, (c->state & Cenabled) ? UXink : UXcoldisabled), ZP, c->w->sysfont, s);
 	free(s);
+}
+
+static ulong
+winbg(Uxwin *w)
+{
+	if(strcmp(w->kind, "dialog") == 0 || strcmp(w->kind, "alert") == 0)
+		return UXcolface;
+	return UXpaper;
 }
 
 static void
@@ -178,13 +321,15 @@ drawgroup(Uxctl *c, Rectangle r)
 {
 	Uxwin *w;
 	Point p;
+	Font *f;
 
 	w = c->w;
-	r.min.y += w->font->height/2;
-	border(w->img, r, 1, _color(w, Cgray), ZP);
+	f = w->sysfont;
+	r.min.y += f->height/2;
+	frame(w, r, 1, UXcoldisabled);
 	if(c->label[0]){
-		p = Pt(r.min.x+8, r.min.y - w->font->height/2);
-		stringbg(w->img, p, _color(w, Cblack), ZP, w->font, c->label, _color(w, Cwhite), ZP);
+		p = Pt(r.min.x+UXcontrolgap, r.min.y - f->height/2);
+		stringbg(w->img, p, _color(w, UXink), ZP, f, c->label, _color(w, winbg(w)), Pt(-4, 0));
 	}
 }
 
@@ -193,36 +338,53 @@ drawlist(Uxctl *c, Rectangle r)
 {
 	Uxwin *w;
 	Rectangle lr, in;
-	int i, lh, y0;
+	int i, y0, sel;
+	Font *f;
 
 	w = c->w;
-	lh = w->font->height + 2;
-	draw(w->img, r, _color(w, Cwhite), nil, ZP);
-	border(w->img, r, 1, _color(w, Cblack), ZP);
-	in = insetrect(r, 2);
+	f = w->font;
+	fill(w, r, UXpaper);
+	frame(w, r, 1, UXink);
+	in = insetrect(r, 1);
 	y0 = in.min.y;
 	if(c->t == ctltypes[8] && c->dir){
-		text(w, Pt(in.min.x+2, y0), c->dir, _color(w, Cdark));
-		y0 += lh;
-		draw(w->img, Rect(in.min.x, y0-1, in.max.x, y0), _color(w, Cgray), nil, ZP);
+		/* the chooser's directory, as a header */
+		lr = Rect(in.min.x, y0, in.max.x, y0+UXlistrowheight);
+		fill(w, lr, UXcolface);
+		string(w->img, Pt(lr.min.x+UXlistpad, lr.min.y + (UXlistrowheight-f->height)/2),
+			_color(w, UXink), ZP, f, c->dir);
+		y0 += UXlistrowheight;
+		fill(w, Rect(in.min.x, y0, in.max.x, y0+1), UXcoldisabled);
+		y0++;
 	}
 	/* keep the first selected item in view */
 	for(i = 0; i < c->nitems; i++)
 		if(c->sel[i]){
 			if(i < c->top)
 				c->top = i;
-			while(y0 + (i-c->top+1)*lh > in.max.y && c->top < i)
+			while(y0 + (i-c->top+1)*UXlistrowheight > in.max.y && c->top < i)
 				c->top++;
 			break;
 		}
 	for(i = c->top; i < c->nitems; i++){
-		lr = Rect(in.min.x, y0 + (i-c->top)*lh, in.max.x, y0 + (i-c->top+1)*lh);
+		lr = Rect(in.min.x, y0 + (i-c->top)*UXlistrowheight, in.max.x, y0 + (i-c->top+1)*UXlistrowheight);
 		if(lr.max.y > in.max.y)
 			break;
-		if(c->sel[i])
-			draw(w->img, lr, _color(w, Csel), nil, ZP);
-		text(w, Pt(lr.min.x+2, lr.min.y+1), c->items[i], _color(w, c->sel[i] ? Cwhite : Cblack));
+		sel = c->sel[i];
+		if(sel)
+			fill(w, lr, active(w) ? UXcolselect : UXcoltrack);
+		string(w->img, Pt(lr.min.x+UXlistpad, lr.min.y + (UXlistrowheight-f->height)/2),
+			_color(w, sel && active(w) ? UXcolselecttext : UXink), ZP, f, c->items[i]);
 	}
+}
+
+/* darkens a selected icon (assets/README.md, Finder: Selected), through the icon's mask */
+static Image*
+shade(Uxwin *w)
+{
+	if(w->col[nelem(palette)] == nil)
+		w->col[nelem(palette)] = allocimage(w->d, Rect(0,0,1,1), RGBA32, 1, setalpha(0x000033FF, 0x80));
+	return w->col[nelem(palette)];
 }
 
 static void
@@ -230,31 +392,38 @@ drawicons(Uxctl *c, Rectangle r)
 {
 	Uxwin *w;
 	Icon *ic;
-	Point p;
-	Rectangle ir;
+	Point p, lp;
+	Rectangle ir, lr;
+	Font *f;
 	Image *img;
-	int i;
+	int i, lw;
 
 	w = c->w;
-	draw(w->img, r, _color(w, Cwhite), nil, ZP);
+	f = w->font;
+	fill(w, r, UXpaper);
 	replclipr(w->img, 0, r);
 	for(i = 0; i < c->nicons; i++){
 		ic = &c->icons[i];
-		p = addpt(subpt(addpt(r.min, ic->pt), c->origin), Pt(0, 0));
-		ir = Rect(p.x-16, p.y-16, p.x+16, p.y+16);
+		/* pos is the icon's centre */
+		p = subpt(addpt(r.min, ic->pt), c->origin);
+		ir = Rect(p.x-UXiconlarge/2, p.y-UXiconlarge/2, p.x+UXiconlarge/2, p.y+UXiconlarge/2);
 		if((img = _resicon(w, ic->icon, 0)) != nil){
 			draw(w->img, ir, img, nil, img->r.min);
 			if(ic->sel)
-				draw(w->img, ir, _color(w, Cshade), img, img->r.min);
+				draw(w->img, ir, shade(w), img, img->r.min);
 		}else{
-			draw(w->img, ir, _color(w, ic->sel ? Cdark : Clight), nil, ZP);
-			border(w->img, ir, 1, _color(w, Cblack), ZP);
+			/* no icon resource */
+			fill(w, ir, ic->sel ? UXgrey4 : UXgrey1);
+			frame(w, ir, 1, UXink);
 		}
-		p = Pt(p.x - stringwidth(w->font, ic->label)/2, ir.max.y+2);
-		if(ic->sel)
-			stringbg(w->img, p, _color(w, Cwhite), ZP, w->font, ic->label, _color(w, Csel), ZP);
-		else
-			text(w, p, ic->label, _color(w, Cblack));
+		lw = stringwidth(f, ic->label);
+		lp = Pt(p.x - lw/2, ir.max.y + UXiconviewlabelgap);
+		lr = Rect(lp.x-UXiconviewlabelpad, lp.y, lp.x+lw+UXiconviewlabelpad, lp.y+f->height);
+		if(ic->sel){
+			fill(w, lr, active(w) ? UXcolselect : UXcoltrack);
+			string(w->img, lp, _color(w, active(w) ? UXcolselecttext : UXink), ZP, f, ic->label);
+		}else
+			string(w->img, lp, _color(w, UXink), ZP, f, ic->label);
 	}
 	replclipr(w->img, 0, w->img->r);
 }
@@ -263,23 +432,50 @@ static void
 drawscroll(Uxctl *c, Rectangle r)
 {
 	Uxwin *w;
-	Rectangle bar, th;
-	int h, ch;
+	Rectangle bar, up, down, track, th;
+	int h, ch, canscroll;
+	ulong arrow;
 
 	w = c->w;
-	border(w->img, r, 1, _color(w, Cblack), ZP);
-	bar = Rect(r.max.x-12, r.min.y+1, r.max.x-1, r.max.y-1);
-	draw(w->img, bar, _color(w, Clight), nil, ZP);
+	frame(w, r, 1, UXink);
+	bar = Rect(r.max.x-UXscrollwidth, r.min.y, r.max.x, r.max.y);
+	fill(w, insetrect(bar, 1), UXpaper);
+	frame(w, bar, 1, UXink);
+	if(!active(w))
+		return;	/* inactive windows show a blank bar */
 	ch = Dy(c->extent);
-	h = Dy(bar);
-	if(ch > 0 && ch > Dy(r)){
-		th = bar;
-		th.min.y = bar.min.y + (vlong)h*(c->origin.y - c->extent.min.y)/ch;
-		th.max.y = th.min.y + (vlong)h*Dy(r)/ch;
-		if(th.max.y > bar.max.y)
-			th.max.y = bar.max.y;
-		draw(w->img, th, _color(w, Cgray), nil, ZP);
+	canscroll = ch > Dy(r);
+	up = Rect(bar.min.x, bar.min.y, bar.max.x, bar.min.y+UXscrollwidth);
+	down = Rect(bar.min.x, bar.max.y-UXscrollwidth, bar.max.x, bar.max.y);
+	track = Rect(bar.min.x+1, up.max.y, bar.max.x-1, down.min.y);
+	arrow = canscroll ? UXink : UXcoldisabled;
+	fill(w, insetrect(up, 1), UXcolface);
+	fill(w, insetrect(down, 1), UXcolface);
+	frame(w, up, 1, UXink);
+	frame(w, down, 1, UXink);
+	glyphin(w, "arrow-up", up, _color(w, arrow));
+	glyphin(w, "arrow-down", down, _color(w, arrow));
+	if(!canscroll)
+		return;
+	fill(w, track, UXcoltrack);
+	h = Dy(track);
+	th = track;
+	th.min.y = track.min.y + (vlong)h*(c->origin.y - c->extent.min.y)/ch;
+	th.max.y = th.min.y + (vlong)h*Dy(r)/ch;
+	if(th.max.y - th.min.y < UXscrollthumbmin)
+		th.max.y = th.min.y + UXscrollthumbmin;
+	if(th.max.y > track.max.y){
+		th.min.y -= th.max.y - track.max.y;
+		th.max.y = track.max.y;
 	}
+	if(th.min.y < track.min.y)
+		th.min.y = track.min.y;
+	th.min.x--;
+	th.max.x++;
+	fill(w, th, UXpaper);
+	fill(w, Rect(th.min.x, th.min.y-1, th.max.x, th.min.y), UXink);
+	fill(w, Rect(th.min.x, th.max.y, th.max.x, th.max.y+1), UXink);
+	glyphin(w, "thumbgrip", th, _color(w, UXink));
 }
 
 void
@@ -313,12 +509,20 @@ _drawctl(Uxctl *c)
 void
 _redraw(Uxwin *w)
 {
+	Rectangle r;
 	int i;
 
 	w->dirty = 0;
 	if(w->img == nil)
 		return;
-	draw(w->img, w->img->r, _color(w, Cwhite), nil, ZP);
+	r = w->img->r;
+	fill(w, r, winbg(w));
+	if(strcmp(w->kind, "dialog") == 0 || strcmp(w->kind, "alert") == 0){
+		/* rio draws the outer frame; libux the teal band and the inner frame */
+		frame(w, r, 1, UXink);
+		frame(w, insetrect(r, 1), 2, UXcoldialogband);
+		frame(w, insetrect(r, 3), 1, UXink);
+	}
 	for(i = 0; i < w->nctl; i++)
 		_drawctl(w->ctl[i]);
 	_resdraw(w);

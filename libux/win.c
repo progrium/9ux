@@ -76,6 +76,7 @@ mainwin(Uxwin *w)
 	w->d = display;
 	w->img = screen;
 	w->font = font;
+	_winfonts(w);
 	w->mc = initmouse(nil, screen);
 	w->kc = initkeyboard(nil);
 	if(w->mc == nil || w->kc == nil)
@@ -132,6 +133,8 @@ dlgproc(void *v)
 		goto Out;
 	}
 	w->font = winfont(w->d);
+	if(w->font != nil)
+		_winfonts(w);
 	w->winnamefd = open("/mnt/wsys/winname", OREAD);
 	w->wctlfd = open("/mnt/wsys/wctl", ORDWR);
 	n = pread(w->winnamefd, buf, sizeof buf-1, 0);
@@ -297,6 +300,8 @@ setcurrent(Uxwin *w)
 	for(i = 0; i < ux.nwin; i++)
 		if(ux.win[i] != w && (ux.win[i]->state & Wcurrent))
 			_winstate(ux.win[i], ux.win[i]->state & ~Wcurrent);
+	for(i = 0; i < ux.nwin; i++)
+		ux.win[i]->dirty = 1;	/* active and inactive windows draw differently */
 	ux.front = w;
 	_winstate(w, w->state | Wcurrent);
 	if(w->fn != nil){
@@ -449,7 +454,6 @@ _winresize(Uxwin *w)
 			return;
 		}
 	}
-	memset(w->col, 0, sizeof w->col);
 	old = w->r;
 	w->r = insetrect(w->img->r, -Borderwidth);
 	if(!eqrect(old, w->r)){

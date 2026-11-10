@@ -178,8 +178,10 @@ strings and icons from resources (S10).
 
 Not yet:
 
-- The look is a placeholder (black on white) until S8's style guide
-  lands; icons with no resource are gray squares.
+- Controls are drawn in the 9/UX look from [assets/](../assets/README.md)
+  (roles from `uxstyle.h`, glyphs from `uxglyphs.c`, fonts from
+  `fonts.ndb`); icons with no resource are grey squares, and radio
+  buttons aren't done yet.
 - Drawing has been checked by hand under `h9 --gfx` with rio, not by the
   GUI harness yet; the input paths (clicks, typing, Tab, Enter, Esc)
   have no automated test until S0's harness can inject input.

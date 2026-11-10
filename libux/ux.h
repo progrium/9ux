@@ -25,7 +25,7 @@ typedef struct Uxev Uxev;
 enum {
 	UXactivate = 1,	/* button pressed */
 	UXvalue,	/* value changed (text, checkbox) */
-	UXselect,	/* selection changed */
+	UXselection,	/* selection changed */
 	UXsubmit,	/* Enter in a one-line field */
 	UXopen,		/* list or icon items opened */
 	UXrename,	/* icon item renamed (Uxev.item, Uxev.text) */

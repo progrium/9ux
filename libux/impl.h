@@ -9,6 +9,10 @@
  * after releasing the lock.
  */
 
+#include "uxstyle.h"
+
+#include "uxglyphs.h"
+
 typedef struct Obj Obj;
 typedef struct App App;
 typedef struct Ctltype Ctltype;
@@ -140,7 +144,8 @@ struct Uxwin {
 	/* drawing; img is nil when headless */
 	Display	*d;
 	Image	*img;
-	Font	*font;
+	Font	*font;	/* body role */
+	Font	*sysfont;	/* system role */
 	Mousectl	*mc;
 	Keyboardctl	*kc;
 	int	dirty;
@@ -148,7 +153,8 @@ struct Uxwin {
 	Mouse	lastm;
 	int	wctlfd;	/* a dialog's wctl, or -1 */
 	int	winnamefd;	/* a dialog's winname, or -1 */
-	Image	*col[8];
+	Image	*col[24];
+	Image	*glyph[32];
 };
 
 struct Item {
@@ -325,8 +331,8 @@ int	_dialogwin(Uxwin*, Rectangle);
 /* draw.c */
 void	_drawctl(Uxctl*);
 Rectangle	_abs(Uxctl*);
-Image*	_color(Uxwin*, int);
-enum { Cwhite, Cblack, Cgray, Cdark, Clight, Csel, Cshade, Ncolor };
+Image*	_color(Uxwin*, ulong);
+void	_winfonts(Uxwin*);
 
 /* menu.c */
 void	_barevent(char*);
