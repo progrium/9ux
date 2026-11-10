@@ -78,7 +78,10 @@ struct View
 	/* desktop and folder windows */
 	Uxctl	*icons;		/* icon view (Micons, and the desktop) */
 	Uxctl	*list;		/* list (Mlist) */
+	Uxctl	*scroll;	/* folder and Trash windows: the scroll view with both bars */
 	Uxctl	*status;	/* a label: items, selection, read-only, offline */
+	Uxctl	*space;	/* a label at the right of the info bar: the size of what's there */
+	int	look;	/* the bars and info bar folderlayout last set, 0 for none yet */
 	Uxctl	*edit;		/* the rename field, while renaming */
 	Item	*editing;
 	int	mode;
@@ -146,6 +149,10 @@ void	viewsetmode(View*, int mode);
 void	viewsetsort(View*, int sort);
 void	viewcleanup(View*);
 void	viewstatus(View*);
+void	folderchrome(View*);
+void	folderlayout(View*);
+Point	viewport(View*);
+Rectangle	viewcontent(View*);
 void	viewevent(View*, Fev*);
 void	openit(View*, Item*);
 int	viewsel(View*, Item ***items);

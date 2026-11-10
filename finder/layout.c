@@ -39,8 +39,8 @@ festrdup(char *s)
 
 enum
 {
-	Margin	= 10,
-	Top	= 4,
+	Margin	= 6,
+	Top	= 9,
 };
 
 /* the centre of an icon in grid cell col,row of a folder's view */
@@ -95,7 +95,7 @@ freecell(View *v)
 					return p;
 			}
 	}
-	ncol = (v->size.x - 2*Margin) / UXiconviewcellw;
+	ncol = (Dx(viewcontent(v)) - 2*Margin) / UXiconviewcellw;
 	if(ncol < 1)
 		ncol = 1;
 	for(row = 0; ; row++)

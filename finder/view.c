@@ -14,7 +14,9 @@
 
 enum
 {
-	Statush	= 18,	/* the info bar at the top of a folder window */
+	Infoh	= 23,	/* the info bar at the top of a folder window, with its double rule */
+	Statush	= 20,	/* the info bar's text */
+	Infopad	= 8,	/* its text from either side */
 };
 
 static void	populate(View*);
@@ -38,6 +40,29 @@ addview(View *v)
 {
 	v->next = views;
 	views = v;
+}
+
+/* hatch the icons of folders and volumes whose windows are open (assets/README.md, Finder: Open) */
+static void
+markopen(void)
+{
+	View *v, *o;
+	Item *it;
+	int i, open;
+
+	for(v = views; v != nil; v = v->next){
+		if(v->icons == nil || v->kind == Ktrash)
+			continue;
+		for(i = 0; i < v->nitem; i++){
+			it = v->item[i];
+			open = 0;
+			if(it->path != nil && (it->dir || it->vol != nil))
+				for(o = views; o != nil; o = o->next)
+					if(o->kind == Kfolder && o->path != nil && strcmp(o->path, it->path) == 0)
+						open = 1;
+			uxiconopen(v->icons, it->id, open);
+		}
+	}
 }
 
 View*
@@ -233,12 +258,111 @@ showitem(View *v, Item *it)
 	free(l);
 }
 
+/* the visible content: the desktop, or a folder window's below its info bar and left of its bars */
 static Rectangle
 contentrect(View *v)
 {
-	if(v->kind == Kdesk)
+	if(v->kind == Kdesk || v->scroll == nil)
 		return Rect(0, 0, v->size.x, v->size.y);
-	return Rect(0, Statush, v->size.x, v->size.y);
+	return uxscrollport(v->scroll);
+}
+
+/* where the icon view's 0,0 is in the window, scrolled */
+Point
+viewport(View *v)
+{
+	Point o;
+
+	if(v->scroll == nil)
+		return contentrect(v).min;
+	o = uxgetorigin(v->scroll);
+	return subpt(contentrect(v).min, o);
+}
+
+Rectangle
+viewcontent(View *v)
+{
+	return contentrect(v);
+}
+
+/* list view columns, as in the mockups' list window */
+static char *coltitles[] = { "Name", "Kind", "Size" };
+static int colwidths[] = { 170, 100, 70 };
+
+/*
+ * A folder (or the Trash) window's frame inside rio's: a scroll view
+ * with both bars and the grow box, always shown as in a classic folder
+ * window, and the info bar above the content: the item count at the
+ * left, the size of what's there at the right, over a double rule.
+ */
+void
+folderchrome(View *v)
+{
+	v->scroll = uxscrollview(v->w, "scroll", Rect(-1, -1, v->size.x+1, v->size.y+1));
+	uxscrollbars(v->scroll, UXvbar|UXhbar|UXgrowbox, Infoh);
+	uxsetextent(v->scroll, Rect(0, 0, 0, 0));
+	v->status = uxlabel(v->w, "status", "", Rect(Infopad, 0, v->size.x-Infopad, Statush));
+	uxlabelstyle(v->status, UXsmall);
+	v->space = uxlabel(v->w, "space", "", Rect(Infopad, 0, v->size.x-Infopad, Statush));
+	uxlabelstyle(v->space, UXsmall|UXright);
+}
+
+/* everything in a folder window placed for its size and content */
+void
+folderlayout(View *v)
+{
+	Rectangle port, ext, cr, ir;
+	int i, w, info;
+	Item *it;
+
+	if(v->scroll == nil)
+		return;
+	/*
+	 * icon view: both bars and the info bar; list view, as in the
+	 * mockups' list window: the vertical bar, and the column header
+	 * right under the title bar (unless there's an error to show)
+	 */
+	info = v->list == nil || v->err[0] || (v->vol != nil && v->vol->state == Voffline);
+	if(v->look != 1 + (v->list != nil) + 2*info){
+		v->look = 1 + (v->list != nil) + 2*info;
+		uxscrollbars(v->scroll, v->list != nil ? UXvbar|UXgrowbox : UXvbar|UXhbar|UXgrowbox, info ? Infoh : 0);
+		if(v->status != nil)
+			uxshow(v->status, info);
+		if(v->space != nil)
+			uxshow(v->space, info);
+	}
+	uxsetrect(v->scroll, Rect(-1, -1, v->size.x+1, v->size.y+1));
+	port = uxscrollport(v->scroll);
+	if(v->status != nil)
+		uxsetrect(v->status, Rect(Infopad, 0, port.max.x-Infopad, Statush));
+	if(v->space != nil)
+		uxsetrect(v->space, Rect(Infopad, 0, port.max.x-Infopad, Statush));
+	/* the content's extent: every icon's cell, or every row and column */
+	ext = Rect(0, 0, 0, 0);
+	if(v->list != nil){
+		w = UXlistpad;
+		for(i = 0; i < nelem(colwidths); i++)
+			w += colwidths[i];
+		ext = Rect(0, 0, w, UXlistrowheight+2 + v->nrows*UXlistrowheight);
+	}else if(v->icons != nil){
+		lock(&itemlk);
+		for(i = 0; i < v->nitem; i++){
+			it = v->item[i];
+			ir = Rect(it->pt.x - UXiconviewcellw/2, it->pt.y - UXiconlarge/2,
+				it->pt.x + UXiconviewcellw/2, it->pt.y - UXiconlarge/2 + UXiconviewcellh);
+			combinerect(&ext, ir);
+		}
+		unlock(&itemlk);
+		ext.min = ZP;	/* nothing scrolls above or left of the folder's top left */
+	}
+	uxsetextent(v->scroll, ext);
+	cr = Rect(port.min.x, port.min.y,
+		port.min.x + (Dx(ext) > Dx(port) ? ext.max.x : Dx(port)),
+		port.min.y + (Dy(ext) > Dy(port) ? ext.max.y : Dy(port)));
+	if(v->icons != nil)
+		uxsetrect(v->icons, cr);
+	if(v->list != nil)
+		uxsetrect(v->list, cr);
 }
 
 /* the desktop */
@@ -449,13 +573,14 @@ folderopen(char *path, int remember)
 	v->r = uxwinrect(v->w);
 	v->size = uxwinsize(v->w);
 	uxwinhandler(v->w, viewhandler, v);
-	v->status = uxlabel(v->w, "status", "", Rect(8, 2, v->size.x-8, Statush-2));
+	folderchrome(v);
 	addview(v);
 	loaditems(v);
 	populate(v);
 	if(remember)
 		savewin(v);
 	setfront(v);
+	markopen();
 	return v;
 }
 
@@ -490,34 +615,53 @@ viewclose(View *v, int forget)
 	free(v->title);
 	free(v);
 	setfront(desk);
+	markopen();
 }
 
+/* a size the way a list window shows it: 2 K, 487 M, 4.1 G */
 static char*
 sizestr(vlong n)
 {
-	if(n < 1024)
-		return smprint("%lld bytes", n);
 	if(n < 1024*1024)
-		return smprint("%lldK", (n+1023)/1024);
+		return smprint("%lld K", (n+1023)/1024);
 	if(n < 1024LL*1024*1024)
-		return smprint("%.1fM", n/(1024.0*1024));
-	return smprint("%.1fG", n/(1024.0*1024*1024));
+		return smprint("%lld M", (n+512*1024)/(1024*1024));
+	return smprint("%.1f G", n/(1024.0*1024*1024));
 }
 
-/* a list row: name, then kind, size and date in columns */
+/* what a list row calls an item: folder, its type from uxmeta (text, image...), program or file */
+static char*
+kindof(Item *it, Dir *d)
+{
+	Fcrec *r;
+	char *q, *s;
+
+	if(it->dir)
+		return festrdup("folder");
+	if(meta != nil){
+		q = quotestrdup(it->path);
+		r = fcmetaquery(meta, "resolve %s", q);
+		free(q);
+		if(r != nil && (s = fcrecget(r, "type")) != nil && s[0]){
+			s = festrdup(s);
+			fcrecfree(r);
+			return s;
+		}
+		fcrecfree(r);
+	}
+	return festrdup((d->mode & 0111) ? "program" : "file");
+}
+
+/* a list row: name, kind and size, in tab-separated columns */
 static char*
 row(Item *it, Dir *d)
 {
 	char *s, *sz, *kind;
-	Tm *tm;
-	char date[32];
 
-	tm = localtime(d->mtime);
-	snprint(date, sizeof date, "%04d-%02d-%02d %02d:%02d",
-		tm->year+1900, tm->mon+1, tm->mday, tm->hour, tm->min);
 	sz = it->dir ? festrdup("--") : sizestr(d->length);
-	kind = it->dir ? "folder" : (d->mode & 0111) ? "program" : "document";
-	s = smprint("%-32s %-10s %10s  %s", it->name, kind, sz, date);
+	kind = kindof(it, d);
+	s = smprint("%s\t%s\t%s", it->name, kind, sz);
+	free(kind);
 	free(sz);
 	return s;
 }
@@ -528,7 +672,7 @@ populate(View *v)
 {
 	Dir **dv;
 	Item *it;
-	char **rows;
+	char **rows, **icons;
 	int i, n;
 
 	if(v->kind == Kdesk)
@@ -542,12 +686,15 @@ populate(View *v)
 		}
 		if(v->icons == nil){
 			v->icons = uxiconview(v->w, "icons", contentrect(v));
+			if(v->scroll != nil)
+				uxsetparent(v->icons, v->scroll);
 			uxhandler(v->icons, viewhandler, v);
 			dragsetup(v);
 		}else
 			uxiconclear(v->icons);
 		for(i = 0; i < v->nitem; i++)
 			showitem(v, v->item[i]);
+		markopen();
 	}else{
 		if(v->icons != nil){
 			uxdelete(v->icons);
@@ -555,6 +702,9 @@ populate(View *v)
 		}
 		if(v->list == nil){
 			v->list = uxlist(v->w, "list", contentrect(v));
+			if(v->scroll != nil)
+				uxsetparent(v->list, v->scroll);
+			uxsetcolumns(v->list, coltitles, colwidths, nelem(coltitles));
 			uxhandler(v->list, viewhandler, v);
 		}
 		for(i = 0; i < v->nrows; i++)
@@ -562,6 +712,7 @@ populate(View *v)
 		free(v->rows);
 		dv = fcsorted(v->f, v->sort);
 		rows = femalloc((v->f->n+1)*sizeof(char*));
+		icons = femalloc((v->f->n+1)*sizeof(char*));
 		v->rows = femalloc((v->f->n+1)*sizeof(char*));
 		n = 0;
 		for(i = 0; i < v->f->n; i++){
@@ -569,11 +720,14 @@ populate(View *v)
 			if(it == nil)
 				continue;
 			rows[n] = row(it, dv[i]);
+			icons[n] = it->icon;
 			v->rows[n] = festrdup(it->id);
 			n++;
 		}
 		v->nrows = n;
 		uxsetitems(v->list, rows, n);
+		uxsetitemicons(v->list, icons, n);
+		free(icons);
 		for(i = 0; i < n; i++)
 			free(rows[i]);
 		free(rows);
@@ -586,8 +740,9 @@ void
 viewstatus(View *v)
 {
 	Item **sel;
-	char *s;
-	int n;
+	char *s, *sz;
+	vlong tot;
+	int i, n;
 
 	if(v->status == nil)
 		return;
@@ -604,6 +759,20 @@ viewstatus(View *v)
 		s = smprint("%d item%s", v->nitem, v->nitem == 1 ? "" : "s");
 	uxsetvalue(v->status, s);
 	free(s);
+	if(v->space != nil){
+		/* 9P has no free space to ask for: the size of the files here */
+		tot = 0;
+		if(v->f != nil && !v->err[0])
+			for(i = 0; i < v->f->n; i++)
+				if(!(v->f->d[i].qid.type & QTDIR))
+					tot += v->f->d[i].length;
+		sz = sizestr(tot);
+		s = smprint("%s in folder", sz);
+		uxsetvalue(v->space, v->err[0] ? "" : s);
+		free(s);
+		free(sz);
+	}
+	folderlayout(v);
 }
 
 /* the selected items; *items is malloc'd when the count is above 0 */
@@ -817,12 +986,10 @@ resized(View *v)
 
 	v->r = uxwinrect(v->w);
 	v->size = uxwinsize(v->w);
-	if(v->icons != nil)
+	if(v->kind != Kdesk && v->scroll != nil)
+		folderlayout(v);
+	else if(v->icons != nil)
 		uxsetrect(v->icons, contentrect(v));
-	if(v->list != nil)
-		uxsetrect(v->list, contentrect(v));
-	if(v->status != nil)
-		uxsetrect(v->status, Rect(8, 2, v->size.x-8, Statush-2));
 	if(v->kind == Kdesk){
 		/* volumes nobody placed follow the right edge */
 		for(i = 0; i < v->nitem; i++)
@@ -913,6 +1080,7 @@ viewevent(View *v, Fev *e)
 		if(e->item == nil || (it = itembyid(v, e->item)) == nil)
 			break;
 		it->pt = e->pt;
+		folderlayout(v);
 		if(it->trash || v->kind == Ktrash)
 			break;	/* the Trash's place isn't saved */
 		it->placed = 1;
@@ -1060,9 +1228,9 @@ renamestart(View *v)
 	if(v->mode == Micons){
 		r = Rect(it->pt.x - UXiconviewlabelmax/2 - 8, it->pt.y + UXiconlarge/2 + UXiconviewlabelgap,
 			it->pt.x + UXiconviewlabelmax/2 + 8, it->pt.y + UXiconlarge/2 + UXiconviewlabelgap + UXfieldheight);
-		r = rectaddpt(r, contentrect(v).min);
+		r = rectaddpt(r, viewport(v));
 	}else
-		r = Rect(4, 0, v->size.x-4, Statush);
+		r = Rect(4, 0, contentrect(v).max.x-4, Statush);
 	v->editing = it;
 	v->edit = uxtextfield(v->w, "rename", "Name", r, 0);
 	uxsetvalue(v->edit, it->name);

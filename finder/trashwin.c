@@ -12,10 +12,6 @@
 #include "finder.h"
 #include "uxstyle.h"
 
-enum
-{
-	Statush	= 18,
-};
 
 static long	ntrash = -1;	/* items in every volume's Trash, when last counted */
 static char	*trashsig;	/* what the Trash window shows, to see changes */
@@ -100,6 +96,7 @@ trashstatus(View *v)
 	uxsetvalue(v->status, s);
 	free(s);
 	free(lim);
+	folderlayout(v);
 }
 
 /* (re)fill the Trash window */
@@ -170,8 +167,9 @@ trashopen(void)
 	v->r = uxwinrect(v->w);
 	v->size = uxwinsize(v->w);
 	uxwinhandler(v->w, viewhandler, v);
-	v->status = uxlabel(v->w, "status", "", Rect(8, 2, v->size.x-8, Statush-2));
-	v->icons = uxiconview(v->w, "icons", Rect(0, Statush, v->size.x, v->size.y));
+	folderchrome(v);
+	v->icons = uxiconview(v->w, "icons", viewcontent(v));
+	uxsetparent(v->icons, v->scroll);
 	uxhandler(v->icons, viewhandler, v);
 	dragsetup(v);
 	v->next = views;
