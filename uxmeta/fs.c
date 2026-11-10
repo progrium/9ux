@@ -448,6 +448,10 @@ static Srv fs = {
 	.end =	fsend,
 };
 
+/*
+ * The poller can answer blocked changes reads, so it must share the
+ * file descriptors of the proc serving 9P: start it from there.
+ */
 static void
 poller(void*)
 {
@@ -457,6 +461,12 @@ poller(void*)
 		metarefresh(&meta);
 		qunlock(&lk);
 	}
+}
+
+static void
+startpoller(Srv*)
+{
+	proccreate(poller, nil, 8192);
 }
 
 static void
@@ -554,7 +564,7 @@ threadmain(int argc, char **argv)
 	metaplumb(&meta);
 	meta.notify = fsnotify;
 
+	fs.start = startpoller;
 	threadpostmountsrv(&fs, srvname, mtpt, MREPL|MCREATE);
-	proccreate(poller, nil, 8192);
 	threadexits(nil);
 }
