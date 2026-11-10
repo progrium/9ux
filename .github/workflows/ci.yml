@@ -13,9 +13,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Many threads push to dev, so a push run finishes rather than being
+# cancelled by the next push (which waits, replacing any older waiting
+# run). Pull request runs do cancel.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
