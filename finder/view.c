@@ -835,7 +835,7 @@ viewevent(View *v, Fev *e)
 		}else if(e->item != nil && (it = itembyid(v, e->item)) != nil)
 			openit(v, it);
 		break;
-	case UXselect:
+	case UXselection:
 		if(v->edit != nil && e->ctl != v->edit)
 			renameend(v, 1);
 		viewstatus(v);
