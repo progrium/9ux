@@ -10,6 +10,7 @@
 #include <plumb.h>
 #include "dat.h"
 #include "fns.h"
+#include "ux.h"
 #include <ctype.h>
 
 char	Ebadwr[]		= "bad rectangle in wctl request";
@@ -492,6 +493,12 @@ writewctl(Xfid *x, char *err)
 		return 1;
 	}
 
+	/* 9/UX: the desktop window stays put */
+	if((cmd==Move || cmd==Resize || cmd==Hide || cmd==Unhide || cmd==Delete)
+	&& uxrefuse(w, x->f->w, cmd==Delete)){
+		strcpy(err, "permission denied: desktop window");
+		return -1;
+	}
 	incref(w);
 	id = wctlcmd(w, r, cmd, err);
 	wclose(w);

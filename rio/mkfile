@@ -11,10 +11,15 @@ OFILES=\
 	util.$O\
 	wctl.$O\
 	wind.$O\
+	ux.$O\
+	uxbar.$O\
+	uxfs.$O\
+	uxmenu.$O\
 	xfid.$O\
 
 HFILES=dat.h\
 	fns.h\
+	ux.h\
 
 </sys/src/cmd/mkone
 

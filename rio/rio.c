@@ -10,6 +10,7 @@
 #include <plumb.h>
 #include "dat.h"
 #include "fns.h"
+#include "ux.h"
 
 /*
  *  WASHINGTON (AP) - The Food and Drug Administration warned
@@ -113,7 +114,7 @@ derror(Display*, char *errorstr)
 void
 usage(void)
 {
-	fprint(2, "usage: rio [-b] [-f font] [-i initcmd] [-k kbdcmd] [-s]\n");
+	fprint(2, "usage: rio [-b] [-f font] [-i initcmd] [-k kbdcmd] [-s] [-u]\n");
 	exits("usage");
 }
 
@@ -121,12 +122,14 @@ void
 threadmain(int argc, char *argv[])
 {
 	char *initstr, *kbdin, *s;
+	int uxon;
 	char buf[256];
 	Image *i;
 	Rectangle r;
 
 	initstr = nil;
 	kbdin = nil;
+	uxon = 0;
 	maxtab = 0;
 	ARGBEGIN{
 	case 'b':
@@ -145,6 +148,9 @@ threadmain(int argc, char *argv[])
 		break;
 	case 's':
 		scrolling = TRUE;
+		break;
+	case 'u':	/* 9/UX mode on */
+		uxon = 1;
 		break;
 	case 'D':
 		debug++;
@@ -207,6 +213,7 @@ threadmain(int argc, char *argv[])
 	flushimage(display, 1);
 
 	timerinit();
+	uxinit(uxon);
 	threadcreate(mousethread, nil, STACK);
 	threadcreate(winclosethread, nil, STACK);
 	filsys = filsysinit(xfidinit());
@@ -370,6 +377,10 @@ keyboardtap(void*)
 		case Akbd:
 			if(*s == 'k' || *s == 'K')
 				shiftdown = utfrune(s+1, Kshift) != nil;
+			if(uxkbd(s)){	/* 9/UX: a Command shortcut */
+				free(s);
+				break;
+			}
 			if(totap == nil)
 				goto Bypass;
 			if(input != nil && input != cur){	/* context change */
@@ -548,8 +559,17 @@ mousethread(void*)
 				break;
 			}
 		Again:
+			uxchanged();	/* 9/UX */
 			moving = FALSE;
 			winput = input;
+			/* 9/UX: the menu bar comes first */
+			if(!sending && uxbarhit(mouse->xy)){
+				if(mouse->buttons)
+					uxbarmouse();
+				else
+					riosetcursor(nil);
+				break;
+			}
 			/* override everything for the keyboard window */
 			if(wkeyboard!=nil && ptinrect(mouse->xy, wkeyboard->screenr)){
 				/* make sure it's on top; this call is free if it is */
@@ -566,6 +586,9 @@ mousethread(void*)
 					goto Sending;
 
 				inside = ptinrect(mouse->xy, insetrect(winput->screenr, Selborder));
+				/* 9/UX: the desktop only gets what no other window covers */
+				if(inside && uxisdesktop(winput) && wpointto(mouse->xy) != winput)
+					inside = FALSE;
 				if(winput->mouseopen)
 					scrolling = FALSE;
 				else if(scrolling)
@@ -626,7 +649,7 @@ mousethread(void*)
 				}else{
 					/* if button 1 event in the window, top the window and wait for button up. */
 					/* otherwise, top the window and pass the event on */
-					if(wtop(mouse->xy) && (mouse->buttons!=1 || inborder(w->screenr, mouse->xy)))
+					if(wtop(mouse->xy) && (mouse->buttons!=1 || inborder(w->screenr, mouse->xy) || uxisdesktop(w)))
 						goto Again;
 					goto Drain;
 				}
@@ -693,6 +716,7 @@ resized(void)
 		wclose(w);
 	}
 	viewr = view->r;
+	uxresized();	/* 9/UX */
 	flushimage(display, 1);
 }
 
@@ -761,6 +785,8 @@ button3menu(void)
 
 	n = nhidden;
 	for(i=0; i<nwindow; i++){
+		if(uxisdesktop(window[i]))	/* 9/UX */
+			continue;
 		for(j=0; j<n; j++)
 			if(window[i] == hidden[j])
 				break;
@@ -1057,6 +1083,8 @@ pointto(int wait)
 		if(w != nil && wpointto(mouse->xy) != w)
 			w = nil;
 	}
+	if(uxisdesktop(w))	/* 9/UX: not for the desktop window */
+		w = nil;
 	riosetcursor(nil);
 	menuing = FALSE;
 	return w;
