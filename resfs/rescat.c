@@ -18,11 +18,10 @@ static void
 fatal(char *msg, char *arg)
 {
 	char buf[256];
-	int n;
 
-	n = snprint(buf, sizeof buf, "%s: %s%s%s\n", argv0name, arg ? arg : "", arg ? ": " : "", msg);
-	if(n > 0 && write(2, buf, strlen(buf)) < 0)
-		n = 0;
+	snprint(buf, sizeof buf, "%s: %s%s%s\n", argv0name, arg ? arg : "", arg ? ": " : "", msg);
+	if(write(2, buf, strlen(buf)) < 0)
+		exits("error");
 	exits("error");
 }
 
@@ -63,6 +62,8 @@ main(int argc, char **argv)
 	Rbuf b;
 	Res *r;
 	int id, rv;
+
+	rv = -1;
 
 	if(argc != 2 && argc != 4 && argc != 5)
 		fatal("usage: rescat file [type id [form]]", nil);

@@ -27,7 +27,7 @@ fn absent {
 		nfail=($nfail x)
 	}
 }
-if(! $1 -m $mnt fixtures/sample.rsrc empty=fixtures/empty.rsrc){
+if(! $1 -m $mnt fixtures/sample.rsrc 'empty=fixtures/empty.rsrc'){
 	echo FAIL: resfs did not start
 	exit fail
 }

@@ -180,7 +180,6 @@ addfile(char *arg)
 	Rbuf b;
 
 	path = arg;
-	name = nil;
 	p = strchr(arg, '=');
 	if(p != nil){
 		*p = 0;

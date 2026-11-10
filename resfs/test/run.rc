@@ -13,7 +13,8 @@ nfail=()
 ifs='
 ' lines=`{grep -v '^#' cases}
 for(line in $lines){
-	ifs=' ' {args=`{echo $line}}
+	ifs=' 	
+' {args=`{echo $line}}
 	name=$args(1)
 	fixture=$args(2)
 	rest=$args(3-)
