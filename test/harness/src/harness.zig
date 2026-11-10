@@ -207,6 +207,18 @@ pub const Session = struct {
     /// Starts rio on the headless screen and waits until its agent runs
     /// commands. Call `stop` when done.
     pub fn start(opts: Options) !*Session {
+        const s = try launch(opts);
+        // From here on, stop() undoes everything.
+        s.waitReady(opts.start_timeout_ms) catch |e| {
+            s.saveScreen("start-failed");
+            s.stop();
+            return e;
+        };
+        return s;
+    }
+
+    /// Everything up to rio running on its thread.
+    fn launch(opts: Options) !*Session {
         const gpa = std.testing.allocator;
         const io = std.testing.io;
         if (active.swap(true, .acq_rel)) @panic("harness: one Session at a time");
@@ -279,11 +291,6 @@ pub const Session = struct {
         s.thread = std.Thread.spawn(.{}, runRio, .{s}) catch |e| {
             s.m.deinit();
             s.started = false;
-            return e;
-        };
-        // From here on, stop() undoes everything.
-        s.waitReady(opts.start_timeout_ms) catch |e| {
-            s.stop();
             return e;
         };
         return s;

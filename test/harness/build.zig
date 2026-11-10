@@ -59,6 +59,7 @@ pub fn build(b: *std.Build) void {
 
     var test_dir = std.Io.Dir.cwd().openDir(io, b.pathJoin(&.{ repo, "test" }), .{ .iterate = true }) catch return;
     defer test_dir.close(io);
+    var prev: ?*std.Build.Step = null;
     var it = test_dir.iterate();
     while (it.next(io) catch null) |e| {
         if (e.kind != .directory) continue;
@@ -81,9 +82,12 @@ pub fn build(b: *std.Build) void {
             });
             const run = b.addRunArtifact(t);
             run.setCwd(.{ .cwd_relative = repo });
-            // GUI tests share one screen per process; files run one after
-            // another so a slow CI host doesn't run several machines at once.
+            // One file at a time: each runs machines with rio and a
+            // dozen processes, and running them all at once on a small
+            // CI host starves them past their timeouts.
             run.has_side_effects = true;
+            if (prev) |p| run.step.dependOn(p);
+            prev = &run.step;
             test_step.dependOn(&run.step);
         }
     }
