@@ -280,7 +280,8 @@ Examples: `key=s`, `key=shift+z`, `key=,`, `key=alt+f4`.
 
 A snapshot of every registration, in the `menubar/ctl` grammar, so it
 can be read by tests and replayed. Sessions are separated by their `app`
-line; the first line says what the bar shows now:
+line, and each app's `window` lines are in stacking order, bottom first.
+The first line says what the bar shows now:
 
 ```text
 focus app=sketch-1 win=9
@@ -298,7 +299,8 @@ menu view title=View win=12
 item view grid 'label=Show Grid' check=on
 ```
 
-`focus` has `win=0` and no `app` when no window has focus. Every
+`focus` has `win=0` when no window has focus, and no `app` when the
+focused window has none. Every
 attribute with a non-default value is written; defaults are left out.
 
 ### menubar/events
@@ -394,10 +396,10 @@ long as fd 3 stays open, which is until the block ends:
 
 ```rc
 {
-	echo app hello-1 title=Hello >[1=3]
+	echo app hello-1 'title=Hello' >[1=3]
 	echo window >[1=3]
-	echo menu file title=File >[1=3]
-	echo item file quit label=Quit key=q >[1=3]
+	echo menu file 'title=File' >[1=3]
+	echo item file quit 'label=Quit' 'key=q' >[1=3]
 	grep 'app=hello-1' </dev/ux/menubar/events
 } >[3]/dev/ux/menubar/ctl
 ```

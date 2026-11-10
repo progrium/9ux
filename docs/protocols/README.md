@@ -67,6 +67,12 @@ The first token is a **verb** (in ctl commands) or an **event name**
 of the form `name=value`, split at the first `=`. The whole token is
 quoted, not just the value: `'label=Save As…'`.
 
+- Writers quote a token only when `tokenize` needs it (space, tab,
+  quote, newline, or an empty token). `%q` also quotes tokens holding
+  `=`, which is harmless: readers must accept any valid quoting.
+- In rc, `=` in an argument is a syntax error, so attribute tokens are
+  quoted there: `echo menu file 'title=File'`, and a value with spaces
+  is quoted twice, `'''label=Read Me'''`, so the quotes reach the file.
 - Attribute names are lowercase ASCII words (`[a-z][a-z0-9]*`).
 - Attributes may come in any order. A name appears at most once unless
   a protocol says it repeats (such as `win=` in a registration).
@@ -163,7 +169,9 @@ All `events` files in 9/UX behave the same way.
   blocked read promptly; that is how a client stops waiting.
 - **Whole messages.** A read returns one or more complete lines and
   never splits a line. If the count is too small for the next message,
-  the read fails with `short read`. Read with at least 8192 bytes.
+  the read fails with `short read`. Read with at least 8192 bytes. (So
+  rc's `read`, which reads a byte at a time, can't be used; `cat`, or
+  `dd -bs 8192 -count 1` for whatever is queued, can.)
 - **Offsets are ignored**; the file is a stream.
 - **Message shape:** `seq event attr...`, where `seq` is a decimal
   sequence number. Sequence numbers come from one counter per server,
