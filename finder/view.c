@@ -855,17 +855,19 @@ openit(View *v, Item *it)
 	if(v->kind == Ktrash)
 		return;	/* things in the Trash don't open; Put Back first */
 	if(it->vol != nil || it->dir){
-		if(it->vol != nil && fcvolcheck(it->vol) < 0
+		if(it->vol != nil && fcvolcheck(it->vol) != Vonline
 		&& (it->vol->addr != nil || it->vol->srv != nil) && !it->vol->attached
 		&& fcvolattach(it->vol) < 0){
 			alerterr(it->name);
 			return;
 		}
-		if(it->vol != nil && fcvolcheck(it->vol) < 0){
+		if(it->vol != nil && fcvolcheck(it->vol) != Vonline){
 			alerterr(it->name);
 			deskcheck();
 			return;
 		}
+		if(it->vol != nil)
+			deskcheck();	/* it may have just been attached */
 		folderopen(it->path, 1);
 		return;
 	}
