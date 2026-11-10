@@ -35,8 +35,10 @@ resfs [-D] [-m mtpt] [-s srvname] [name=]file ...
   or extension: `sketch/resources.rsrc` is `resources`. `name=file`
   gives the name instead. A name used twice, or `version`, is an
   error.
-- Files are bare resource forks (`.rsrc`). AppleSingle and AppleDouble
-  come later and will appear the same way.
+- A file is a bare resource fork (`.rsrc`), or an AppleSingle or
+  AppleDouble file (version 1 or 2), whose resource fork entry (ID 2)
+  is served; the other entries are ignored. The directory name drops
+  AppleDouble's `._` prefix too: `._Sketch` is `Sketch`.
 - Every file is parsed and decoded when resfs starts; a file that
   doesn't parse stops resfs with an error naming it. Files are limited
   to 64 MB and 65536 resources.
@@ -327,5 +329,4 @@ type before reading. The parser and decoders are fuzzed on the host
 
 ## Not yet
 
-- AppleSingle and AppleDouble input.
 - `PICT`, `cicn`, `crsr`, and `BNDL`/`FREF` as import hints.
