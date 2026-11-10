@@ -21,9 +21,43 @@ from uxassets import (Canvas, find_fontdir, full_palette, load_fonts,
 import iconsheet
 
 
+# Themes. "nine" is the style guide; the others are explorations of
+# where the look could go. Every colour is still a palette name.
+BASE = dict(
+    desktop="ninegrey",
+    sel="navy",              # object selection: menus, lists, icon labels
+    title="rules",           # 'rules' (lines either side) or 'solid'
+    tbg="sea", thl="mist", trule="teal", rulestep=3, tfg="ink",
+    tbg_off="grey1", tfg_off="grey4",
+    boxes="mac",             # 'mac' (close left, zoom right) or 'win'
+    frame=0,                 # width of a sizing border, 0 for none
+    button="round", bradius=4,
+    face="grey1",            # dialog and settings window body
+    dialogface="paper", dialogband="teal",
+    field="cream", focus="teal",
+    scroll="flat", track="grey2",
+    corners=False,           # round the screen's corners
+)
+THEMES = {
+    "nine": dict(),
+    "nine-butter": dict(tbg="butter", thl="cream", trule="olive"),
+    "nine-grey": dict(tbg="grey1", thl="paper", trule="grey3", tbg_off="paper"),
+    "seven": dict(desktop="fifty", sel="ink", tbg="paper", thl=None,
+                  trule="ink", rulestep=2, tbg_off="paper", tfg_off="grey3",
+                  bradius=7, face="paper", dialogband="ink", field="paper",
+                  focus=None, track="dither", corners=True),
+    "win": dict(desktop="lagoon", title="solid", tbg="navy", thl=None,
+                tfg="paper", tbg_off="paper", tfg_off="ink", boxes="win",
+                frame=3, button="bevel", face="grey2", dialogface="grey2",
+                dialogband="navy", field="paper", focus=None,
+                scroll="bevel", track="grey1"),
+}
+
+
 class UX:
-    def __init__(self, cv, fontdir):
+    def __init__(self, cv, fontdir, theme="nine"):
         self.cv = cv
+        self.t = dict(BASE, **THEMES[theme])
         self.pal = full_palette()
         self.m = load_metrics()
         self.f = load_fonts(fontdir)
@@ -69,8 +103,34 @@ class UX:
                     if g.at(gx, gy) != "." and (gx + gy) % 2 == 0:
                         self.cv.set(x + gx, y + gy, self.c("grey3"))
 
-    def desktop(self, x, y, w, h, pattern="ninegrey"):
+    def desktop(self, x, y, w, h, pattern=None):
+        pattern = pattern or self.t["desktop"]
         self.cv.tile(x, y, w, h, self.pats[pattern].grid, self.pal)
+
+    def bevel(self, x, y, w, h, pressed=False, fill="grey2", outline=True):
+        """A raised (or pressed) box with light from the top left."""
+        cv = self.cv
+        cv.rect(x, y, w, h, self.c(fill))
+        o = 1 if outline else 0
+        if outline:
+            cv.frame(x, y, w, h, self.c("ink"))
+        hi, lo = ("grey4", "paper") if pressed else ("paper", "grey4")
+        cv.hline(x + o, y + o, w - 2 * o, self.c(hi))
+        cv.vline(x + o, y + o, h - 2 * o, self.c(hi))
+        cv.hline(x + o, y + h - o - 1, w - 2 * o, self.c(lo))
+        cv.vline(x + w - o - 1, y + o, h - 2 * o, self.c(lo))
+        if not pressed:
+            cv.hline(x + o + 1, y + h - o - 2, w - 2 * o - 2, self.c(lo))
+            cv.vline(x + w - o - 2, y + o + 1, h - 2 * o - 2, self.c(lo))
+
+    def corners(self, W, H, r=6):
+        cv = self.cv
+        for (cx, cy, sx, sy) in ((0, 0, 1, 1), (W - 1, 0, -1, 1),
+                                 (0, H - 1, 1, -1), (W - 1, H - 1, -1, -1)):
+            for dy in range(r):
+                for dx in range(r):
+                    if (r - dx - 0.5) ** 2 + (r - dy - 0.5) ** 2 > r * r:
+                        cv.set(cx + sx * dx, cy + sy * dy, self.c("ink"))
 
     # ------------------------------------------------------------ menu bar
 
@@ -94,7 +154,7 @@ class UX:
             r = (x, 0, tw + 2 * pad, H - 1)
             pos.append(r)
             if i == open_index:
-                cv.rect(*r, self.c("navy"))
+                cv.rect(*r, self.c(self.t["sel"]))
                 self.text("system", x + pad, self.vcenter("system", 0, H - 1), t, "paper")
             else:
                 self.text("system", x + pad, self.vcenter("system", 0, H - 1), t)
@@ -103,6 +163,8 @@ class UX:
             cw = self.tw("system", clock)
             self.text("system", w - m["menubar.clockpad"] - cw,
                       self.vcenter("system", 0, H - 1), clock)
+        if self.t["corners"]:
+            self.corners(w, self.cv.h)
         return pos
 
     def menu(self, x, y, items, hilite=None):
@@ -130,7 +192,7 @@ class UX:
             on = (i == hilite and "disabled" not in flags)
             fg = "paper" if on else ("grey3" if "disabled" in flags else "ink")
             if on:
-                cv.rect(x + 1, yy, w - 2, ih, self.c("navy"))
+                cv.rect(x + 1, yy, w - 2, ih, self.c(self.t["sel"]))
             ty = self.vcenter("system", yy, ih)
             if "check" in flags:
                 self.glyph("check", x + 6, yy + (ih - self.g["check"].h) // 2, fg)
@@ -169,52 +231,73 @@ class UX:
                vscroll=None, hscroll=None, grow=True, body="paper"):
         """Draw a 9/UX window frame. Returns the content rectangle.
 
-        kind: 'document' (title bar, close and zoom), 'dialog' (no title
-        bar; a double frame), 'palette' (thin title bar)."""
+        kind: 'document' (title bar, close and zoom) or 'dialog' (no
+        title bar; a double frame). body 'face' means the theme's face."""
+        t = self.t
         m = self.m
         cv = self.cv
         ink = self.c("ink")
+        if body == "face":
+            body = t["face"]
+        if kind == "dialog":
+            body = t["dialogface"]
         sh = m["window.shadow"]
         cv.rect(x + sh, y + sh, w, h, ink)
         cv.rect(x, y, w, h, self.c(body))
         cv.frame(x, y, w, h, ink)
         if kind == "dialog":
-            cv.frame(x + 2, y + 2, w - 4, h - 4, self.c("teal"), 2)
+            cv.frame(x + 2, y + 2, w - 4, h - 4, self.c(t["dialogband"]), 2)
             cv.frame(x + 4, y + 4, w - 8, h - 8, ink)
             cv.rect(x + 5, y + 5, w - 10, h - 10, self.c(body))
             return (x + 5, y + 5, w - 10, h - 10)
+        f = t["frame"]
+        if f:
+            # a sizing border: grey band between two ink lines
+            cv.frame(x + 1, y + 1, w - 2, h - 2, self.c("grey2"), f)
+            x, y, w, h = x + f, y + f, w - 2 * f, h - 2 * f
+            cv.frame(x, y, w, h, ink)
         th = m["window.titleheight"]
         tb = (x + 1, y + 1, w - 2, th - 2)
-        if active:
-            cv.rect(*tb, self.c("sea"))
-            cv.hline(tb[0], tb[1], tb[2], self.c("mist"))
-        else:
-            cv.rect(*tb, self.c("grey1"))
+        cv.rect(*tb, self.c(t["tbg"] if active else t["tbg_off"]))
+        if active and t["thl"]:
+            cv.hline(tb[0], tb[1], tb[2], self.c(t["thl"]))
         cv.hline(x, y + th - 1, w, ink)
         tw = self.tw("system", title)
         tx = x + (w - tw) // 2
         ty = self.vcenter("system", y + 1, th - 2)
-        if active:
-            # the 9/UX title band: teal rules either side of the title
+        bs, bi = m["window.boxsize"], m["window.boxinset"]
+        if active and t["title"] == "rules":
             p = m["window.titlepad"]
-            for yy in range(y + 5, y + th - 5, 3):
-                cv.hline(x + 1 + m["window.boxinset"] + m["window.boxsize"] + 6, yy,
-                         tx - p - (x + 1 + m["window.boxinset"] + m["window.boxsize"] + 6),
-                         self.c("teal"))
-                cv.hline(tx + tw + p, yy,
-                         (x + w - 1 - m["window.boxinset"] - m["window.boxsize"] - 6) - (tx + tw + p),
-                         self.c("teal"))
-            bs, bi = m["window.boxsize"], m["window.boxinset"]
+            l0 = x + 1 + bi + bs + 6
+            r1 = x + w - 1 - bi - bs - 6
+            for yy in range(y + 5, y + th - 5, t["rulestep"]):
+                cv.hline(l0, yy, tx - p - l0, self.c(t["trule"]))
+                cv.hline(tx + tw + p, yy, r1 - (tx + tw + p), self.c(t["trule"]))
+        if active and t["boxes"] == "mac":
             by = y + (th - bs) // 2
-            cv.rect(x + bi, by, bs, bs, self.c("paper"))
+            cv.rect(x + bi, by, bs, bs, self.c(t["tbg"]))
             cv.frame(x + bi, by, bs, bs, ink)
             zx = x + w - bi - bs
-            cv.rect(zx, by, bs, bs, self.c("paper"))
+            cv.rect(zx, by, bs, bs, self.c(t["tbg"]))
             cv.frame(zx, by, bs, bs, ink)
             cv.frame(zx, by, 6, 6, ink)
-            self.text("system", tx, ty, title)
-        else:
-            self.text("system", tx, ty, title, "grey4")
+        if t["boxes"] == "win":
+            # control box at the left, shrink and grow at the right,
+            # always shown (they are how the window is driven)
+            b = th - 1
+            cv.rect(x + 1, y + 1, b - 1, b - 1, self.c("grey2"))
+            cv.vline(x + b, y + 1, b - 1, ink)
+            cv.rect(x + 5, y + b // 2 - 1, b - 9, 3, self.c("paper"))
+            cv.frame(x + 4, y + b // 2 - 2, b - 7, 5, ink)
+            for k, up in ((0, True), (1, False)):
+                bx = x + w - 1 - (k + 1) * b
+                cv.vline(bx - 1, y + 1, b - 1, ink)
+                self.bevel(bx, y + 1, b, b - 1, outline=False)
+                cx_, cy_ = bx + b // 2, y + b // 2
+                for i in range(4):
+                    yy = cy_ - 2 + i if up else cy_ + 1 - i
+                    cv.hline(cx_ - i, yy, 2 * i + 1, ink)
+        self.text("system", tx, ty, title, t["tfg"] if active else t["tfg_off"])
         cx, cy, cw, ch = x + 1, y + th, w - 2, h - th - 1
         sw = m["scroll.width"]
         if vscroll is not None:
@@ -229,19 +312,26 @@ class UX:
             gx, gy = x + w - sw, y + h - sw
             cv.rect(gx, gy, sw, sw, self.c("grey1"))
             cv.frame(gx, gy, sw, sw, ink)
-            if active:
+            if active and not f:
                 self.glyph("grow", gx + 2, gy + 2, "grey5")
         return (cx, cy, cw, ch)
 
     def scrollbar(self, x, y, length, vertical, pos, active=True):
         """pos: thumb position 0..1, or None for nothing to scroll."""
+        t = self.t
         cv = self.cv
         sw = self.m["scroll.width"]
         ink = self.c("ink")
         w, h = (sw, length) if vertical else (length, sw)
-        cv.rect(x, y, w, h, self.c("grey2") if active and pos is not None else self.c("paper"))
+        live = (active or t["scroll"] == "bevel") and pos is not None
+        if live and t["track"] == "dither":
+            for yy in range(y, y + h):
+                for xx in range(x, x + w):
+                    cv.set(xx, yy, self.c("grey3" if (xx + yy) % 2 else "paper"))
+        else:
+            cv.rect(x, y, w, h, self.c(t["track"]) if live else self.c("paper"))
         cv.frame(x, y, w, h, ink)
-        if not active:
+        if not active and t["scroll"] != "bevel":
             return
         a1, a2 = ("arrow-up", "arrow-down") if vertical else ("arrow-left", "arrow-right")
         for i, a in enumerate((a1, a2)):
@@ -249,9 +339,15 @@ class UX:
                 bx, by = x, (y if i == 0 else y + h - sw)
             else:
                 bx, by = (x if i == 0 else x + w - sw), y
+            g = self.g[a]
+            if t["scroll"] == "bevel":
+                self.bevel(bx, by, sw, sw)
+                self.glyph(a, bx + (sw - g.w) // 2, by + (sw - g.h) // 2,
+                           "ink" if pos is not None else "grey4",
+                           "ink" if pos is not None else "grey4")
+                continue
             cv.rect(bx + 1, by + 1, sw - 2, sw - 2, self.c("grey1"))
             cv.frame(bx, by, sw, sw, ink)
-            g = self.g[a]
             self.glyph(a, bx + (sw - g.w) // 2, by + (sw - g.h) // 2,
                        "ink" if pos is not None else "grey3",
                        "paper" if pos is not None else "grey1")
@@ -259,11 +355,16 @@ class UX:
             return
         track = (h if vertical else w) - 2 * sw + 2
         tl = max(self.m["scroll.thumbmin"], track // 4)
-        t = int((track - tl) * pos)
+        if t["scroll"] == "bevel":
+            tl = sw
+        tpos = int((track - tl) * pos)
         if vertical:
-            tx, ty, tw_, th_ = x, y + sw - 1 + t, sw, tl
+            tx, ty, tw_, th_ = x, y + sw - 1 + tpos, sw, tl
         else:
-            tx, ty, tw_, th_ = x + sw - 1 + t, y, tl, sw
+            tx, ty, tw_, th_ = x + sw - 1 + tpos, y, tl, sw
+        if t["scroll"] == "bevel":
+            self.bevel(tx, ty, tw_, th_)
+            return
         cv.rect(tx, ty, tw_, th_, self.c("paper"))
         cv.frame(tx, ty, tw_, th_, ink)
         g = self.g["thumbgrip"]
@@ -294,10 +395,12 @@ class UX:
         cv = self.cv
         h = m["button.height"]
         w = w or max(m["button.minwidth"], self.tw("system", label) + 2 * m["button.pad"])
-        r = m["button.radius"]
+        if self.t["button"] == "bevel":
+            return self._bevelbutton(x, y, label, state, w, h)
+        r = self.t["bradius"]
         fill, line, fg = "paper", "ink", "ink"
         if state == "pressed":
-            fill, fg = "navy", "paper"
+            fill, fg = self.t["sel"], "paper"
         if state == "disabled":
             line, fg = "grey3", "grey3"
         if state == "default":
@@ -307,6 +410,21 @@ class UX:
         cv.roundrect(x, y, w, h, r, self.c(fill), self.c(line))
         self.text("system", x + (w - self.tw("system", label)) // 2,
                   self.vcenter("system", y, h), label, fg)
+        return w
+
+    def _bevelbutton(self, x, y, label, state, w, h):
+        cv = self.cv
+        if state == "default":
+            cv.roundrect(x - 1, y - 1, w + 2, h + 2, 2, None, self.c("ink"))
+        cv.roundrect(x, y, w, h, 2, self.c("grey2"), self.c("ink"))
+        self.bevel(x + 1, y + 1, w - 2, h - 2, pressed=(state == "pressed"),
+                   outline=False)
+        if state == "default":
+            cv.roundrect(x, y, w, h, 2, None, self.c("ink"))
+        d = 1 if state == "pressed" else 0
+        fg = "grey4" if state == "disabled" else "ink"
+        self.text("system", x + (w - self.tw("system", label)) // 2 + d,
+                  self.vcenter("system", y, h) + d, label, fg)
         return w
 
     def checkbox(self, x, y, label, on=False, disabled=False, pressed=False):
@@ -341,10 +459,10 @@ class UX:
         m = self.m
         cv = self.cv
         h = m["field.height"]
-        if focused:
+        if focused and self.t["focus"]:
             fr = m["field.focusring"]
-            cv.rect(x - fr, y - fr, w + 2 * fr, h + 2 * fr, self.c("teal"))
-        cv.rect(x, y, w, h, self.c("cream"))
+            cv.rect(x - fr, y - fr, w + 2 * fr, h + 2 * fr, self.c(self.t["focus"]))
+        cv.rect(x, y, w, h, self.c(self.t["field"]))
         cv.frame(x, y, w, h, self.c("ink"))
         if secret:
             text = "•" * len(text)
@@ -379,7 +497,7 @@ class UX:
         for i, row in enumerate(rows):
             on = i == selected
             if on:
-                cv.rect(x, yy, w, rh, self.c("navy" if active else "grey2"))
+                cv.rect(x, yy, w, rh, self.c(self.t["sel"] if active else "grey2"))
             fg = "paper" if on and active else "ink"
             cx = x + m["list.pad"]
             cols = row if isinstance(row, (list, tuple)) else [row]
@@ -407,7 +525,7 @@ class UX:
         lx = cx - lw // 2
         if selected:
             cv.rect(lx - p, ly, lw + 2 * p, self.fh("body"),
-                    self.c("navy" if active else "grey2"))
+                    self.c(self.t["sel"] if active else "grey2"))
             self.text("body", lx, ly, label, "paper" if active else "ink")
         else:
             if plate:
@@ -494,7 +612,7 @@ def scene_app(ux, W=800, H=600):
     # the app's main window with controls
     x, y, w, h = 110, 230, 390, 300
     cx, cy, cw, ch = ux.window(x, y, w, h, "Sketch Settings", active=True,
-                               grow=False, body="grey1")
+                               grow=False, body="face")
     px, py = cx + m["dialog.margin"], cy + m["dialog.margin"]
     ux.label(px, py + 3, "Name:", "system")
     ux.field(px + 64, py, 260, "Sketch of the harbor", focused=True,
@@ -616,6 +734,25 @@ def scene_cursors(ux):
     return cv
 
 
+def scene_titlebars(fontdir):
+    """Each theme's title bars, active over inactive, side by side."""
+    names = list(THEMES)
+    W, H = 16 + 236 * len(names), 150
+    cv = Canvas(W, H)
+    for i, n in enumerate(names):
+        ux = UX(cv, fontdir, n)
+        x = 8 + i * 236
+        ux.desktop(x - 8, 0, 236, H)
+        ux.window(x + 6, 34, 210, 50, "Untitled", active=False, grow=False)
+        ux.window(x, 12, 210, 70, "plan9", active=True, vscroll=0.0, hscroll=None)
+        ux.window(x, 92, 210, 44, "Untitled", active=False, grow=False)
+        ux.text("system", x, H - 12, "", "ink")
+        lw = ux.tw("small", n)
+        cv.rect(x, 140 - 2, lw + 4, 12, ux.c("paper"))
+        ux.text("small", x + 2, 138, n, "ink")
+    return cv
+
+
 def main(argv):
     fontdir = None
     if len(argv) > 2 and argv[1] == "-f":
@@ -637,6 +774,19 @@ def main(argv):
     for name, fn in (("patterns", scene_patterns), ("cursors", scene_cursors)):
         ux = UX(Canvas(1, 1), fontdir)
         fn(ux).scaled(2).write_png(os.path.join(out, name + "@2x.png"))
+    # explorations: the same scenes in each alternative theme
+    tdir = os.path.join(out, "themes")
+    os.makedirs(tdir, exist_ok=True)
+    for theme in THEMES:
+        if theme == "nine":
+            continue
+        for name, fn, size in (("desktop", scene_desktop, (800, 600)),
+                               ("app", scene_app, (800, 600)),
+                               ("alert", scene_alert, (440, 170))):
+            ux = UX(Canvas(*size), fontdir, theme)
+            fn(ux, *size)
+            ux.cv.scaled(2).write_png(os.path.join(tdir, "%s-%s@2x.png" % (name, theme)))
+    scene_titlebars(fontdir).scaled(2).write_png(os.path.join(tdir, "titlebars@2x.png"))
     ux = UX(Canvas(1, 1), fontdir)
     iconsheet.sheet(load_icons(), ux.pal, ux.f["body"], 2).write_png(
         os.path.join(out, "icons@2x.png"))

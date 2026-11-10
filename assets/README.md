@@ -102,8 +102,8 @@ All in [`metrics.ndb`](metrics.ndb); `gen/uxstyle.h` has them as
 
 - A paper strip across the top of the screen, `UXmenubarheight` tall,
   ending in a 1 px ink rule.
-- At the left, the 9/UX mark (`icons/mark.icon`, 16 px) opens the system
-  menu. Menu titles start at x=36, in the system font, with 9 px either
+- At the left, the 9/UX mark (`icons/mark.icon`, a 16 px Glenda) opens
+  the system menu. Menu titles start at x=36, in the system font, with 9 px either
   side.
 - The first title is the foreground application's name, so the bar always
   says whose menus it shows. A legacy window with no registered menus
@@ -209,7 +209,7 @@ non-`.` pixel, and each colour renders by its `bit` attribute.
 | `app`, `app-rc`, `app-editor` | generic application, rc window, text editor |
 | `trash`, `trash-full` | the Trash: an open wire basket, empty and with paper in it |
 | `alert-stop`, `alert-note`, `alert-caution` | alert icons for libux `Dialog` |
-| `mark` | the 9/UX mark: the system menu and the about box |
+| `mark` | the 9/UX mark, a pixel Glenda: the system menu and the about box |
 
 Drawing new icons:
 
@@ -221,6 +221,27 @@ Drawing new icons:
 - Draw the 16 px size by hand; don't scale the 32.
 - Check it on white, on the default desktop, in 1 bit and selected
   (`tools/mockup.py` renders `mockups/icons@2x.png` with all four).
+
+## Theme explorations
+
+`tools/mockup.py` can draw the same scenes in other themes, to try
+directions before changing the guide. They are in
+[`mockups/themes/`](mockups/themes/); every theme keeps the global menu
+bar, the Finder and the palette, and changes only chrome and controls.
+
+![Title bars in each theme](mockups/themes/titlebars@2x.png)
+
+| Theme | What changes |
+|---|---|
+| `nine` | the guide as written above (sea title bar) |
+| `nine-butter` | title bar in rio's butter with olive rules |
+| `nine-grey` | neutral grey1 title bar with grey3 rules |
+| `seven` | closer to System 7: paper title bars with dense ink rules, ink selection, rounder buttons, white dialogs with an ink band, dithered scroll tracks, a 50% grey desktop, rounded screen corners |
+| `win` | closer to Windows 3.1: solid navy title bar with paper title, a control box and shrink/grow buttons, a grey sizing border, bevelled grey buttons and scroll bars, grey dialogs, a teal desktop |
+
+The themes are defined at the top of `tools/mockup.py`; once one is
+chosen, its values move into `metrics.ndb` and `palette.ndb` and this
+guide.
 
 ## Cursors
 
