@@ -105,3 +105,15 @@ takes them upstream.
 - **h9 would need:** `setcursor` (and anything else `mouseattach` calls)
   to wait for or skip a display that isn't open yet, in the X11 backend.
 
+
+## Writing `stop` to /proc/N/ctl never returns
+
+- **Found by:** S4 (uxd), at H9_REV b27cacd, native backend.
+- **What happens:** `sleep 100 & echo stop >/proc/$apid/ctl` blocks the
+  `echo` forever (until h9's timeout hangs everything up). On 9front the
+  write returns once the target has stopped, and `start` resumes it.
+- **Workaround:** uxd's test for an app that stops answering uses an app
+  tree served by `srvfs` with a pipe in it, so one read waits inside the
+  app, instead of stopping the app's process (`uxd/test/stall.rc`).
+- **h9 would need:** `stop`, `start` and `waitstop` in `/proc/N/ctl`, or
+  an error from the write saying they aren't supported.
