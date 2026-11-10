@@ -41,6 +41,10 @@ BASE = dict(
 THEMES = {
     "nine": dict(),
     "nine-butter": dict(tbg="butter", thl="cream", trule="olive"),
+    "butter-teal": dict(tbg="butter", thl="cream", trule="olive",
+                        desktop="nineteal"),
+    "butter-deep": dict(tbg="butter", thl="cream", trule="olive",
+                        desktop="ninedeep"),
     "nine-grey": dict(tbg="grey1", thl="paper", trule="grey3", tbg_off="paper"),
     "seven": dict(desktop="fifty", sel="ink", tbg="paper", thl=None,
                   trule="ink", rulestep=2, tbg_off="paper", tfg_off="grey3",

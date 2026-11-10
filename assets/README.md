@@ -235,6 +235,8 @@ bar, the Finder and the palette, and changes only chrome and controls.
 |---|---|
 | `nine` | the guide as written above (sea title bar) |
 | `nine-butter` | title bar in rio's butter with olive rules |
+| `butter-teal` | butter title bars on a teal desktop with Nine grey's dot hatching in sea |
+| `butter-deep` | the same with darker (deep) dots |
 | `nine-grey` | neutral grey1 title bar with grey3 rules |
 | `seven` | closer to System 7: paper title bars with dense ink rules, ink selection, rounder buttons, white dialogs with an ink band, dithered scroll tracks, a 50% grey desktop, rounded screen corners |
 | `win` | closer to Windows 3.1: solid navy title bar with paper title, a control box and shrink/grow buttons, a grey sizing border, bevelled grey buttons and scroll bars, grey dialogs, a teal desktop |
