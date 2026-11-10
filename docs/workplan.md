@@ -8,22 +8,30 @@ brief.
 
 ## How parallel work stays unblocked
 
+All streams commit straight to the shared **`dev`** branch; there are
+no pull requests. `main` is updated from `dev` at milestones.
+
 1. **Contracts first.** The files between components are written down
    in `docs/protocols/` before code relies on them. Once a protocol doc
-   is merged, both sides build against it, not against each other.
+   is on `dev`, both sides build against it, not against each other.
 2. **Fakes for every contract.** Each protocol ships with a small fake
    server (or fake client) under `test/fakes/`, so a stream can test
    against `/dev/ux` or `/mnt/ux` before the real one exists.
 3. **Directory ownership.** Each stream owns its directories; nobody else
-   edits them except through that stream. Shared files (`README.md`,
-   `docs/plan.md`, this file, root `mkfile`) change only in small,
-   separate PRs.
-4. **Protocol changes are their own PRs.** A stream that needs a contract
-   changed opens a PR against `docs/protocols/` and its fake, and the
-   affected streams review it. No silent drift.
-5. **Every PR keeps CI green**, including the stock-rio regression suite
-   once it exists.
-6. **h9 is pinned** in `scripts/pins.sh`. A stream that hits an h9 gap
+   edits them. Shared files (`README.md`, `docs/plan.md`, this file,
+   root `mkfile`, `scripts/pins.sh`) change only in small commits that
+   touch nothing else.
+4. **Small commits, rebased.** Commit often, each commit building and
+   passing its tests. Before pushing, `git pull --rebase origin dev`;
+   never force-push `dev`. Start each commit message with the stream's
+   area (`rio:`, `libux:`, `protocols:`, ...).
+5. **Protocol changes are their own commits.** A stream that needs a
+   contract changed commits the doc and its fake together, says so in the
+   message, and tells the affected streams' threads. No silent drift.
+6. **Keep `dev` green**: run `scripts/test.sh` (once it exists) before
+   pushing, including the stock-rio regression suite. If you break
+   `dev`, fixing it comes before anything else.
+7. **h9 is pinned** in `scripts/pins.sh`. A stream that hits an h9 gap
    records it in `docs/h9-needs.md` and works around it; the h9 stream
    (H) takes it upstream and bumps the pin.
 
@@ -70,8 +78,8 @@ flowchart LR
 | Wave | Streams | Can run at once | Starts when |
 |---|---|---|---|
 | 1 | S0, S1, S5, S6 (plus H as needed) | 4 | Now |
-| 2 | S2, S3, S4, S7a, S8 | 5 | S1's protocol docs and fakes merge; S2 also needs S0's harness |
-| 3 | S7b, S9, S10 | 3 | Their inputs below are merged |
+| 2 | S2, S3, S4, S7a, S8 | 5 | S1's protocol docs and fakes land on `dev`; S2 also needs S0's harness |
+| 3 | S7b, S9, S10 | 3 | Their inputs below are on `dev` |
 | 4 | S11 | 1 | Wave 3 is done |
 
 S5 and S6 run from wave 1 to the end, so up to seven threads can be busy
@@ -127,7 +135,7 @@ locally and in CI, and stock rio's behavior is pinned down by tests.
 **Done when:** CI is green on `main` with the regression suite, and a new
 checkout runs `scripts/test.sh` with nothing else set up.
 
-**First PR:** `scripts/h9.sh` verified, plus a harness test that boots
+**First commit:** `scripts/h9.sh` verified, plus a harness test that boots
 `rio/` headless and sees a window open.
 
 ### S1: Contracts
@@ -156,18 +164,18 @@ wave 2 can build both sides at once.
    programs on lib9p, plus rc tests that exercise them.
 5. Settle design open questions 1, 2 and 5 in the docs.
 
-**Done when:** both protocol docs and the fakes are merged, and S2, S3
+**Done when:** both protocol docs and the fakes are on `dev`, and S2, S3
 and S4 have each reviewed the doc they implement.
 
-**First PR:** `devux.md` and `ux.md` drafts for review (no code), then the
-fakes in a second PR.
+**First commit:** `devux.md` and `ux.md` drafts for review (no code), then the
+fakes in a second commit.
 
 ### S5: uxmeta
 
 **Goal:** the metadata service: ndb files in, consistent answers and safe
 writes out.
 
-**Depends on:** nothing to start; uses `ux.md` conventions once merged.
+**Depends on:** nothing to start; uses `ux.md` conventions once they land.
 
 **Work:**
 1. `docs/protocols/meta.md`: the ndb schema (apps, extensions/types,
@@ -186,7 +194,7 @@ writes out.
 **Done when:** Finder's needs in plan.md Phase 3 can be met through the
 9P interface alone, with tests.
 
-**First PR:** `meta.md` plus the layered reader with tests.
+**First commit:** `meta.md` plus the layered reader with tests.
 
 ### S6: resfs
 
@@ -212,7 +220,7 @@ writes out.
 **Done when:** `resfs` serves icons that render correctly, compared with
 golden images, and the fuzzer has run clean for a sustained run in CI.
 
-**First PR:** the parser and fuzz target, without the 9P server.
+**First commit:** the parser and fuzz target, without the 9P server.
 
 ---
 
@@ -236,7 +244,7 @@ fallback, hit-test order, and a mode switch that turns 9/UX off. Keep
 arriving by click and by file write, and desktop clicks reaching a
 desktop client (acceptance criterion 3).
 
-**First PR:** `/dev/ux/version` and `/dev/ux/events` with focus events.
+**First commit:** `/dev/ux/version` and `/dev/ux/events` with focus events.
 
 ### S3: libux
 
@@ -256,7 +264,7 @@ which Finder needs.
 button through `ctl`, and two independent `events` readers see it; a
 stalled reader doesn't stall the UI (acceptance criterion 4).
 
-**First PR:** the app model and `Button` in a plain rio window, with its
+**First commit:** the app model and `Button` in a plain rio window, with its
 tree served.
 
 ### S4: uxd
@@ -274,13 +282,13 @@ redacted), and surviving restarts of itself and of apps.
 controls, an authorized one can, and restarting `uxd` loses no app state
 (acceptance criterion 8).
 
-**First PR:** registration and the aggregated read-only tree.
+**First commit:** registration and the aggregated read-only tree.
 
 ### S7a: Finder core
 
 **Goal:** everything in Finder that isn't drawing, as a tested library.
 
-**Depends on:** S1 (conventions). Uses S5's `meta.md` once merged.
+**Depends on:** S1 (conventions). Uses S5's `meta.md` once it lands.
 
 **Work:** the volume registry and workspace context; directory listing
 and change detection by rescan; probing what a file server supports and
@@ -293,7 +301,7 @@ with `--serve`, and what happens when it disappears.
 operation on a local and a remote volume through the library
 (acceptance criterion 7, without the UI).
 
-**First PR:** volume registry and directory model with tests.
+**First commit:** volume registry and directory model with tests.
 
 ### S8: Visual design
 
@@ -313,7 +321,7 @@ target.
 **Done when:** Finder and libux use only these assets, and the style
 guide matches what they draw.
 
-**First PR:** style guide and mockups.
+**First commit:** style guide and mockups.
 
 ---
 
@@ -374,10 +382,10 @@ checked and recorded in `docs/release.md`, then the v0.1 tag.
 **Goal:** the things 9/UX needs from h9 get built there, and the pin
 moves forward safely.
 
-**Work:** triage `docs/h9-needs.md`; write h9 design proposals and PRs in
+**Work:** triage `docs/h9-needs.md`; write h9 design proposals and changes in
 progrium/hyper9 for real gaps (likely candidates: a headless screen from
 the CLI with a screenshot file, so tests can be plain rc; any devdraw or
-input gaps the regression suite finds); bump `H9_REV` in its own PR once
+input gaps the regression suite finds); bump `H9_REV` in its own commit once
 CI passes.
 
 **Runs:** only when there's something on the list. This stream works in a
@@ -387,5 +395,5 @@ different repository.
 
 Start wave 1 as four threads, one per stream (S0, S1, S5, S6), each
 given its section of this file as the brief plus links to the design and
-plan. Start each wave 2 stream when its inputs are merged; S1's protocol
-PRs are the main gate.
+plan. Start each wave 2 stream when its inputs are on `dev`; S1's protocol
+docs are the main gate.

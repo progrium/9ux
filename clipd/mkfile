@@ -1,0 +1,9 @@
+</$objtype/mkfile
+BIN=/$objtype/bin
+
+TARG=clipd
+OFILES=clipd.$O
+
+</sys/src/cmd/mkone
+
+# mk test (from mkone) runs test/mkfile's test

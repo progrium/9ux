@@ -1,0 +1,33 @@
+# Resource IDs for the 9/UX system resource file, gen/system.rsrc.
+# IDs are stable: give a new icon or cursor the next free ID, and never
+# reuse one. Alert icons use 0, 1 and 2 (stop, note, caution), the IDs
+# dialog item lists conventionally use for them.
+
+icon=alert-stop     id=0
+icon=alert-note     id=1
+icon=alert-caution  id=2
+icon=mark           id=128
+icon=disk           id=129
+icon=disk-remote    id=130
+icon=disk-ram       id=131
+icon=folder         id=132
+icon=folder-apps    id=133
+icon=folder-home    id=134
+icon=doc            id=135
+icon=doc-text       id=136
+icon=doc-image      id=137
+icon=doc-script     id=138
+icon=app            id=139
+icon=app-rc         id=140
+icon=app-editor     id=141
+icon=trash          id=142
+icon=trash-full     id=143
+
+cursor=arrow      id=128
+cursor=ibeam      id=129
+cursor=busy       id=130
+cursor=cross      id=131
+cursor=move       id=132
+cursor=copy       id=133
+cursor=resize     id=134
+cursor=forbidden  id=135

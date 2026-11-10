@@ -1,0 +1,80 @@
+# Helpers for libux' rc tests. Source with: . lib.rc
+failed=0
+# the object letter for this machine (6 on amd64, 7 on arm64); mk passes $O
+if(~ $#O 0)
+	O=`{sed -n 's/^O=//p' /$objtype/mkfile}
+out=/tmp/libux.$pid
+mkdir -p $out
+
+# want pattern file: the file has a line matching the regexp
+fn want {
+	if(! grep -s -- $1 $2){
+		echo 'FAIL '^$test^': wanted /'^$1^'/ in '^$2
+		sed 's/^/	/' $2
+		failed=1
+	}
+}
+
+# dontwant pattern file
+fn dontwant {
+	if(grep -s -- $1 $2){
+		echo 'FAIL '^$test^': did not want /'^$1^'/ in '^$2
+		sed 's/^/	/' $2
+		failed=1
+	}
+}
+
+# same file text: the file is exactly the text
+fn same {
+	echo -n $2 >$out/same
+	if(! cmp -s $1 $out/same){
+		echo 'FAIL '^$test^': '^$1^' differs'
+		echo '	want:'; sed 's/^/	/' $out/same
+		echo '	got:'; sed 's/^/	/' $1
+		failed=1
+	}
+}
+
+# fails errpattern cmd...: the command must fail with that error
+fn fails {
+	pat=$1
+	shift
+	if($* >[2]$out/err){
+		echo 'FAIL '^$test^': '^$"*^' succeeded' >[1=2]
+		failed=1
+	}
+	if not if(! grep -s -- $pat $out/err){
+		echo 'FAIL '^$test^': '^$"*^': wanted error /'^$pat^'/' >[1=2]
+		sed 's/^/	/' $out/err >[1=2]
+		failed=1
+	}
+}
+
+# drain fd file: everything queued on an open events fd, in one read
+fn drain {
+	dd -quiet 1 -bs 8192 -count 1 -if /fd/$1 >$2
+}
+
+fn done {
+	rm -rf $out
+	if(~ $failed 0){
+		echo PASS $suite
+		exit ''
+	}
+	echo FAIL $suite
+	exit fail
+}
+
+# start the sample app headless and mount its tree on $app
+fn startsample {
+	srvname=ux.$user.sample
+	rm -f /srv/$srvname
+	# resources through resfs from the tree, not /bin
+	resfs=../resfs/$O.resfs uxsysres=../assets/gen/system.rsrc \
+		uxheadless=1 uxpublic=1 ../apps/sample/$O.out &
+	samplepid=$apid
+	for(i in `{seq 50}) if(! test -e /srv/$srvname) sleep 0.1
+	app=$out/app
+	mkdir -p $app
+	mount -c /srv/$srvname $app
+}

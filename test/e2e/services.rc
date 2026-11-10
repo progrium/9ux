@@ -1,0 +1,38 @@
+#!/bin/rc
+# services.rc [ADDR]: run by demo_test.zig in the harness's agent, so what
+# it starts and mounts is in the namespace every later window copies.
+# Starts the session's services the way a 9/UX profile would: the
+# plumber (text files to the edit port), uxd on /mnt/ux, and uxmeta on
+# /mnt/meta with two local volumes (home and other) and, given ADDR, a
+# remote one (remote, the 9P server at ADDR, which Finder attaches when
+# it's opened).
+addr=$1
+cd /mnt/term/cwd
+O=`{sed -n 's/^O=//p' /$objtype/mkfile}
+t=$work/demo
+mkdir -p $t/sys $t/apps $t/user $t/lib $t/home/docs $t/other /mnt/plumb /mnt/ux /mnt/meta
+echo 'hello from the demo' > $t/home/notes.txt
+echo 'a document' > $t/home/docs/readme.txt
+
+echo 'type is text
+data matches ''.*\.txt''
+plumb to edit' > $t/lib/plumbing
+plumber -p $t/lib/plumbing
+
+uxd/$O.out -m /mnt/ux -g $t/grants
+
+cat > $t/sys/base.ndb <<'X'
+ext=.txt type=text
+type=text open=edit icon=doc-text desc="Plain text"
+X
+echo volume'=home path='$t/home' icon=disk desktop=yes' > $t/user/meta.ndb
+if(! ~ $#addr 0)
+	echo volume'=remote path=/n/remote addr='$addr' icon=disk desktop=yes' >> $t/user/meta.ndb
+echo volume'=other path='$t/other' icon=disk desktop=yes' >> $t/user/meta.ndb
+uxmeta/$O.out -s demometa.$pid -m /mnt/meta -d $t/sys -a $t/apps -u $t/user -w demo -i 50
+for(f in /mnt/plumb/send /mnt/ux/register /mnt/meta/ctl)
+	if(! test -e $f){
+		echo services.rc: no $f >[1=2]
+		exit fail
+	}
+exit ''

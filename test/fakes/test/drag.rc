@@ -1,0 +1,212 @@
+#!/bin/rc
+# Tests for fakedevux's drag and drop against docs/protocols/devux.md.
+# Run from test/fakes after mk: rc test/drag.rc
+rfork ne
+suite=drag
+. test/lib.rc
+bin=./$O.fakedevux
+
+$bin -s fakedevux.$pid
+mount -a /srv/fakedevux.$pid /dev 7
+d=/dev/ux
+dd=$d/drag
+fn fake { echo $* >/dev/fake/ctl }
+
+fake new 7 'label=src'
+fake new 9 'label=dst'
+fake new 12 'label=other'
+
+test=version
+cat $d/version >$out/v
+want '^devux 1\.' $out/v
+want '^feature drag$' $out/v
+
+test=no-button
+fails 'no button down' echo start 'types=text' >$dd/ctl
+
+test=bad-types
+fake press 7 'pt=10,10'
+fails 'bad value' echo start 'types=Bad/Type' >$dd/ctl
+fails 'bad value' echo start 'types=text' 'ops=steal' >$dd/ctl
+fake release
+
+test=drop-put
+{
+	fake press 7 'pt=10,10'
+	echo start 'types=text,file' 'ops=copy,move' '''label=Read Me''' >[1=3]
+	fails busy echo start 'types=text' >$dd/ctl
+	fake move 9 'pt=5,6'
+	fake move 9 'pt=7,8'
+	fails 'type not offered' echo accept 1 'win=9' 'type=image' >$dd/ctl
+	echo accept 1 'win=9' 'type=text' >$dd/ctl
+	echo accept 1 'win=12' >$dd/ctl		# not over 12: ignored
+	cat $dd/state >$out/s
+	same $out/s 'drag id=1 win=7 types=text,file ops=copy,move ''label=Read Me'' state=over target=9 type=text op=copy
+'
+	fails 'not dropped' echo fetch 1 text >$dd/data
+	{
+		echo put 1 text >[1=5]
+		echo -n 'hello, world' >[1=5]
+	} >[5]$dd/data
+	fake release
+	{
+		echo fetch 1 text >[1=5]
+		cat <[0=5] >$out/got
+	} <>[5]$dd/data
+	same $out/got 'hello, world'
+	echo done 1 'op=copy' >$dd/ctl
+	drain 4 $out/e
+	cat $dd/state >$out/s
+	same $out/s ''
+} >[3]$dd/ctl <[4]$dd/events
+want '^[0-9]+ start id=1 win=7 types=text,file ops=copy,move ''label=Read Me''$' $out/e
+want '^[0-9]+ enter id=1 win=7 pt=10,10 types=text,file ops=copy,move$' $out/e
+want '^[0-9]+ leave id=1 win=7$' $out/e
+want '^[0-9]+ enter id=1 win=9 pt=5,6 ' $out/e
+want '^[0-9]+ over id=1 win=9 pt=7,8$' $out/e
+want '^[0-9]+ accept id=1 win=9 type=text op=copy$' $out/e
+dontwant 'win=12' $out/e
+want '^[0-9]+ drop id=1 win=9 pt=7,8 type=text op=copy$' $out/e
+want '^[0-9]+ done id=1 win=9 op=copy$' $out/e
+want '^[0-9]+ end id=1$' $out/e
+dontwant 'fetch' $out/e
+
+test=fetch-reply
+{
+	fake press 7
+	echo start 'types=file' 'ops=move,copy' >[1=3]
+	fake move 9 'pt=1,1'
+	echo accept 2 'win=9' >$dd/ctl
+	fake release
+	drain 4 $out/e0
+	{
+		echo fetch 2 file 'item=0' >[1=5]
+		cat <[0=5] >$out/got
+		touch $out/fetched
+	} <>[5]$dd/data &
+	n=0
+	while(! grep -s ' fetch id=2 ' $out/e0 && ~ $n 0 1 2 3 4 5 6 7 8 9){
+		drain 4 $out/e1
+		cat $out/e1 >>$out/e0
+		n=`{echo $n+1 | hoc}
+	}
+	req=`{sed -n 's/.* fetch id=2 type=file item=0 req=([0-9]+)$/\1/p' $out/e0}
+	{
+		echo reply $req >[1=6]
+		echo -n 'first ' >[1=6]
+		echo -n 'second' >[1=6]
+	} >[6]$dd/data
+	wait
+	same $out/got 'first second'
+	fails 'not found' echo reply $req >$dd/data
+	echo done 2 >$dd/ctl
+	drain 4 $out/e
+} >[3]$dd/ctl <[4]$dd/events
+want '^[0-9]+ accept id=2 win=9 type=file op=move$' $out/e0
+want '^[0-9]+ drop id=2 win=9 pt=1,1 type=file op=move$' $out/e0
+want '^[0-9]+ done id=2 win=9 op=move$' $out/e
+
+test=fetch-fail
+{
+	fake press 7
+	echo start 'types=text' >[1=3]
+	fake move 12
+	echo accept 3 'win=12' >$dd/ctl
+	fake release
+	{
+		echo fetch 3 text >[1=5]
+		cat <[0=5] >$out/got >[2]$out/err
+		touch $out/fetched
+	} <>[5]$dd/data &
+	n=0
+	while(! grep -s ' fetch id=3 ' $out/e0 && ~ $n 0 1 2 3 4 5 6 7 8 9){
+		drain 4 $out/e1
+		cat $out/e1 >>$out/e0
+		n=`{echo $n+1 | hoc}
+	}
+	req=`{sed -n 's/.* fetch id=3 type=text req=([0-9]+)$/\1/p' $out/e0}
+	echo fail $req '''disk on fire''' >$dd/data
+	wait
+	want 'disk on fire' $out/err
+	echo done 3 '''err=no data''' >$dd/ctl
+	drain 4 $out/e
+} >[3]$dd/ctl <[4]$dd/events
+want '^[0-9]+ done id=3 win=12 op=copy ''err=no data''$' $out/e
+
+test=cancel-nowhere
+{
+	fake press 7
+	echo start 'types=text' >[1=3]
+	fake move 0
+	fake release
+	drain 4 $out/e
+} >[3]$dd/ctl <[4]$dd/events
+want '^[0-9]+ leave id=4 win=7$' $out/e
+want '^[0-9]+ cancel id=4$' $out/e
+want '^[0-9]+ end id=4$' $out/e
+dontwant 'drop' $out/e
+
+test=cancel-unaccepted
+{
+	fake press 7
+	echo start 'types=text' >[1=3]
+	fake move 9
+	echo accept 5 'win=9' >$dd/ctl
+	echo refuse 5 'win=9' >$dd/ctl
+	fake release
+	drain 4 $out/e
+} >[3]$dd/ctl <[4]$dd/events
+want '^[0-9]+ refuse id=5 win=9$' $out/e
+want '^[0-9]+ cancel id=5$' $out/e
+
+test=cancel-ctl
+{
+	fake press 7
+	echo start 'types=text' >[1=3]
+	echo cancel >$dd/ctl
+	fails 'not found' echo cancel 6 >$dd/ctl
+	fake release
+	drain 4 $out/e
+} >[3]$dd/ctl <[4]$dd/events
+want '^[0-9]+ cancel id=6$' $out/e
+want '^[0-9]+ end id=6$' $out/e
+
+test=source-closes
+{
+	fake press 7
+	{ echo start 'types=text' >[1=3] } >[3]$dd/ctl
+	drain 4 $out/e
+	cat $dd/state >$out/s
+	same $out/s ''
+	fake release
+} <[4]$dd/events
+want '^[0-9]+ start id=7 ' $out/e
+want '^[0-9]+ cancel id=7$' $out/e
+want '^[0-9]+ end id=7$' $out/e
+
+test=one-write
+{
+	fake press 7
+	echo start 'types=text' >[1=3]
+	fake move 9
+	echo accept 8 'win=9' >$dd/ctl
+	fake release
+	echo 'put 8 text
+all in one' >$dd/data
+	{
+		echo fetch 8 text >[1=5]
+		cat <[0=5] >$out/got
+	} <>[5]$dd/data
+	same $out/got 'all in one
+'
+	fails 'data after' echo 'fetch 8 text
+junk' >$dd/data
+	echo done 8 >$dd/ctl
+} >[3]$dd/ctl
+
+test=help
+cat $dd/ctl >$out/h
+want '^start -$' $out/h
+want '^accept -$' $out/h
+
+done

@@ -1,0 +1,136 @@
+# Builds 9/UX and runs every test layer (scripts/test.sh) on Linux x86_64.
+#
+# GitHub's runners have no KVM, so h9 runs 9front's amd64 binaries on its
+# native backend (Syscall User Dispatch), and the root tree comes from the
+# 9front release's amd64 ISO (scripts/h9.sh). Both, and the pinned Zig,
+# are cached on scripts/pins.sh: a cold run fetches about 600 MB and
+# builds h9 in a few minutes; a warm one starts testing in seconds.
+name: ci
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+# Many threads push to dev, so a push run finishes rather than being
+# cancelled by the next push (which waits, replacing any older waiting
+# run). Pull request runs do cancel.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      # Restored and saved separately so a failing test still saves them.
+      # The root changes only with the ISO, so it has its own cache and
+      # 9front.org's ISO is fetched once, not on every pin change.
+      - name: Restore the 9front root
+        id: root-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .local/hyper9/.local/9front
+          # Bump with NINEFRONT_RELEASE in scripts/pins.sh.
+          key: root-amd64-iso-11952-v1
+
+      - name: Restore Zig and h9
+        id: h9-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .local/zig
+            .local/hyper9
+            !.local/hyper9/.zig-cache
+            !.local/hyper9/.local/9front
+          key: h9-${{ runner.os }}-${{ hashFiles('scripts/pins.sh', 'scripts/h9.sh', 'scripts/zig.sh') }}
+
+      - name: Restore the harness build
+        id: harness-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cache/zig
+            test/harness/.zig-cache
+          key: harness-${{ runner.os }}-${{ hashFiles('scripts/pins.sh') }}-${{ hashFiles('test/harness/**') }}
+          restore-keys: |
+            harness-${{ runner.os }}-${{ hashFiles('scripts/pins.sh') }}-
+
+      - name: Set up h9 and the root
+        timeout-minutes: 25
+        run: scripts/h9.sh --setup && scripts/h9.sh --check
+
+      - name: Save the 9front root
+        if: steps.root-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .local/hyper9/.local/9front
+          key: ${{ steps.root-cache.outputs.cache-primary-key }}
+
+      - name: Save Zig and h9
+        if: steps.h9-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .local/zig
+            .local/hyper9
+            !.local/hyper9/.zig-cache
+            !.local/hyper9/.local/9front
+          key: ${{ steps.h9-cache.outputs.cache-primary-key }}
+
+      - name: Test
+        run: scripts/test.sh
+
+      - name: Save the harness build
+        if: always() && steps.harness-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cache/zig
+            test/harness/.zig-cache
+          key: ${{ steps.harness-cache.outputs.cache-primary-key }}
+
+      - name: Upload screenshots from failed GUI tests
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-artifacts
+          path: .local/test/artifacts
+          if-no-files-found: ignore
+
+  # libFuzzer on every component whose host Makefile has a fuzz target
+  # (resfs's parser first). FUZZTIME seconds each.
+  fuzz:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: libFuzzer's runtime
+        run: sudo apt-get install -y --no-install-recommends libclang-rt-18-dev
+      - name: Fuzz
+        env:
+          FUZZTIME: 300
+        run: |
+          status=0
+          for mf in */Makefile; do
+            grep -q '^fuzz:' "$mf" || continue
+            d=$(dirname "$mf")
+            echo "::group::fuzz $d"
+            make -C "$d" fuzz FUZZTIME="$FUZZTIME" || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+      - name: Upload crashing inputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes
+          path: |
+            */crash-*
+            */leak-*
+            */timeout-*
+          if-no-files-found: ignore

@@ -10,6 +10,7 @@
 #include <plumb.h>
 #include "dat.h"
 #include "fns.h"
+#include "ux.h"
 
 char Einuse[] =		"file in use";
 char Edeleted[] =	"window deleted";
@@ -240,6 +241,7 @@ xfidattach(Xfid *x)
   Done:
 	qunlock(&all);
 	filsysrespond(x->fs, x, &t, nil);
+	uxchanged();	/* 9/UX */
 }
 
 void
@@ -248,6 +250,10 @@ xfidopen(Xfid *x)
 	Fcall t;
 	Window *w;
 
+	if(uxisqid(FILE(x->f->qid))){	/* 9/UX */
+		uxopen(x);
+		return;
+	}
 	w = x->f->w;
 	if(w != nil && w->deleted){
 		filsysrespond(x->fs, x, &t, Edeleted);
@@ -345,6 +351,8 @@ xfidclose(Xfid *x)
 	int nb, nulls;
 
 	w = x->f->w;
+	if(uxisqid(FILE(x->f->qid)))	/* 9/UX */
+		uxclose(x);
 	switch(FILE(x->f->qid)){
 	case Qconsctl:
 		if(w->rawing){
@@ -409,6 +417,10 @@ xfidwrite(Xfid *x)
 	enum { CWdata, CWgone, CWflush, NCW };
 	Alt alts[NCW+1];
 
+	if(uxisqid(FILE(x->f->qid))){	/* 9/UX */
+		uxwrite(x);
+		return;
+	}
 	w = x->f->w;
 	if(w != nil && w->deleted){
 		filsysrespond(x->fs, x, &fc, Edeleted);
@@ -620,6 +632,7 @@ xfidwrite(Xfid *x)
 	}
 	fc.count = cnt;
 	filsysrespond(x->fs, x, &fc, nil);
+	uxchanged();	/* 9/UX: label, wctl */
 }
 
 int
@@ -669,6 +682,10 @@ xfidread(Xfid *x)
 	enum { Adata, Agone, Aflush, Aend };
 	Alt alts[Aend+1];
 
+	if(uxisqid(FILE(x->f->qid))){	/* 9/UX */
+		uxread(x);
+		return;
+	}
 	w = x->f->w;
 	if(w != nil && w->deleted){
 		filsysrespond(x->fs, x, &fc, Edeleted);

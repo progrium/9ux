@@ -1,0 +1,8 @@
+item n=1 type=button rect=220,70,290,90 enabled=on text=OK
+item n=2 type=button rect=130,70,200,90 enabled=on text=Cancel
+item n=3 type=text rect=10,10,100,26 enabled=off 'text=Find what:'
+item n=4 type=edit rect=110,10,290,26 enabled=on text=
+item n=5 type=checkbox rect=10,40,120,56 enabled=on 'text=Match case'
+item n=6 type=icon rect=10,70,42,102 enabled=off id=128
+item n=7 type=user rect=0,0,0,0 enabled=off
+item n=8 type=help rect=2,1,4,3 enabled=on data=00010080

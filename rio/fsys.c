@@ -9,6 +9,7 @@
 #include <fcall.h>
 #include "dat.h"
 #include "fns.h"
+#include "ux.h"
 
 char Eperm[] = "permission denied";
 char Eexist[] = "file does not exist";
@@ -27,6 +28,7 @@ Dirtab dirtab[]=
 	{ "wctl",		QTFILE,	Qwctl,		0600 },
 	{ "kbdtap",	QTFILE,	Qtap,	0660 },
 	{ "wsys",		QTDIR,	Qwsys,		0500|DMDIR },
+	{ "ux",		QTDIR,	Qux,			0500|DMDIR },	/* 9/UX */
 
 	{ "cons",		QTFILE,	Qcons,		0600 },
 	{ "cursor",		QTFILE,	Qcursor,		0600 },
@@ -382,6 +384,21 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
 				err = Enotdir;
 				break;
 			}
+			if(uxisqid(FILE(qid))){	/* 9/UX: /dev/ux */
+				switch(uxwalk1(x->wname[i], &qid, &dir)){
+				case -1:
+					goto Notfound;
+				case 1:
+					dir = dirtab;
+					break;
+				}
+				if(i == MAXWELEM){
+					err = "name too long";
+					break;
+				}
+				t.wqid[t.nwqid++] = qid;
+				continue;
+			}
 			if(strcmp(x->wname[i], "..") == 0){
 				type = QTDIR;
 				path = Qdir;
@@ -440,6 +457,7 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
 
 			break;	/* file not found */
 		}
+    Notfound:
 
 		if(i==0 && err==nil)
 			err = Eexist;
@@ -545,6 +563,21 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
 				continue;
 			if(f->w == nil && d->qid >= Qglobal)
 				continue;
+			len = dostat(fs, WIN(x->f->qid), d, b+n, x->count-n, clock);
+			if(len <= BIT16SZ)
+				break;
+			if(i >= o)
+				n += len;
+			i += len;
+		}
+		break;
+	case Qux:
+	case Quxdesk:
+	case Quxmenu:
+	case Quxdrag:
+		d = uxdirtab(FILE(f->qid));
+		d++;	/* skip '.' */
+		for(i=0; d->name!=nil && i<e; d++){
 			len = dostat(fs, WIN(x->f->qid), d, b+n, x->count-n, clock);
 			if(len <= BIT16SZ)
 				break;

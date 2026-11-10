@@ -1,0 +1,11 @@
+</$objtype/mkfile
+
+TARG=fakedevux fakeapp
+OFILES=evq.$O
+HFILES=fake.h
+BIN=/$objtype/bin
+CLEANFILES=$O.fakedevux $O.fakeapp
+
+</sys/src/cmd/mkmany
+
+# `mk test` (from mkmany) runs test/mkfile, which runs test/run.rc

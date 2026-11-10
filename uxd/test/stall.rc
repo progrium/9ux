@@ -1,0 +1,97 @@
+#!/bin/rc
+# Slow and stalled peers affect only themselves: a reader that stops
+# reading, and an app that stops answering (ux.md, Decisions; README.md,
+# Stream files).
+rfork ne
+suite=stall
+. ../test/fakes/test/lib.rc
+. test/setup.rc
+startuxd
+u=/mnt/ux
+$fakeapp -r -q 8 -w 13 >[2]$out/app.13 &
+waitfor $u/apps/fake-1
+
+$fakeapp -r -w 14 >[2]$out/app.14 &
+waitfor $u/apps/fake-2
+a=$u/apps/fake-1
+c=$a/windows/13/controls
+
+test=stalled-reader
+{
+	for(i in 1 2 3 4 5 6 7 8 9 10 11 12)
+		echo activate >$c/ok/ctl
+	same $c/ok/label 'OK
+'
+	{
+		echo activate >$c/ok/ctl
+		drain 5 $out/fresh
+	} <[5]$c/ok/events
+	drain 4 $out/stalled
+} <[4]$c/ok/events
+want '^[0-9]+ lost n=[0-9]+$' $out/stalled
+want '^[0-9]+ activate ctl=windows/13/controls/ok via=ctl$' $out/fresh
+dontwant lost $out/fresh
+
+test=blocked-read
+# a read waiting for events holds up nothing else
+cat $c/agree/events >$out/agree &
+reader=$apid
+sleep 0.3
+same $c/agree/label 'I agree
+'
+same $u/windows 'window win=13 app=fake-1
+window win=14 app=fake-2
+'
+echo toggle >$c/agree/ctl
+sleep 0.3
+want 'value ctl=windows/13/controls/agree value=on' $out/agree
+# interrupting it (a flush through uxd to the app) leaves things working
+echo kill >/proc/$reader/note
+sleep 0.3
+echo toggle >$c/agree/ctl
+same $c/agree/value 'off
+'
+
+test=blocked-app-request
+# an app that doesn't answer one request holds up only that request:
+# here an app tree served by exportfs with a pipe in it, so a read of
+# the pipe waits inside the app
+mkdir -p $out/slow/pipe
+echo ux 1.0 >$out/slow/version
+bind '#|' $out/slow/pipe
+srvfs ux.$user.$pid.slow $out/slow
+<>[3]$u/register {
+	echo register 'name=slow' 'srv=/srv/ux.'^$user^.$pid^.slow >[1=3]
+	dd -quiet 1 -bs 8192 -count 1 -if /fd/3 >/dev/null
+	cat $u/apps/slow-1/pipe/data1 >$out/slowread &
+	reader=$apid
+	sleep 0.3
+	if(test -s $out/slowread){
+		echo FAIL $test: read did not wait
+		failed=1
+	}
+	same $c/ok/label 'OK
+'
+	same $u/apps/fake-2/windows/14/controls/ok/label 'OK
+'
+	same $u/apps/slow-1/version 'ux 1.0
+'
+	echo hello >$out/slow/pipe/data
+	wait $reader
+	same $out/slowread 'hello
+'
+	# interrupt a waiting read: uxd passes the flush on to the app
+	cat $u/apps/slow-1/pipe/data1 >$out/slowread &
+	reader=$apid
+	sleep 0.3
+	echo kill >/proc/$reader/note
+	sleep 0.3
+	same $u/apps/slow-1/version 'ux 1.0
+'
+	same $c/ok/label 'OK
+'
+}
+
+
+cleanup
+done

@@ -1,0 +1,40 @@
+</$objtype/mkfile
+
+LIB=libux.a$O
+OFILES=\
+	app.$O\
+	cmd.$O\
+	clip.$O\
+	ctl.$O\
+	draw.$O\
+	drag.$O\
+	ev.$O\
+	menu.$O\
+	obj.$O\
+	reg.$O\
+	res.$O\
+	srv.$O\
+	win.$O\
+	uxglyphs.$O\
+
+HFILES=ux.h impl.h ../assets/gen/uxstyle.h ../assets/gen/uxglyphs.h
+CFLAGS=$CFLAGS -I../assets/gen
+
+all:V: $LIB
+
+$LIB: $OFILES
+	ar vu $LIB $OFILES
+
+%.$O: %.c $HFILES
+	$CC $CFLAGS $stem.c
+
+uxglyphs.$O: ../assets/gen/uxglyphs.c
+	$CC $CFLAGS -o $target ../assets/gen/uxglyphs.c
+
+test:V: all
+	cd test && mk test
+
+clean:V:
+	rm -f *.[$OS] libux.a[$OS]
+
+nuke:V: clean

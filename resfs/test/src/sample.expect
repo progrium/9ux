@@ -1,0 +1,15 @@
+ALRT 129 size=12
+CURS 128 size=68 attr=purgeable name=Cross
+DITL 128 size=92
+DLOG 128 size=32 name=Find
+ICN# 128 size=256 name=Sample
+MENU 128 size=78
+STR%20 128 size=26
+STR# 128 size=39 name=Messages
+icl4 128 size=512
+icl8 128 size=1024
+icl8 130 size=1024
+ics# 128 size=64
+ics4 128 size=128
+ics8 128 size=256
+zzzz -16455 size=4 'name=Opaque é'

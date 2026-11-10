@@ -1,0 +1,16 @@
+</$objtype/mkfile
+
+LIBO=../ndb.$O ../layer.$O ../view.$O ../txn.$O ../plumb.$O
+
+test:V: $O.unit
+	./$O.unit
+	rc ./run ../$O.out
+
+$O.unit: unit.$O $LIBO
+	$LD -o $target $prereq
+
+unit.$O: unit.c ../meta.h
+	$CC $CFLAGS -I.. unit.c
+
+clean:V:
+	rm -f *.[$OS] [$OS].unit

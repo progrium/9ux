@@ -1,0 +1,2 @@
+item n=1 type=button rect=300,70,370,90 enabled=on text=OK
+item n=2 type=text rect=60,10,370,60 enabled=on 'text=Can’t do that.'

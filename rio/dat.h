@@ -8,6 +8,26 @@ enum
 	Qwsys,		/* directory of window directories */
 	Qwsysdir,		/* window directory, child of wsys */
 
+	/* 9/UX: /dev/ux (ux.h, uxfs.c) */
+	Qux,
+	Quxversion,
+	Quxctl,
+	Quxevents,
+	Quxwindows,
+	Quxdesk,
+	Quxdeskctl,
+	Quxdeskstate,
+	Quxdeskevents,
+	Quxmenu,
+	Quxmenuctl,
+	Quxmenumenus,
+	Quxmenuevents,
+	Quxdrag,
+	Quxdragctl,
+	Quxdragstate,
+	Quxdragevents,
+	Quxdragdata,
+
 	Qcons,
 	Qconsctl,
 	Qcursor,
@@ -227,6 +247,7 @@ struct Fid
 	Fid		*next;
 	int		nrpart;
 	uchar	rpart[UTFmax];
+	void		*aux;	/* 9/UX: Uxfid* for /dev/ux files */
 };
 
 struct Xfid

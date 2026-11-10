@@ -1,0 +1,18 @@
+</$objtype/mkfile
+BIN=/$objtype/bin
+
+TARG=uxd
+OFILES=\
+	app.$O\
+	conn.$O\
+	fs.$O\
+	grant.$O\
+	sub.$O\
+	uxd.$O\
+
+HFILES=dat.h\
+	fns.h\
+
+</sys/src/cmd/mkone
+
+# mk test (from mkone) runs test/mkfile's test

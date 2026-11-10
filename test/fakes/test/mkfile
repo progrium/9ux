@@ -1,0 +1,8 @@
+</$objtype/mkfile
+
+# Run from test/fakes with `mk test`; the tests use the binaries there.
+test:V:
+	cd .. && O=$O rc test/run.rc
+
+clean nuke install all:V:
+	status=()

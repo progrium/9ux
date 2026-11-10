@@ -11,6 +11,7 @@
 #include <complete.h>
 #include "dat.h"
 #include "fns.h"
+#include "ux.h"
 
 Window*
 wlookid(int id)
@@ -44,10 +45,15 @@ static	int	topped;
 void
 wtopme(Window *w)
 {
+	if(uxisdesktop(w))	/* 9/UX: the desktop is never raised */
+		return;
 	if(w!=nil && w->i!=nil && w->topped!=topped){
 		w->topped = ++topped;
+		uxchromefit(w);	/* 9/UX: its frame just below it */
 		topwindow(w->i);
+		uxbarontop();
 		flushimage(display, 1);
+		uxchanged();
 	}
 }
 
@@ -57,8 +63,25 @@ wbottomme(Window *w)
 	if(w!=nil && w->i!=nil){
 		w->topped = - ++topped;
 		bottomwindow(w->i);
+		uxchromebottom(w);
+		wdeskbottom();
 		flushimage(display, 1);
+		uxchanged();
 	}
+}
+
+/* 9/UX: keep the desktop window below every other window */
+void
+wdeskbottom(void)
+{
+	Window *d;
+
+	d = wlookid(uxdesktopid());
+	if(d==nil || d->deleted || d->i==nil || Dx(d->screenr)<=0)
+		return;
+	d->topped = - ++topped;
+	bottomwindow(d->i);
+	flushimage(display, 1);
 }
 
 Window*
@@ -126,7 +149,7 @@ wsetcursor(Window *w, int force)
 {
 	Cursor *p;
 
-	if(menuing || sweeping || (w!=input && wpointto(mouse->xy)!=w))
+	if(menuing || sweeping || uxdragging() || (w!=input && wpointto(mouse->xy)!=w))	/* 9/UX: uxdragging */
 		return;
 	if(w==nil)
 		p = nil;
@@ -297,6 +320,8 @@ wborder(Window *w, int type)
 
 	if(w->i == nil)
 		return;
+	if(uxchromeborder(w))	/* 9/UX classic chrome */
+		return;
 	if(w->holding){
 		if(type == Selborder)
 			col = holdcol;
@@ -373,9 +398,13 @@ wresize(Window *w, Image *i)
 		wborder(w, Selborder);
 	else
 		wborder(w, Unselborder);
-	flushimage(display, 1);
 	wsetname(w);
 	w->topped = ++topped;
+	if(uxisdesktop(w))	/* 9/UX */
+		wdeskbottom();
+	uxchromefit(w);
+	uxbarontop();
+	flushimage(display, 1);
 	w->resized = TRUE;
 	w->winnameread = FALSE;
 	w->mc.buttons = 0;	/* avoid re-triggering clicks on resize */
@@ -1294,6 +1323,7 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, int scrolling)
 	draw(w->i, r, cols[BACK], nil, w->entire.min);
 	wborder(w, Selborder);
 	wscrdraw(w);
+	uxbarontop();	/* 9/UX */
 	incref(w);	/* ref will be removed after mounting; avoids delete before ready to be deleted */
 	return w;
 }
@@ -1336,6 +1366,7 @@ wclunk(Window *w)
 			memmove(window+i, window+i+1, (nwindow-i)*sizeof(window[0]));
 			break;
 		}
+	uxchanged();	/* 9/UX */
 }
 
 int
@@ -1563,6 +1594,7 @@ winctl(void *arg)
 	npart = 0;
 	lastb = -1;
 	for(;;){
+		uxchanged();	/* 9/UX */
 		if(w->i==nil){
 			/* window deleted */
 			alts[Wgone].op = CHANSND;

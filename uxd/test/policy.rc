@@ -1,0 +1,102 @@
+#!/bin/rc
+# Policy: reads are open, changes need rights, sensitive values are
+# redacted, secrets are never served (ux.md, Rights).
+rfork ne
+suite=policy
+. ../test/fakes/test/lib.rc
+. test/setup.rc
+startuxd
+startapp 5
+waitfor /mnt/ux/apps/fake-1
+a=/mnt/ux/apps/fake-1
+c=$a/windows/5/controls
+p=$out/pubmnt
+mkdir -p $p
+mount /srv/uxd.$user $p
+pa=$p/apps/fake-1
+pc=$pa/windows/5/controls
+
+test=public-rights
+same $p/rights 'read
+'
+ls $p >$out/l
+dontwant grants $out/l
+fails 'does not exist' ls $p/grants
+
+test=public-reads
+same $pc/ok/label 'OK
+'
+same $pc/ok/ctl 'activate activate
+'
+echo set before >$c/name/ctl
+same $pc/name/value 'before
+'
+same $p/windows 'window win=5 app=fake-1
+'
+
+test=public-writes-refused
+{
+	fails 'permission denied' echo activate >$pc/ok/ctl
+	fails 'permission denied' echo set nope >$pc/name/ctl
+	fails 'permission denied' echo invoke close >$pa/menus/file/ctl
+	fails 'permission denied' echo quit >$pa/ctl
+	fails 'permission denied' echo frob >$pc/ok/ctl
+	fails 'permission denied' rc -c 'echo click ok >'$pa/fakectl
+	fails 'permission denied' rc -c 'echo nope >'$pc/name/value
+	echo activate >$c/ok/ctl
+	drain 4 $out/e
+} <[4]$a/events
+# only the session's activate reached the app
+grep -c activate $out/e >$out/n
+same $out/n '1
+'
+same $c/name/value 'before
+'
+
+test=public-mixed-batch
+# one refused line refuses the whole write
+fails 'permission denied' echo 'focus
+set x' >$pc/name/ctl
+
+test=sensitive
+echo state name sensitive on >$a/fakectl
+fails 'permission denied' cat $pc/name/value
+fails 'permission denied' cat $pc/name/selection
+same $c/name/value 'before
+'
+same $pc/name/type 'text-field
+'
+want sensitive $pc/name/state
+{
+	echo 'set ''top secret''' >$c/name/ctl
+	drain 4 $out/pub
+	drain 5 $out/adm
+} <[4]$pa/events <[5]$a/events
+want '^[0-9]+ value ctl=windows/5/controls/name redacted=on$' $out/pub
+dontwant 'top secret' $out/pub
+want 'value ctl=windows/5/controls/name ''value=top secret''$' $out/adm
+echo state name sensitive off >$a/fakectl
+same $pc/name/value 'top secret
+'
+
+test=secret
+echo set hunter2 >$c/password/ctl
+same $pc/password/value '
+'
+same $c/password/value '
+'
+{
+	echo type password x >$a/fakectl
+	drain 4 $out/e
+} <[4]$pa/events
+dontwant hunter2 $out/e
+want 'value ctl=windows/5/controls/password redacted=on$' $out/e
+
+test=no-create-remove
+fails 'permission denied' touch $c/ok/new
+fails 'permission denied' rm $c/ok/label
+fails 'permission denied' rc -c 'echo x >'$c/ok/label
+
+unmount $p
+cleanup
+done

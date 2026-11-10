@@ -1,0 +1,49 @@
+#!/bin/rc
+# rescomp tests in 9front or h9: cd test; rc comp.rc rescat rescomp
+# A smaller version of comp.sh, which the host runs.
+rfork e
+if(! ~ $#* 2){
+	echo 'usage: comp.rc rescat rescomp' >[1=2]
+	exit usage
+}
+rescat=$1
+rescomp=$2
+t=/tmp/rescomp.$pid
+nfail=()
+fn bad {
+	echo FAIL: $*
+	nfail=($nfail x)
+}
+if(! $rescomp -o $t.rsrc src/sample.res)
+	bad rescomp src/sample.res
+if not{
+	$rescat $t.rsrc >$t.index
+	if(! cmp -s $t.index src/sample.expect)
+		bad src/sample.res index
+	for(c in 'icon 128 image:icon128.image' 'MENU 128 text:MENU128.text' 'CURS 128 cursor:CURS128.cursor' 'icl8 130 image:icl8-130.image'){
+		ifs=':' {p=`{echo -n $c}}
+		ifs=' ' {a=`{echo -n $p(1)}}
+		if(! $rescat $t.rsrc $a >$t.out || ! cmp -s $t.out golden/$p(2))
+			bad src/sample.res $p(1)
+	}
+}
+for(f in sample badrefs empty){
+	if(! $rescomp -d fixtures/$f.rsrc >$t.res || ! $rescomp -o $t.rsrc $t.res)
+		bad round trip of $f
+	if not{
+		$rescat fixtures/$f.rsrc >$t.a
+		$rescat $t.rsrc >$t.b
+		if(! cmp -s $t.a $t.b)
+			bad round trip of $f: index
+	}
+}
+for(f in src/bad-*.res)
+	if($rescomp -o $t.rsrc $f >[2]/dev/null)
+		bad $f compiled
+rm -f $t.*
+if(! ~ $#nfail 0){
+	echo rescomp: $#nfail failed
+	exit fail
+}
+echo rescomp: ok
+exit ''

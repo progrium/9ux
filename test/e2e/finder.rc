@@ -1,0 +1,8 @@
+#!/bin/rc
+# finder.rc: Finder, run in a window from the tree, with resfs and the
+# system resources; registers with uxd.
+cd /mnt/term/cwd
+O=`{sed -n 's/^O=//p' /$objtype/mkfile}
+resfs=`{pwd}^/resfs/$O.resfs uxsysres=`{pwd}^/assets/gen/system.rsrc \
+	uxpattern=`{pwd}^/assets/gen/patterns/nineteal.img \
+	exec finder/$O.finder -m /mnt/meta -w demo -i 200 >[2]$work/finder.err

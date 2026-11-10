@@ -1,0 +1,7 @@
+# Run from uxd with `mk test`; the tests use ../test/fakes.
+test:V:
+	@{cd ../../test/fakes && mk all >/dev/null}
+	cd .. && rc test/run.rc
+
+clean nuke install all:V:
+	status=()

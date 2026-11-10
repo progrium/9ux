@@ -1,0 +1,123 @@
+#!/bin/rc
+# The aggregated tree: discovery, the winid map, reads and writes
+# passed through, events (ux.md, /mnt/ux).
+rfork ne
+suite=tree
+. ../test/fakes/test/lib.rc
+. test/setup.rc
+startuxd
+u=/mnt/ux
+
+test=version
+same $u/version 'ux 1.0
+feature grants
+'
+same $u/rights 'read sensitive activate edit keys clipboard admin
+'
+
+test=register
+{
+	startapp 3
+	waitfor $u/apps/fake-1
+	drain 4 $out/e
+} <[4]$u/events
+want '^1 resync$' $out/e
+want '^[0-9]+ register app=fake-1 name=fake$' $out/e
+want '^[0-9]+ window win=3 app=fake-1$' $out/e
+same $u/windows 'window win=3 app=fake-1
+'
+ls $u/apps >$out/l
+same $out/l '/mnt/ux/apps/fake-1
+'
+same $u/apps/fake-1/id 'fake-1
+'
+want 'registered as fake-1' $out/app.3
+
+a=$u/apps/fake-1
+w=$a/windows/3
+c=$w/controls
+
+test=read
+same $a/version 'ux 1.0
+feature menus
+feature value-write
+'
+same $c/ok/type 'button
+'
+same $c/ok/state 'enabled visible default
+'
+same $c/ok/ctl 'activate activate
+'
+ls $c >$out/l
+want '/controls/agree$' $out/l
+want '/controls/password$' $out/l
+ls -l $a >$out/l
+want 'fake-1/windows$' $out/l
+
+test=stat
+ls -ld $a >$out/l
+want '^d.*/apps/fake-1$' $out/l
+ls -l $c/ok/type >$out/l
+want 'controls/ok/type$' $out/l
+
+test=walk-dotdot
+cd $c/ok
+same ../name/type 'text-field
+'
+cd ../../../../..
+same ../version 'ux 1.0
+feature grants
+'
+cd /
+
+test=two-readers
+{
+	echo activate >$c/ok/ctl
+	drain 4 $out/a
+	drain 5 $out/b
+} <[4]$c/ok/events <[5]$c/ok/events
+want '^[0-9]+ activate ctl=windows/3/controls/ok via=ctl$' $out/a
+grep activate $out/a >$out/a2
+grep activate $out/b >$out/b2
+if(! cmp -s $out/a2 $out/b2){
+	echo FAIL $test: readers disagree
+	failed=1
+}
+
+test=edit
+{
+	echo 'set ''hello world''' >$c/name/ctl
+	drain 4 $out/e
+} <[4]$a/events
+same $c/name/value 'hello world
+'
+want 'value ctl=windows/3/controls/name ''value=hello world''$' $out/e
+echo 'written whole' >$c/name/value
+same $c/name/value 'written whole
+'
+
+test=menus
+{
+	echo invoke close >$a/menus/file/ctl
+	drain 4 $out/e
+} <[4]$a/menus/file/events
+want 'action menu=file id=close win=3 via=ctl' $out/e
+
+test=errors
+fails 'unknown command' echo frob >$c/ok/ctl	# admin: the app decides
+fails 'not found' echo invoke nosuch >$a/menus/file/ctl
+fails 'file does not exist' cat $u/apps/nosuch/version
+fails 'file does not exist' cat $c/nosuch/type
+
+test=app-exits
+{
+	killapps
+	waitgone $a
+	drain 4 $out/e
+} <[4]$u/events
+want '^[0-9]+ window win=3$' $out/e
+want '^[0-9]+ unregister app=fake-1$' $out/e
+same $u/windows ''
+
+cleanup
+done

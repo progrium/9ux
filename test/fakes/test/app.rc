@@ -1,0 +1,184 @@
+#!/bin/rc
+# Tests for fakeapp against docs/protocols/ux.md (the app tree).
+# Run from test/fakes after mk: rc test/app.rc
+rfork ne
+suite=app
+. test/lib.rc
+bin=./$O.fakeapp
+
+mkdir -p /tmp/fakeapp.$pid
+$bin -w 9 -s fakeapp.$pid -m /tmp/fakeapp.$pid
+a=/tmp/fakeapp.$pid
+w=$a/windows/9
+c=$w/controls
+fn fake { echo $* >$a/fakectl }
+
+test=version
+cat $a/version >$out/v
+want '^ux 1\.' $out/v
+want '^feature menus$' $out/v
+
+test=tree
+ls $c >$out/l
+want '/ok$' $out/l
+want '/name$' $out/l
+same $c/ok/type 'button
+'
+same $c/ok/label 'OK
+'
+same $c/ok/state 'enabled visible default
+'
+same $c/name/type 'text-field
+'
+same $c/ok/parent '
+'
+same $w/kind 'window
+'
+
+test=ctl-help
+same $c/ok/ctl 'activate activate
+'
+want '^set edit$' $c/name/ctl
+want '^focus activate$' $c/name/ctl
+
+test=independent-readers
+{
+	echo activate >$c/ok/ctl
+	drain 4 $out/a
+	drain 5 $out/b
+	drain 6 $out/w
+} <[4]$c/ok/events <[5]$c/ok/events <[6]$w/events
+want '^1 resync$' $out/a
+want '^[0-9]+ activate ctl=windows/9/controls/ok via=ctl$' $out/a
+grep activate $out/a >$out/a2
+grep activate $out/b >$out/b2
+grep activate $out/w >$out/w2
+if(! cmp -s $out/a2 $out/b2 || ! cmp -s $out/a2 $out/w2){
+	echo FAIL $test: readers disagree
+	failed=1
+}
+
+test=text-field
+{
+	echo 'set ''hello world''' >$c/name/ctl
+	echo select 0 5 >$c/name/ctl
+	echo insert bye >$c/name/ctl
+	drain 4 $out/e
+} <[4]$c/name/events
+same $c/name/value 'bye world
+'
+same $c/name/selection '3 3
+'
+want 'value ctl=windows/9/controls/name ''value=hello world''$' $out/e
+want 'select ctl=windows/9/controls/name q0=0 q1=5$' $out/e
+want 'value ctl=windows/9/controls/name ''value=bye world''$' $out/e
+
+test=value-write
+echo 'written whole' >$c/name/value
+same $c/name/value 'written whole
+'
+
+test=ui-events
+{
+	fake click ok
+	fake type name '!'
+	fake menu new
+	fake key quit
+	drain 4 $out/e
+} <[4]$a/events
+want 'activate ctl=windows/9/controls/ok via=ui' $out/e
+want '''value=written whole!''' $out/e
+want 'action menu=file id=new win=9 via=menu' $out/e
+want 'action menu=file id=quit win=9 via=key' $out/e
+
+test=secret
+{
+	echo set hunter2 >$c/password/ctl
+	fake type password x
+	drain 4 $out/e
+} <[4]$a/events
+same $c/password/value '
+'
+want '^[0-9]+ value ctl=windows/9/controls/password redacted=on$' $out/e
+dontwant hunter2 $out/e
+want secret $c/password/state
+
+test=checkbox
+echo toggle >$c/agree/ctl
+same $c/agree/value 'on
+'
+echo set off >$c/agree/ctl
+same $c/agree/value 'off
+'
+
+test=menus
+want '^item quit label=Quit key=q$' $a/menus/file/items
+{
+	echo invoke close >$a/menus/file/ctl
+	drain 4 $out/e
+} <[4]$a/menus/file/events
+want 'action menu=file id=close win=9 via=ctl' $out/e
+
+test=errors
+fails 'unknown command' echo frob >$c/ok/ctl
+fails 'bad syntax' echo activate now >$c/ok/ctl
+fails 'unknown command' echo set x >$c/ok/ctl
+fails 'not found' echo invoke nosuch >$a/menus/file/ctl
+fails 'bad value' echo select 5 1 >$c/name/ctl
+fake state ok enabled off
+fails disabled echo activate >$c/ok/ctl
+fake state ok enabled on
+
+fake state name enabled off
+fails disabled echo focus >$c/name/ctl
+fake state name enabled on
+fake state name readonly on
+fails 'bad value: readonly' echo set x >$c/name/ctl
+fake state name readonly off
+
+test=busy
+{
+	cat /fd/4 >/dev/null >[2]/dev/null &
+	sleep 1
+	fails busy dd -quiet 1 -bs 8192 -count 1 -if /fd/4
+	kill_reader=$apid
+} <[4]$c/agree/events
+echo kill >/proc/$kill_reader/note
+
+test=dynamic
+{
+	fake add extra button '''label=Extra'''
+	same $c/extra/label 'Extra
+'
+	{
+		fake del extra
+		cat /fd/5 >$out/x
+	} <[5]$c/extra/events
+	drain 4 $out/e
+} <[4]$w/events
+want 'new ctl=windows/9/controls/extra type=button' $out/e
+want 'delete ctl=windows/9/controls/extra' $out/e
+want '^[0-9]+ gone$' $out/x
+if(test -e $c/extra){
+	echo FAIL $test: extra still there
+	failed=1
+}
+
+test=close-window
+cat $w/events >$out/w &
+sleep 1
+echo close >$w/ctl
+wait
+want '^[0-9]+ gone$' $out/w
+if(test -e $w){
+	echo FAIL $test: window still there
+	failed=1
+}
+
+test=quit
+cat $a/events >$out/e >[2]/dev/null &
+sleep 1
+echo quit >$a/ctl
+wait
+want '^[0-9]+ gone$' $out/e
+done

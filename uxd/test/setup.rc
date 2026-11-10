@@ -1,0 +1,73 @@
+# Common setup for uxd's tests: source after lib.rc, from uxd/.
+# Starts uxd (as $out/uxd, so `kill uxd` finds it) with the session
+# service on /mnt/ux, and fakeapp registered through it.
+O=`{sed -n 's/^O=//p' /$objtype/mkfile}
+bin=$O.out
+fakes=../test/fakes
+fakeapp=$fakes/$O.fakeapp
+cp $bin $out/uxd
+grants=$out/grants
+mkdir -p /mnt/ux >[2]/dev/null
+
+# A uxd that an earlier test left behind (one that failed or hung
+# before its cleanup) still holds /srv/uxd.$user, and a new one can't
+# post there; so stop it and clear its entries first.
+fn clearuxd {
+	kill uxd | rc >[2]/dev/null
+	n=0
+	while(test -e /srv/uxd.$user -o -e /srv/uxd.$user.admin && ! ~ $n 30){
+		sleep 0.1
+		n=`{echo $n+1 | hoc}
+	}
+	rm -f /srv/uxd.$user /srv/uxd.$user.admin >[2]/dev/null
+	unmount /mnt/ux >[2]/dev/null
+	status=()
+}
+
+fn startuxd {
+	clearuxd
+	$out/uxd -m /mnt/ux -g $grants $uxdflags
+}
+
+# waitfor file: until it exists (up to 5s)
+fn waitfor {
+	n=0
+	while(! test -e $1 && ! ~ $n 50){
+		sleep 0.1
+		n=`{echo $n+1 | hoc}
+	}
+	if(! test -e $1){
+		echo 'FAIL '^$test^': '^$1^' never appeared'
+		failed=1
+	}
+}
+
+# waitgone file
+fn waitgone {
+	n=0
+	while(test -e $1 && ! ~ $n 50){
+		sleep 0.1
+		n=`{echo $n+1 | hoc}
+	}
+	if(test -e $1){
+		echo 'FAIL '^$test^': '^$1^' still there'
+		failed=1
+	}
+}
+
+# startapp winid: fakeapp registered with uxd; its log in $out/app.winid
+fn startapp {
+	$fakeapp -r -w $1 >[2]$out/app.$1 &
+}
+
+# quit every registered fakeapp
+fn killapps {
+	for(f in /mnt/ux/apps/*/fakectl)
+		if(test -e $f)
+			echo quit >$f >[2]/dev/null
+}
+
+fn cleanup {
+	killapps
+	clearuxd
+}

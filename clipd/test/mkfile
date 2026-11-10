@@ -1,0 +1,8 @@
+</$objtype/mkfile
+
+# Run from clipd with `mk test`.
+test:V:
+	cd .. && O=$O rc test/clip.rc
+
+clean nuke install all:V:
+	status=()

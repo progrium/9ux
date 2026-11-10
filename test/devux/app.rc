@@ -1,0 +1,25 @@
+#!/bin/rc
+# app.rc ID TITLE: run in a window by the devux tests. Registers this
+# window as app ID with File and Edit menus, copies the menu bar's
+# events to $work/ID.events, and stays registered while it runs.
+id=$1
+title=$2
+{
+	echo app $id 'title='^$title >[1=3]
+	echo window >[1=3]
+	echo menu file 'title=File' >[1=3]
+	echo item file new 'label=New' 'key=n' >[1=3]
+	echo item file quit 'label=Quit' 'key=q' >[1=3]
+	echo menu edit 'title=Edit' >[1=3]
+	echo item edit undo 'label=Undo' 'key=z' 'enabled=off' >[1=3]
+	echo item edit copy 'label=Copy' 'key=c' >[1=3]
+	echo menu view 'title=View' >[1=3]
+	echo item view grid '''label=Show Grid''' 'check=on' 'key=shift+g' >[1=3]
+	echo item view s1 'sep=on' >[1=3]
+	echo menu zoom 'title=Zoom' 'top=off' >[1=3]
+	echo item zoom in '''label=Zoom In''' 'key=ctl+alt+=' >[1=3]
+	echo item view zoom 'label=Zoom' 'sub=zoom' >[1=3]
+	cat /dev/ux/menubar/events >$work/$id.events &
+	echo ready >$work/$id.ready
+	wait
+} >[3]/dev/ux/menubar/ctl

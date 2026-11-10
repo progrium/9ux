@@ -1,0 +1,7 @@
+menu id=128 title=File proc=0 enabled=on
+item title=New key=N enabled=on
+item title=Open… key=O enabled=on
+item title=- enabled=off
+item title=Recent submenu=130 enabled=on
+item 'title=Bold item' mark=✓ icon=3 style=bold,underline enabled=on
+item title=Quit key=Q enabled=on

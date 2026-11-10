@@ -1,0 +1,17 @@
+# 9/UX font roles, in ndb(6) form. Paths are relative to /lib/font/bit,
+# and every font named here ships with 9front (release 11952), so 9/UX
+# bundles no fonts of its own.
+#
+#   role    where it is used
+#   font    the default
+#   large   the choice for a large (HiDPI or low-vision) setting
+#   height  line height of the default, for checking the metrics
+
+role=system  font=lucidasans/boldunicode.7.font  large=dejavusansbd/unicode.16.font height=13
+    use="menu bar, menu items, window titles, button labels, dialog text"
+role=body    font=lucidasans/unicode.7.font      large=dejavusans/unicode.16.font   height=13
+    use="labels, fields, lists, Finder icon labels"
+role=small   font=lucidasans/unicode.6.font      large=dejavusans/unicode.12.font   height=11
+    use="list headers, status lines, Get Info detail"
+role=mono    font=vga/unicode.font               large=terminus/unicode.18.font     height=16
+    use="rc windows and code; rio's own default"
