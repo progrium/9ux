@@ -132,7 +132,7 @@ barreader(void*)
 	close(fd);
 }
 
-/* /dev/ux/events: close boxes in rio's window chrome (devux 1.2) */
+/* /dev/ux/events: close boxes in rio's window chrome (devux 1.2), and focus */
 static void
 uxevreader(void*)
 {
@@ -150,7 +150,7 @@ uxevreader(void*)
 		p = buf;
 		while((e = strchr(p, '\n')) != nil){
 			*e = 0;
-			if(strstr(p, " close win=") != nil)
+			if(strstr(p, " close win=") != nil || strstr(p, " focus win=") != nil)
 				sendp(ux.menuc, estrdup(p));
 			p = e+1;
 		}
@@ -160,18 +160,20 @@ uxevreader(void*)
 	close(fd);
 }
 
-/* ask rio for classic chrome on an ordinary window; uxlk held */
+/*
+ * ask rio for classic chrome on a window, unless it's a dialog or an
+ * alert (they draw their own frame); and follow rio's events. uxlk held.
+ */
 void
 _chrome(Uxwin *w)
 {
 	int fd;
 
-	if(strcmp(w->kind, "window") != 0)
-		return;
 	fd = open("/dev/ux/ctl", OWRITE);
 	if(fd < 0)
 		return;
-	fprint(fd, "chrome %d on\n", w->winid);	/* fails harmlessly before devux 1.2 */
+	if(strcmp(w->kind, "dialog") != 0 && strcmp(w->kind, "alert") != 0)
+		fprint(fd, "chrome %d on\n", w->winid);	/* fails harmlessly before devux 1.2 */
 	close(fd);
 	if(!ux.evreader){
 		ux.evreader = 1;
@@ -270,6 +272,12 @@ _barevent(char *line)
 	Uxwin *w;
 
 	nf = tokenize(line, f, nelem(f));
+	if(nf >= 3 && strcmp(f[1], "focus") == 0){
+		for(i = 2; i < nf; i++)
+			if(strncmp(f[i], "win=", 4) == 0)
+				_focusto(atoi(f[i]+4));
+		return;
+	}
 	if(nf >= 3 && strcmp(f[1], "close") == 0){
 		for(i = 2; i < nf; i++)
 			if(strncmp(f[i], "win=", 4) == 0 && (w = _findwin(atoi(f[i]+4))) != nil)

@@ -322,12 +322,14 @@ _winstate(Uxwin *w, int state)
 	free(s);
 }
 
+static Uxwin*	modal(void);
+
 static void
 setcurrent(Uxwin *w)
 {
 	int i;
 
-	if(ux.front == w)
+	if(ux.front == w && (w->state & Wcurrent))
 		return;
 	for(i = 0; i < ux.nwin; i++)
 		if(ux.win[i] != w && (ux.win[i]->state & Wcurrent))
@@ -345,6 +347,31 @@ setcurrent(Uxwin *w)
 		e.win = w;
 		_notify(w->fn, w->arg, &e);
 	}
+}
+
+/*
+ * rio moved keyboard focus (a focus event on /dev/ux/events): to one
+ * of our windows, which becomes current, as a click in it would make
+ * it; or elsewhere, so none of ours is. rio takes the click that makes
+ * a window current, so this is how libux hears of it. uxlk held.
+ */
+void
+_focusto(int winid)
+{
+	Uxwin *w;
+	int i;
+
+	w = winid > 0 ? _findwin(winid) : nil;
+	if(w != nil && !w->dead){
+		if(modal() == nil || modal() == w)
+			setcurrent(w);
+		return;
+	}
+	for(i = 0; i < ux.nwin; i++)
+		if(ux.win[i]->state & Wcurrent){
+			_winstate(ux.win[i], ux.win[i]->state & ~Wcurrent);
+			ux.win[i]->dirty = 1;
+		}
 }
 
 void

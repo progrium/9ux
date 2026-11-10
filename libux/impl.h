@@ -341,6 +341,7 @@ void	_chooserload(Uxctl*);
 Uxwin*	_newwin(char*, char*, Rectangle);
 void	_delwin(Uxwin*);
 void	_winclose(Uxwin*, int);
+void	_focusto(int winid);
 void	_redraw(Uxwin*);
 void	_drawdirty(void);
 void	_wininput(Uxwin*, Mouse*);
