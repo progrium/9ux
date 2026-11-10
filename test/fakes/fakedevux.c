@@ -54,6 +54,9 @@ struct Win {
 	char	*label;
 	int	hidden;
 	Sess	*app;
+	int	chrome;
+	int	zoomed;
+	Rectangle	unzoomed;
 };
 
 struct Item {
@@ -1595,7 +1598,33 @@ fakecmd(char *line, void*)
 	}else if(w == nil){
 		e = c.npos < 2 ? "bad syntax" : (strcmp(verb, "delete") == 0 || strcmp(verb, "rect") == 0
 			|| strcmp(verb, "hide") == 0 || strcmp(verb, "unhide") == 0
-			|| strcmp(verb, "top") == 0 || strcmp(verb, "label") == 0) ? "not found" : "unknown command";
+			|| strcmp(verb, "top") == 0 || strcmp(verb, "label") == 0
+			|| strcmp(verb, "closebox") == 0 || strcmp(verb, "zoombox") == 0) ? "not found" : "unknown command";
+	}else if(strcmp(verb, "closebox") == 0 || strcmp(verb, "zoombox") == 0){
+		/* a click in a window's chrome (devux 1.2) */
+		if(!w->chrome || !modeon)
+			e = "bad value: no chrome";
+		else if(verb[0] == 'c'){
+			mbegin(&m, "close");
+			mattr(&m, "win", "%d", id);
+			ev("events", mend(&m));
+			if(w->app == nil)
+				e = fakecmd(smprint("delete %d", id), nil);
+		}else{
+			if(w->zoomed)
+				w->r = w->unzoomed;
+			else{
+				w->unzoomed = w->r;
+				w->r = deskrect();
+				w->r.min.y += 20;	/* title bar */
+				w->r = insetrect(w->r, 2);	/* frame and shadow */
+			}
+			w->zoomed = !w->zoomed;
+			mbegin(&m, "rect");
+			mattr(&m, "win", "%d", id);
+			mattr(&m, "rect", "%s", fmtrect(w->r));
+			ev("events", mend(&m));
+		}
 	}else if(strcmp(verb, "delete") == 0){
 		i = winpos(w);
 		nwins--;
@@ -1660,12 +1689,13 @@ Out:
 }
 
 static char*
-uxctlcmd(char *line, void*)
+uxctlcmd(char *line, void *arg)
 {
 	Cmd c;
 	char *e;
 	Msg m;
-	int on;
+	int on, id;
+	Win *w;
 
 	if(cmdparse(&c, line) == 0){
 		cmdfree(&c);
@@ -1686,6 +1716,27 @@ uxctlcmd(char *line, void*)
 				mbegin(&m, "resize");
 				mattr(&m, "rect", "%s", fmtrect(deskrect()));
 				ev("desktop", mend(&m));
+			}
+		}
+	}else if(strcmp(c.tok[0], "chrome") == 0){
+		/* chrome [winid] on|off (devux 1.2) */
+		id = c.ntok == 3 ? atoi(c.tok[1]) : (int)(uintptr)arg;
+		if((c.ntok != 2 && c.ntok != 3) || !isbool(c.tok[c.ntok-1]))
+			e = "bad syntax";
+		else if(id == 0)
+			e = "bad syntax: no window";
+		else if((w = findwin(id)) == nil)
+			e = "not found";
+		else if(id == deskwin)
+			e = "bad value: the desktop window has no chrome";
+		else{
+			on = strcmp(c.tok[c.ntok-1], "on") == 0;
+			if(on != w->chrome){
+				w->chrome = on;
+				mbegin(&m, "chrome");
+				mattr(&m, "win", "%d", id);
+				mattr(&m, "chrome", "%s", on ? "on" : "off");
+				ev("events", mend(&m));
 			}
 		}
 	}else if(strcmp(c.tok[0], "cmdkey") == 0){
@@ -1878,6 +1929,8 @@ winsnapshot(void)
 			fmtprint(&f, "%shidden", w->id == cur ? "," : "");
 		if(w->id == deskwin)
 			fmtprint(&f, "%sdesktop", w->id == cur || w->hidden ? "," : "");
+		if(w->chrome)
+			fmtprint(&f, "%schrome", w->id == cur || w->hidden || w->id == deskwin ? "," : "");
 		fmtprint(&f, "\n");
 	}
 	return fmtstrflush(&f);
@@ -1899,7 +1952,7 @@ fsread(Req *r)
 	o = r->fid->aux;
 	switch(qid(r->fid)){
 	case Qversion:
-		readstr(r, "devux 1.1\nfeature focus\nfeature desktop\nfeature menubar\nfeature drag\n");
+		readstr(r, "devux 1.2\nfeature focus\nfeature desktop\nfeature menubar\nfeature drag\nfeature chrome\n");
 		break;
 	case Qctl:
 		snprint(buf, sizeof buf, "mode %s\ncmdkey %s\n", modeon ? "on" : "off", cmdkey);
@@ -1932,7 +1985,7 @@ fsread(Req *r)
 		datawait(r);
 		return;
 	case Qfakectl:
-		readstr(r, "new -\nfocus -\ndelete -\nrect -\nhide -\nunhide -\ntop -\n"
+		readstr(r, "new -\nfocus -\ndelete -\nrect -\nhide -\nunhide -\ntop -\nclosebox -\nzoombox -\n"
 			"label -\nscreen -\nclick -\nkey -\npress -\nmove -\nrelease -\n");
 		break;
 	case Qfakelog:
@@ -1965,7 +2018,7 @@ fswrite(Req *r)
 	}
 	switch(qid(r->fid)){
 	case Qctl:
-		e = eachline(r->ifcall.data, r->ifcall.count, uxctlcmd, nil);
+		e = eachline(r->ifcall.data, r->ifcall.count, uxctlcmd, (void*)(uintptr)ownwin(r->fid));
 		break;
 	case Qdeskctl:
 		a.fid = r->fid;

@@ -1,6 +1,6 @@
 # devux: rio's `/dev/ux` files
 
-**Protocol:** `devux 1.1` · **Server:** the 9/UX rio fork (`rio/`) ·
+**Protocol:** `devux 1.2` · **Server:** the 9/UX rio fork (`rio/`) ·
 **Fake:** [`test/fakes/fakedevux`](../../test/fakes/) ·
 **Conventions:** [README.md](README.md)
 
@@ -84,11 +84,12 @@ mode 0600 for files (0400 where read-only), 0500 for directories.
 ## version
 
 ```text
-devux 1.1
+devux 1.2
 feature focus
 feature desktop
 feature menubar
 feature drag
+feature chrome
 ```
 
 ## ctl (`/dev/ux/ctl`)
@@ -106,6 +107,7 @@ Commands:
 |---|---|
 | `mode on` / `mode off` | Turn 9/UX presentation and interception on or off |
 | `cmdkey key` | Set the Command key: `mod4` (default), `alt`, `ctl`, or `none` (no shortcuts) |
+| `chrome [winid] on` / `chrome [winid] off` | Turn classic chrome on or off for a window (default: the fid's own window). See [Window chrome](#window-chrome) |
 
 **Mode off** is stock rio: no menu bar strip, no shortcut
 interception, and a claimed desktop window is hidden (as with rio's
@@ -134,6 +136,8 @@ changes. Messages:
 | `desktop` | `win` | The desktop was claimed (`win=0`: released) |
 | `screen` | `rect` | The screen was resized |
 | `mode` | `ux` | The mode changed (`ux=on` or `ux=off`) |
+| `chrome` | `win`, `chrome` | A window's chrome was turned on or off (`chrome=on` or `chrome=off`) |
+| `close` | `win` | The close box in a window's chrome was clicked (see [Window chrome](#window-chrome)) |
 
 `rect` is the window's full rectangle in screen coordinates, as in
 `/dev/wctl`.
@@ -161,7 +165,7 @@ window win=9 rect=200,150,700,500 'label=Read Me' app=sketch-1 state=current
 ```
 
 `state` flags: `current` (has keyboard focus), `hidden`, `desktop` (the
-claimed desktop window). `app` is absent for windows without an app.
+claimed desktop window), `chrome` (classic chrome is on). `app` is absent for windows without an app.
 
 ## Desktop
 
@@ -351,6 +355,40 @@ goes down with the Command key held:
 rio never intercepts a key typed without Command, never intercepts
 anything for a legacy window, and has no global Command shortcuts of its
 own in 1.0. In mode off, or with `cmdkey none`, nothing is intercepted.
+
+## Window chrome
+
+`feature chrome`, added in devux 1.2. A window can opt into classic
+9/UX chrome, drawn and handled by rio: a title bar above the window,
+and a frame with a shadow around it. Chrome is off for every window
+until something turns it on, so legacy windows look as they always
+have.
+
+- `chrome [winid] on|off` on `/dev/ux/ctl` sets it. The setting belongs
+  to the window, not to the fid that wrote it, and lasts until it is
+  changed or the window is deleted. Any fid may set it for any window,
+  as with `wctl`. Setting it on the desktop window fails with `bad
+  value`. A change queues a `chrome` event.
+- **The window's rectangle doesn't change.** The chrome sits outside
+  it: the title bar (20 pixels in 1.2) above, the frame and shadow
+  around. `/dev/wctl`, `rect` events and `windows` all keep reporting
+  the client's own rectangle, so libdraw clients see no difference.
+- **Title bar.** It shows the window's label, centred, with a close box
+  at the left and a zoom box at the right. Dragging the title bar moves
+  the window (a `rect` event follows); clicking it raises and focuses
+  the window as a click in the window would.
+- **Close box.** rio queues `close win=N` on `/dev/ux/events` and
+  deletes nothing: the window's app decides (libux treats it as the
+  window's `close`, which may put up a dialog). A window that belongs
+  to no app has no one to decide, so rio deletes it as its Delete
+  command would, after queueing `close`.
+- **Zoom box.** It toggles the window between its own size and the
+  largest rectangle that keeps it and its chrome inside the desktop
+  rectangle, and back. Each change is a `rect` event.
+- **Mode off** draws no chrome and ignores the boxes, but keeps each
+  window's setting for when the mode comes back on.
+
+Chrome is the third stop in [pointer routing](#pointer-routing).
 
 ## Pointer routing
 
@@ -591,3 +629,4 @@ echo invoke hello-1 quit >/dev/ux/menubar/ctl
 |---|---|
 | 1.0 | First version |
 | 1.1 | Drag and drop: `/dev/ux/drag/` and `feature drag` |
+| 1.2 | Window chrome: `chrome` on `ctl`, the `chrome` and `close` events, the `chrome` state flag, and `feature chrome` |

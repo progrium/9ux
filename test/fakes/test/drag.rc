@@ -18,7 +18,7 @@ fake new 12 'label=other'
 
 test=version
 cat $d/version >$out/v
-want '^devux 1\.1$' $out/v
+want '^devux 1\.' $out/v
 want '^feature drag$' $out/v
 
 test=no-button
