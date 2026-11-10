@@ -123,7 +123,7 @@ test "version and ctl" {
     defer s.stop();
     const v = try s.readFile("/dev/ux/version");
     defer gpa.free(v);
-    try std.testing.expectEqualStrings("devux 1.1\nfeature focus\nfeature desktop\nfeature menubar\nfeature drag\n", v);
+    try std.testing.expectEqualStrings("devux 1.2\nfeature focus\nfeature desktop\nfeature menubar\nfeature drag\nfeature chrome\n", v);
     const c = try s.readFile("/dev/ux/ctl");
     defer gpa.free(c);
     try std.testing.expectEqualStrings("mode on\ncmdkey mod4\n", c);
@@ -306,4 +306,85 @@ test "mode off is stock rio: no bar, desktop hidden" {
     const c = try s.readFile("/dev/ux/ctl");
     defer gpa.free(c);
     try std.testing.expectEqualStrings("mode off\ncmdkey mod4\n", c);
+}
+
+test "classic chrome: title bar, move by title, zoom, and the close box" {
+    var s = try start("devux-chrome");
+    defer s.stop();
+    try s.rcQuiet("cat /dev/ux/events >$work/events &");
+    // An app window with chrome, and a plain one beside it.
+    try s.openWindow(rect(200, 150, 600, 450), "echo chrome on >/dev/ux/ctl; rc /mnt/term/cwd/test/devux/app.rc hello-1 Hello");
+    gpa.free(try s.waitWork("hello-1.ready", 20_000));
+    const w = try ids(s, 1);
+    defer gpa.free(w);
+    const id = w[0];
+    var want = try std.fmt.allocPrint(gpa, "chrome win={d} chrome=on", .{id});
+    try waitFor(s, "events", want);
+    gpa.free(want);
+    const ws = try s.readFile("/dev/ux/windows");
+    defer gpa.free(ws);
+    try std.testing.expect(std.mem.indexOf(u8, ws, ",chrome") != null);
+
+    // The active title bar is butter, above the window, and the window's
+    // own rectangle is unchanged.
+    try s.settle();
+    {
+        const img = try s.screenshot();
+        defer img.deinit(gpa);
+        try std.testing.expect(img.count(rect(230, 135, 570, 152), 0xEEEE9E) > 100);
+    }
+    try std.testing.expectEqual(rect(200, 150, 600, 450), try s.windowRect(id));
+
+    // Dragging the title moves the window.
+    s.drag(pt(300, 140), pt(350, 200), .left);
+    try c_waitRect(s, id, rect(250, 210, 650, 510));
+
+    // The zoom box fills the desktop, and puts it back.
+    s.click(pt(636, 203), .left);
+    harness.sleepMs(300);
+    const z = try s.windowRect(id);
+    try std.testing.expect(z.min.x <= 2 and z.min.y <= bar_h + 20 and z.max.x >= 1020);
+    s.click(pt(z.max.x - 14, z.min.y - 7), .left);
+    try c_waitRect(s, id, rect(250, 210, 650, 510));
+
+    // The close box only asks the app.
+    s.click(pt(263, 203), .left);
+    want = try std.fmt.allocPrint(gpa, "close win={d}", .{id});
+    try waitFor(s, "events", want);
+    gpa.free(want);
+    const still = try s.windows();
+    defer gpa.free(still);
+    try std.testing.expectEqual(1, still.len);
+
+    // Chrome off: back to rio's border.
+    const cmd = try std.fmt.allocPrint(gpa, "echo chrome {d} off >/dev/ux/ctl", .{id});
+    defer gpa.free(cmd);
+    try s.rcQuiet(cmd);
+    want = try std.fmt.allocPrint(gpa, "chrome win={d} chrome=off", .{id});
+    try waitFor(s, "events", want);
+    gpa.free(want);
+}
+
+test "the close box deletes a window that has no app" {
+    var s = try start("devux-chrome-close");
+    defer s.stop();
+    try s.openWindow(rect(200, 150, 600, 450), "echo chrome on >/dev/ux/ctl; sleep 1000");
+    gpa.free(try ids(s, 1));
+    harness.sleepMs(500);
+    s.click(pt(213, 143), .left);
+    const none = try s.waitWindows(0);
+    gpa.free(none);
+}
+
+fn c_waitRect(s: *Session, id: u32, r: harness.Rect) !void {
+    var waited: u32 = 0;
+    while (true) : (waited += 50) {
+        const got = try s.windowRect(id);
+        if (std.meta.eql(got, r)) return;
+        if (waited > 10_000) {
+            std.debug.print("window {d}: want {f}, have {f}\n", .{ id, r, got });
+            return error.WaitTimeout;
+        }
+        harness.sleepMs(50);
+    }
 }

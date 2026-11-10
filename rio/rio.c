@@ -584,6 +584,14 @@ mousethread(void*)
 					riosetcursor(nil);
 				break;
 			}
+			/* 9/UX: then window chrome */
+			if(!sending && (w = uxchromeat(mouse->xy)) != nil){
+				if(mouse->buttons)
+					uxchromemouse(w);
+				else
+					riosetcursor(nil);
+				break;
+			}
 			/* override everything for the keyboard window */
 			if(wkeyboard!=nil && ptinrect(mouse->xy, wkeyboard->screenr)){
 				/* make sure it's on top; this call is free if it is */

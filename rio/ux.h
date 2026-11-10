@@ -200,6 +200,18 @@ void		uxbarmouse(void);
 void		uxbarontop(void);
 int		uxkbd(char*);
 
+/* uxchrome.c */
+int		uxchromeborder(Window*);
+void		uxchromefit(Window*);
+void		uxchromebottom(Window*);
+void		uxchromedel(int);
+void		uxchromeall(void);
+char*	uxchromectl(Window*, char**, int);
+Window*	uxchromeat(Point);
+void		uxchromemouse(Window*);
+int		uxhaschrome(int);
+int		uxchromed(Window*);
+
 /* uxstyle.c */
 #include "../assets/gen/uxstyle.h"
 extern Font	*uxsysfont;

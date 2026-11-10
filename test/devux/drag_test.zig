@@ -72,7 +72,7 @@ test "version has drag" {
     defer s.stop();
     const v = try s.readFile("/dev/ux/version");
     defer gpa.free(v);
-    try std.testing.expect(std.mem.startsWith(u8, v, "devux 1.1\n"));
+    try std.testing.expect(std.mem.startsWith(u8, v, "devux 1."));
     try std.testing.expect(std.mem.indexOf(u8, v, "\nfeature drag\n") != null);
     const h = try s.readFile("/dev/ux/drag/ctl");
     defer gpa.free(h);

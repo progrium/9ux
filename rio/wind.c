@@ -49,6 +49,7 @@ wtopme(Window *w)
 		return;
 	if(w!=nil && w->i!=nil && w->topped!=topped){
 		w->topped = ++topped;
+		uxchromefit(w);	/* 9/UX: its frame just below it */
 		topwindow(w->i);
 		uxbarontop();
 		flushimage(display, 1);
@@ -62,6 +63,7 @@ wbottomme(Window *w)
 	if(w!=nil && w->i!=nil){
 		w->topped = - ++topped;
 		bottomwindow(w->i);
+		uxchromebottom(w);
 		wdeskbottom();
 		flushimage(display, 1);
 		uxchanged();
@@ -318,6 +320,8 @@ wborder(Window *w, int type)
 
 	if(w->i == nil)
 		return;
+	if(uxchromeborder(w))	/* 9/UX classic chrome */
+		return;
 	if(w->holding){
 		if(type == Selborder)
 			col = holdcol;
@@ -398,6 +402,7 @@ wresize(Window *w, Image *i)
 	w->topped = ++topped;
 	if(uxisdesktop(w))	/* 9/UX */
 		wdeskbottom();
+	uxchromefit(w);
 	uxbarontop();
 	flushimage(display, 1);
 	w->resized = TRUE;

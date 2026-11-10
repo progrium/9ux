@@ -295,6 +295,7 @@ uxsync(void)
 			postwin("app", o->id, nil, nil, nil, 0);
 		postwin("delete", o->id, nil, nil, nil, 0);
 		uxappdelwin(o->id);
+		uxchromedel(o->id);
 	}
 
 	/* new and changed windows */
@@ -309,8 +310,13 @@ uxsync(void)
 				postwin("app", s->id, nil, nil, s->app, 1);
 			continue;
 		}
-		if(!streq(o->label, s->label))
+		if(!streq(o->label, s->label)){
 			postwin("label", s->id, nil, s->label, nil, 0);
+			if((w = uxwin(s->id)) != nil && uxchromeborder(w))
+				flushimage(display, 1);
+			if(w != nil && w == input)
+				uxbardraw();	/* the bar may show the label */
+		}
 		if(!eqrect(o->r, s->r))
 			postwin("rect", s->id, &s->r, nil, nil, 0);
 		if(o->hidden != s->hidden)
@@ -421,13 +427,12 @@ uxwindows(int *np)
 		fmtattr(&f, "label", s);
 		free(s);
 		fmtattr(&f, "app", uxappid(w->id));
-		st = smprint("%s%s%s%s%s",
-			w == input ? "current" : "",
-			w == input && (Dx(w->screenr) <= 0 || uxisdesktop(w)) ? "," : "",
-			Dx(w->screenr) <= 0 ? "hidden" : "",
-			Dx(w->screenr) <= 0 && uxisdesktop(w) ? "," : "",
-			uxisdesktop(w) ? "desktop" : "");
-		fmtprint(&f, " state=%s\n", st);
+		st = smprint("%s%s%s%s",
+			w == input ? ",current" : "",
+			Dx(w->screenr) <= 0 ? ",hidden" : "",
+			uxisdesktop(w) ? ",desktop" : "",
+			uxhaschrome(w->id) ? ",chrome" : "");
+		fmtprint(&f, " state=%s\n", st[0] ? st+1 : st);
 		free(st);
 	}
 	free(ws);
@@ -473,12 +478,13 @@ uxsetmode(int on)
 	else
 		uxbarfree();
 	uxdeskfit();
+	uxchromeall();
 	uxpost(Sux, "mode ux=%s", on ? "on" : "off");
 	uxchanged();
 }
 
 char*
-uxctlwrite(char *line)
+uxctlwrite(Window *own, char *line)
 {
 	char *f[4];
 	int nf;
@@ -486,6 +492,8 @@ uxctlwrite(char *line)
 	nf = tokenize(line, f, nelem(f));
 	if(nf == 0)
 		return nil;
+	if(strcmp(f[0], "chrome") == 0)
+		return uxchromectl(own, f, nf);
 	if(strcmp(f[0], "mode") == 0){
 		if(nf != 2)
 			return "bad syntax";
@@ -692,5 +700,6 @@ uxresized(void)
 		uxbarinit();
 	}
 	uxdeskfit();
+	uxchromeall();
 	uxchanged();
 }

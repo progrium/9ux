@@ -44,6 +44,7 @@ static	int		ntitles;
 static	Uxmenu	*shown;		/* copies of the shown app menus */
 static	Uxapp	*shownapp;
 static	char		*shownappid;
+static	char		*shownlabel;	/* a legacy window's label, as shown */
 static	int		shownwin;
 static	Uxmenu	*riomenu;
 
@@ -210,12 +211,13 @@ layout(void)
 	Uxmenu *m;
 	Window *w;
 	int x, win;
-	char *t;
 
 	uxfreemenus(shown);
 	shown = nil;
 	free(shownappid);
 	shownappid = nil;
+	free(shownlabel);
+	shownlabel = nil;
 	ntitles = 0;
 	win = uxforeground(&a);
 	shownapp = a;
@@ -230,12 +232,12 @@ layout(void)
 
 	x = barr.min.x+UXmenubarfirsttitle-Tpad;
 	if(a != nil){
-		t = a->title;
+		shownlabel = estrdup(a->title != nil ? a->title : "");
 		shownappid = estrdup(a->id);
-		addtitle(&x, t, nil, 0);
+		addtitle(&x, shownlabel, nil, 0);
 	}else if((w = uxwin(win)) != nil && !uxisdesktop(w)){
-		t = w->label != nil ? w->label : "";
-		addtitle(&x, t, nil, 1);
+		shownlabel = estrdup(w->label != nil ? w->label : "");
+		addtitle(&x, shownlabel, nil, 1);
 	}
 	if(a == nil)
 		return;

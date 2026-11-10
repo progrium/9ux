@@ -17,6 +17,7 @@ OFILES=\
 	uxfs.$O\
 	uxmenu.$O\
 	uxstyle.$O\
+	uxchrome.$O\
 	uxglyphs.$O\
 	xfid.$O\
 

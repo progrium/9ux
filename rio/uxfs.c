@@ -56,11 +56,12 @@ static Dirtab uxdragdir[] =
 };
 
 static char version[] =
-	"devux 1.1\n"
+	"devux 1.2\n"
 	"feature focus\n"
 	"feature desktop\n"
 	"feature menubar\n"
-	"feature drag\n";
+	"feature drag\n"
+	"feature chrome\n";
 
 static char draghelp[] =
 	"start -\n"
@@ -71,7 +72,8 @@ static char draghelp[] =
 
 static char ctlhelp[] =
 	"mode -\n"
-	"cmdkey -\n";
+	"cmdkey -\n"
+	"chrome -\n";
 
 static char deskhelp[] =
 	"claim -\n"
@@ -98,7 +100,7 @@ void		uxunsubscribe(Uxsub*);
 void		uxsubfree(Uxsub*);
 char*	uxwindows(int*);
 char*	uxctlread(int*);
-char*	uxctlwrite(char*);
+char*	uxctlwrite(Window*, char*);
 char*	uxdeskctl(Uxfid*, Window*, char*);
 void		uxdeskclose(Uxfid*);
 char*	uxdeskstate(int*);
@@ -371,7 +373,7 @@ uxwrite(Xfid *x)
 			e = p+strlen(p);
 		switch(q){
 		case Quxctl:
-			err = uxctlwrite(p);
+			err = uxctlwrite(own, p);
 			break;
 		case Quxdeskctl:
 			err = uxdeskctl(u, own, p);
