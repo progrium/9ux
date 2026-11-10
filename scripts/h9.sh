@@ -59,12 +59,29 @@ build_h9() {
 	touch "$src/.9ux-built"
 }
 
-# The release ISO's tree, plus the mount points the kernel supplies
-# (h9's tools/mkroot.zig lists them).
+# Directories the ISO's tree lacks: the mount points the kernel supplies
+# (h9's tools/mkroot.zig lists them), and the empty ones a 9front install
+# has under /mnt and /n (sys/lib/sysconfig/proto/portproto), which the
+# ISO leaves out. Cheap, so done on every run: an older tree gets them too.
+mountpoints() {
+	for d in bin boot dev env fd mnt mnt/temp mnt/term mnt/term/cwd mnt/wsys \
+		n net net.alt proc root shr srv tmp \
+		mnt/acme mnt/apeselect mnt/apm mnt/cd mnt/cons mnt/consoles mnt/doc \
+		mnt/exportfs mnt/factotum mnt/lp mnt/plumb mnt/rdb mnt/vmware \
+		n/9 n/9fat n/a n/c n/d n/a: n/c: n/d: n/boot n/dump n/ftp n/kfs \
+		n/sid n/tapefs; do
+		[ -d "$1/$d" ] || mkdir -p "$1/$d"
+	done
+}
+
+# The release ISO's tree.
 iso_root() {
 	nine="$src/.local/9front"
 	dest="$nine/root-$NINEFRONT_RELEASE-iso"
-	[ -e "$dest/.9ux-root" ] && return 0
+	if [ -e "$dest/.9ux-root" ]; then
+		mountpoints "$dest"
+		return 0
+	fi
 	iso="$nine/9front-$NINEFRONT_RELEASE.amd64.iso"
 	mkdir -p "$nine"
 	if [ ! -f "$iso" ]; then
@@ -87,10 +104,7 @@ iso_root() {
 	zig=$("$top/scripts/zig.sh" --path)
 	rm -rf "$dest"
 	(cd "$src" && . scripts/env.sh && "$zig" build isoroot -- "$iso" "$dest") >&2
-	for d in bin boot dev env fd mnt mnt/temp mnt/term mnt/term/cwd mnt/wsys \
-		n net net.alt proc root shr srv tmp; do
-		mkdir -p "$dest/$d"
-	done
+	mountpoints "$dest"
 	# Installer payloads, not part of a running system.
 	rm -rf "$dest/dist"
 	touch "$dest/.9ux-root"

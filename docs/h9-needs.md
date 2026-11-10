@@ -27,10 +27,16 @@ takes them upstream.
   other directories the 9front kernel supplies, so the first run fails
   with `bind #y /dev: file does not exist: '/dev'`. `zig build mkroot`
   adds them (its `mount_points` list); isoroot doesn't.
-- **Workaround:** `scripts/h9.sh` makes the same list of directories
-  after unpacking, and drops the installer payload in `dist/`.
-- **h9 would need:** isoroot to add `mount_points` as mkroot does (and
-  perhaps skip `dist/`), so an ISO tree is a usable `--root` as is.
+  The ISO also leaves out the empty directories an install has under
+  `/mnt` and `/n` (`/mnt/plumb`, `/mnt/factotum`, ...; see
+  `sys/lib/sysconfig/proto/portproto`), so the plumber and factotum
+  can't mount themselves.
+- **Workaround:** `scripts/h9.sh` makes both sets of directories (on
+  every run, so older trees get them), and drops the installer payload
+  in `dist/`.
+- **h9 would need:** isoroot to add `mount_points` as mkroot does, and
+  the empty directories from portproto (and perhaps skip `dist/`), so an
+  ISO tree is a usable `--root` as is.
 
 ## h9 can't be a fetched Zig package
 
