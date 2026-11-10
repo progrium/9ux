@@ -52,7 +52,7 @@ item=/usr/glenda/doc/notes.txt x=32 y=48
 | `ext` | file name suffix with its dot, e.g. `.txt` | `type`, `open`, `icon`, `plumb` | Maps a file name suffix to a type and how to open it |
 | `icon` | icon name | `image` (image(6) file), or `rsrc` with `res` (`TYPE ID`) | Where an icon's pixels come from |
 | `volume` | volume name | `path` (mount point in the session namespace), `addr` (dial string of a 9P server to mount there) or `srv` (a `/srv` file to mount there), `spec` (attach name), `icon`, `desktop` (`yes`/`no`), `x`, `y` | A registered volume (design §4: volumes are declared, never inferred). With neither `addr` nor `srv`, `path` is already in the namespace. |
-| `folder` | absolute directory path | `view` (`icons`/`list`), `sort` (`name`/`kind`/`date`/`size`), `x`, `y`, `width`, `height`, `scrollx`, `scrolly`, `icon` | A folder window's layout |
+| `folder` | absolute directory path | `view` (`icons`/`list`), `sort` (`name`/`kind`/`date`/`size`), `x`, `y`, `width`, `height`, `scrollx`, `scrolly`, `icon`, `open` (`yes`/`no`: open when Finder last ran) | A folder window's layout |
 | `item` | absolute path of a file or directory | `x`, `y` (position in its parent's icon view), `icon` (custom icon), `label` | One entry's layout and per-item choices |
 
 Paths in `folder` and `item` keys are paths **in the workspace's
