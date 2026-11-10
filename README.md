@@ -82,6 +82,7 @@ uxd/                   UI registry and event broker
 uxmeta/                ndb-backed metadata service
 resfs/                 resource-fork file server
 finder/                Finder
+assets/                style guide, mockups, icons, cursors, patterns
 scripts/               pinned versions, and h9.sh to run the pinned h9
 mkfile                 builds every component that has a mkfile
 ```
