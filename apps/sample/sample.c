@@ -138,6 +138,41 @@ iconev(Uxev *e, void*)
 		setstatus("renamed %s to %s", e->item, e->text);
 }
 
+/* Notes takes text, and files (dropped from Finder, say): their contents */
+static void
+notesev(Uxev *e, void*)
+{
+	Uxdropfile *df;
+	char *data;
+	long n;
+	int nf;
+
+	if(e->type != UXdrop)
+		return;
+	if(strcmp(e->text, "file") == 0){
+		nf = uxdropfiles(e, &df);
+		if(nf < 1){
+			setstatus("drop: no files: %r");
+			return;
+		}
+		if(df[0].dir || (data = uxdropdata(e, "file", 0, &n)) == nil){
+			setstatus("drop: can't read %s", df[0].name);
+			uxdropresult(e, nil, "not supported: a folder");
+		}else{
+			uxsetvalue(notes, data);
+			setstatus("dropped %s (%ld bytes)", df[0].name, n);
+			free(data);
+		}
+		uxdropfilesfree(df, nf);
+		return;
+	}
+	if((data = uxdropdata(e, "text", -1, &n)) != nil){
+		uxsetvalue(notes, data);
+		setstatus("dropped text (%ld bytes)", n);
+		free(data);
+	}
+}
+
 static void
 usage(void)
 {
@@ -178,6 +213,8 @@ threadmain(int argc, char *argv[])
 	pass = uxtextfield(win, "password", "Password", Rect(80, 48, 300, 68), UXsecret);
 	agree = uxcheckbox(win, "agree", "I agree", Rect(316, 48, 460, 68));
 	notes = uxtextfield(win, "notes", "Notes", Rect(16, 80, 300, 160), UXmultiline);
+	uxhandler(notes, notesev, nil);
+	uxdroptypes(notes, "file,text", "copy");
 	list = uxlist(win, "colors", Rect(316, 80, 460, 190));
 	uxsetitems(list, colors, ncolors);
 	uxhandler(list, listev, nil);
@@ -190,7 +227,7 @@ threadmain(int argc, char *argv[])
 	uxiconadd(icons, "sample", "Sample", "sample", Pt(232, 40));
 	uxhandler(icons, iconev, nil);
 	status = uxlabel(win, "status", "", Rect(16, 352, 460, 372));
-	USED(pass, agree, notes);
+	USED(pass, agree);
 	uxfocus(name);
 
 	uxmain();
