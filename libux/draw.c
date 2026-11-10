@@ -387,6 +387,75 @@ shade(Uxwin *w)
 	return w->col[nelem(palette)];
 }
 
+/*
+ * The desktop: the desktop colour, tiled with the pattern image named
+ * by $uxpattern (an assets/gen/patterns tile) when there is one.
+ */
+static void
+deskbg(Uxwin *w, Rectangle r)
+{
+	static Display *pd;
+	static Image *pat;
+	static int tried;
+	char *f;
+	int fd;
+
+	fill(w, r, UXcoldesktop);
+	if(pd != w->d){
+		pd = w->d;
+		pat = nil;
+		tried = 0;
+	}
+	if(!tried){
+		tried = 1;
+		f = getenv("uxpattern");
+		if(f != nil && (fd = open(f, OREAD)) >= 0){
+			pat = readimage(w->d, fd, 0);
+			if(pat != nil)
+				replclipr(pat, 1, Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF));
+			close(fd);
+		}
+		free(f);
+	}
+	if(pat != nil)
+		draw(w->img, r, pat, nil, ZP);
+}
+
+/* the label, elided in the middle to fit max pixels; malloc'd */
+static char*
+elide(Font *f, char *s, int max)
+{
+	Rune *r, *e;
+	int n, a, b;
+	char *t;
+
+	if(stringwidth(f, s) <= max)
+		return estrdup(s);
+	r = runesmprint("%s", s);
+	n = runestrlen(r);
+	e = emalloc((n+2)*sizeof(Rune));
+	for(a = n/2, b = n - n/2; a > 0; ){
+		memmove(e, r, a*sizeof(Rune));
+		e[a] = L'…';
+		memmove(e+a+1, r+n-b, b*sizeof(Rune));
+		e[a+1+b] = 0;
+		if(runestringwidth(f, e) <= max)
+			break;
+		if(a >= b)
+			a--;
+		else
+			b--;
+	}
+	if(a == 0){
+		e[0] = L'…';
+		e[1] = 0;
+	}
+	t = smprint("%S", e);
+	free(r);
+	free(e);
+	return t;
+}
+
 static void
 drawicons(Uxctl *c, Rectangle r)
 {
@@ -396,11 +465,16 @@ drawicons(Uxctl *c, Rectangle r)
 	Rectangle ir, lr;
 	Font *f;
 	Image *img;
-	int i, lw;
+	int i, lw, desk;
+	char *l;
 
 	w = c->w;
 	f = w->font;
-	fill(w, r, UXpaper);
+	desk = strcmp(w->kind, "desktop") == 0;
+	if(desk)
+		deskbg(w, r);
+	else
+		fill(w, r, UXpaper);
 	replclipr(w->img, 0, r);
 	for(i = 0; i < c->nicons; i++){
 		ic = &c->icons[i];
@@ -416,15 +490,25 @@ drawicons(Uxctl *c, Rectangle r)
 			fill(w, ir, ic->sel ? UXgrey4 : UXgrey1);
 			frame(w, ir, 1, UXink);
 		}
-		lw = stringwidth(f, ic->label);
+		if(ic->label[0] == 0)
+			continue;
+		l = elide(f, ic->label, UXiconviewlabelmax);
+		lw = stringwidth(f, l);
 		lp = Pt(p.x - lw/2, ir.max.y + UXiconviewlabelgap);
 		lr = Rect(lp.x-UXiconviewlabelpad, lp.y, lp.x+lw+UXiconviewlabelpad, lp.y+f->height);
 		if(ic->sel){
 			fill(w, lr, active(w) ? UXcolselect : UXcoltrack);
-			string(w->img, lp, _color(w, active(w) ? UXcolselecttext : UXink), ZP, f, ic->label);
-		}else
-			string(w->img, lp, _color(w, UXink), ZP, f, ic->label);
+			string(w->img, lp, _color(w, active(w) ? UXcolselecttext : UXink), ZP, f, l);
+		}else{
+			/* on the desktop a label sits on a paper plate, to read over any pattern */
+			if(desk)
+				fill(w, lr, UXpaper);
+			string(w->img, lp, _color(w, UXink), ZP, f, l);
+		}
+		free(l);
 	}
+	if(c->drag == Dband && Dx(c->band) > 0 && Dy(c->band) > 0)
+		frame(w, c->band, 1, desk ? UXpaper : UXgrey4);
 	replclipr(w->img, 0, w->img->r);
 }
 

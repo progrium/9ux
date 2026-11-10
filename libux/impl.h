@@ -46,6 +46,21 @@ enum {
 	Wmodal		= 1<<2,
 };
 
+/* icon view drags (Uxctl.drag) */
+enum {
+	Dnone,
+	Dpress,	/* button down on an icon, not moved yet */
+	Dmove,	/* moving the selected icons */
+	Dband,	/* rubber band selection */
+};
+
+/*
+ * Set by drag and drop (S9): called while selected icons are being
+ * moved and the pointer leaves the icon view. Returning 1 takes the
+ * drag over; the icons go back where they were.
+ */
+extern int	(*_icondragout)(Uxctl*, Mouse*);
+
 /* control state; the low bits are the UX* flags of ux.h */
 enum {
 	Cenabled	= 1<<8,
@@ -124,6 +139,10 @@ struct Uxctl {
 	int	pressed;	/* button being tracked */
 	int	lastclick;	/* for double clicks */
 	int	lastitem;
+	int	drag;	/* icon view: Dnone, Dpress, Dmove, Dband */
+	Point	dragp;	/* where the button went down */
+	Point	dragl;	/* the pointer at the last move */
+	Rectangle	band;	/* the rubber band, screen coordinates */
 };
 
 struct Uxwin {

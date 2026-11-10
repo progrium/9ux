@@ -673,27 +673,157 @@ iconat(Uxctl *c, Point p)
 	return -1;
 }
 
+int	(*_icondragout)(Uxctl*, Mouse*);
+
+static Rectangle
+iconrect(Uxctl *c, int i)
+{
+	Rectangle r, ir;
+
+	r = _abs(c);
+	ir = Rect(-UXiconlarge/2, -UXiconlarge/2, UXiconlarge/2, UXiconviewcellh-UXiconlarge/2);
+	return rectaddpt(ir, subpt(addpt(r.min, c->icons[i].pt), c->origin));
+}
+
+static int
+nsel(Uxctl *c)
+{
+	int i, n;
+
+	n = 0;
+	for(i = 0; i < c->nicons; i++)
+		n += c->icons[i].sel;
+	return n;
+}
+
+/* move the selected icons by d (live feedback while dragging) */
+static void
+movesel(Uxctl *c, Point d)
+{
+	int i;
+
+	for(i = 0; i < c->nicons; i++)
+		if(c->icons[i].sel)
+			c->icons[i].pt = addpt(c->icons[i].pt, d);
+	dirty(c);
+}
+
+/* the drag ended with the icons moved: report each one */
+static void
+moved(Uxctl *c)
+{
+	Uxev e;
+	int i;
+
+	_event(c, "items", nil);
+	for(i = 0; i < c->nicons; i++){
+		if(!c->icons[i].sel)
+			continue;
+		memset(&e, 0, sizeof e);
+		e.type = UXmove;
+		e.via = UXui;
+		e.win = c->w;
+		e.ctl = c;
+		e.item = c->icons[i].id;
+		e.pt = c->icons[i].pt;
+		_notify(c->fn, c->arg, &e);
+	}
+}
+
+/*
+ * Button 1 on an icon selects it (or keeps a selection it's part of)
+ * and dragging moves the selection; on empty space it starts a rubber
+ * band. A double click opens the selection. Returns 1 while the button
+ * is down so the window's grab keeps the mouse for us.
+ */
 static int
 iconmouse(Uxctl *c, Mouse *m)
 {
 	int i, j;
 	char *s;
+	Rectangle b;
 
-	if(!(m->buttons & 1))
-		return 0;
-	i = iconat(c, m->xy);
-	if(i >= 0 && c->lastitem == i && m->msec - c->lastclick < 400){
-		c->lastclick = 0;
-		s = iconsel(c, ',');
-		_iconopen(c, s, UXui);
-		free(s);
-		return 0;
+	switch(c->drag){
+	case Dnone:
+		if(!(m->buttons & 1))
+			return 0;
+		i = iconat(c, m->xy);
+		if(i >= 0 && c->lastitem == i && m->msec - c->lastclick < 400){
+			c->lastclick = 0;
+			s = iconsel(c, ',');
+			_iconopen(c, s, UXui);
+			free(s);
+			c->drag = Dpress;	/* swallow the rest of the click */
+			c->dragp = c->dragl = m->xy;
+			c->lastitem = -1;
+			return 1;
+		}
+		c->lastitem = i;
+		c->lastclick = m->msec;
+		c->dragp = c->dragl = m->xy;
+		if(i >= 0){
+			if(!c->icons[i].sel){
+				for(j = 0; j < c->nicons; j++)
+					c->icons[j].sel = j == i;
+				_iconsel(c, UXui);
+			}
+			c->drag = Dpress;
+		}else{
+			if(nsel(c) > 0){
+				for(j = 0; j < c->nicons; j++)
+					c->icons[j].sel = 0;
+				_iconsel(c, UXui);
+			}
+			c->drag = Dband;
+			c->band = Rpt(m->xy, m->xy);
+		}
+		return 1;
+	case Dpress:
+		if(!(m->buttons & 1)){
+			/* a click on one of several selected icons selects just it */
+			i = iconat(c, m->xy);
+			if(i >= 0 && nsel(c) > 1 && c->lastclick != 0){
+				for(j = 0; j < c->nicons; j++)
+					c->icons[j].sel = j == i;
+				_iconsel(c, UXui);
+			}
+			c->drag = Dnone;
+			return 0;
+		}
+		if(abs(m->xy.x - c->dragp.x) + abs(m->xy.y - c->dragp.y) < 4 || c->lastitem < 0)
+			return 1;
+		c->drag = Dmove;
+		/* fall through */
+	case Dmove:
+		if(!ptinrect(m->xy, _abs(c)) && _icondragout != nil && _icondragout(c, m)){
+			movesel(c, subpt(c->dragp, c->dragl));
+			c->drag = Dnone;
+			return 0;
+		}
+		movesel(c, subpt(m->xy, c->dragl));
+		c->dragl = m->xy;
+		if(!(m->buttons & 1)){
+			c->drag = Dnone;
+			if(!eqpt(c->dragp, m->xy))
+				moved(c);
+			return 0;
+		}
+		return 1;
+	case Dband:
+		c->band = canonrect(Rpt(c->dragp, m->xy));
+		for(i = 0; i < c->nicons; i++){
+			b = iconrect(c, i);
+			c->icons[i].sel = rectXrect(b, c->band);
+		}
+		dirty(c);
+		if(!(m->buttons & 1)){
+			c->drag = Dnone;
+			_iconsel(c, UXui);
+			return 0;
+		}
+		return 1;
 	}
-	c->lastitem = i;
-	c->lastclick = m->msec;
-	for(j = 0; j < c->nicons; j++)
-		c->icons[j].sel = j == i;
-	_iconsel(c, UXui);
+	c->drag = Dnone;
 	return 0;
 }
 
