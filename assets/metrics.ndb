@@ -1,0 +1,70 @@
+# 9/UX metrics, in pixels at 1x, in ndb(6) form.
+#
+# rio (menu bar, chrome) and libux (controls) draw from these; the
+# mockups in mockups/ are rendered from them too, so a value changed here
+# changes the reference pictures. mkassets writes them to gen/uxstyle.h
+# as UXmenubarheight, ... (dots and dashes dropped).
+#
+# Fonts are named in fonts.ndb; heights below assume the default set
+# (13 px system and body fonts).
+
+# menu bar (drawn by rio)
+metric=menubar.height       value=20
+metric=menubar.markx        value=10   # left edge of the 9/UX mark
+metric=menubar.titlepad     value=9    # space either side of a menu title
+metric=menubar.firsttitle   value=36   # x of the first menu title
+metric=menubar.clockpad     value=12   # right margin of the clock
+
+# pull-down menus (drawn by rio)
+metric=menu.itemheight      value=18
+metric=menu.sepheight       value=7
+metric=menu.padleft         value=20   # room for a check mark
+metric=menu.padright        value=14
+metric=menu.keygap          value=28   # min gap between label and shortcut
+metric=menu.shadow          value=2
+
+# windows (title bar and frame drawn by rio for 9/UX windows)
+metric=window.border        value=1
+metric=window.shadow        value=1
+metric=window.titleheight   value=20   # including its bottom rule
+metric=window.boxsize       value=11   # close and zoom boxes
+metric=window.boxinset      value=8    # box distance from the frame edge
+metric=window.titlepad      value=8    # space either side of the title
+metric=window.minwidth      value=120
+metric=window.minheight     value=80
+
+# scroll bars and grow box (drawn by libux)
+metric=scroll.width         value=16
+metric=scroll.thumbmin      value=16
+metric=grow.size            value=16
+
+# controls (drawn by libux)
+metric=button.height        value=20
+metric=button.radius        value=4
+metric=button.pad           value=14   # label padding either side
+metric=button.minwidth      value=64
+metric=button.defaultring   value=3    # ring width + gap for the default button
+metric=check.size           value=12
+metric=check.gap            value=6    # box to label
+metric=radio.size           value=12
+metric=field.height         value=20
+metric=field.pad            value=4
+metric=field.focusring      value=2
+metric=list.rowheight       value=16
+metric=list.pad             value=6
+metric=control.gap          value=8    # between related controls
+metric=control.groupgap     value=16   # between groups
+metric=dialog.margin        value=16
+metric=dialog.iconsize      value=32
+metric=dialog.textx         value=64   # alert text column
+
+# Finder (drawn by finder through libux IconView)
+metric=icon.large           value=32
+metric=icon.small           value=16
+metric=iconview.cellw       value=76
+metric=iconview.cellh       value=60
+metric=iconview.labelgap    value=3
+metric=iconview.labelpad    value=2    # plate padding around a label
+metric=iconview.labelmax    value=72   # wrap or elide past this width
+metric=desktop.margin       value=12
+metric=desktop.cellh        value=64

@@ -1,0 +1,73 @@
+# 9/UX desktop patterns. Each 'pattern NAME "Title"' block is an 8x8
+# grid of palette letters (../palette.ndb), tiled across the desktop.
+# The first pattern is the default.
+
+pattern ninegrey "Nine grey"
+44444444
+44344444
+44444444
+44444444
+44444444
+44444434
+44444444
+44444444
+
+pattern plain "Plain"
+44444444
+44444444
+44444444
+44444444
+44444444
+44444444
+44444444
+44444444
+
+pattern harbor "Harbor"
+TTTTTTTT
+TTDTTTTT
+TTTTTTTT
+TTTTTDTT
+TTTTTTTT
+TDTTTTTT
+TTTTTTTT
+TTTTDTTT
+
+pattern weave "Weave"
+TTTDTTTC
+TTDTTTCT
+TDTTTCTT
+DTTTCTTT
+TTTCTTTD
+TTCTTTDT
+TCTTTDTT
+CTTTDTTT
+
+pattern linen "Linen"
+YYYYYyYY
+YYYYYyYY
+YYYYYyYY
+yyyyyoyy
+YYYYYyYY
+YYYYYyYY
+YYYYYyYY
+YYYYYyYY
+
+pattern check "Check"
+44554455
+44554455
+55445544
+55445544
+44554455
+44554455
+55445544
+55445544
+
+pattern dither "Dither"
+KWKWKWKW
+WKWKWKWK
+KWKWKWKW
+WKWKWKWK
+KWKWKWKW
+WKWKWKWK
+KWKWKWKW
+WKWKWKWK

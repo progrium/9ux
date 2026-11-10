@@ -1,0 +1,151 @@
+# 9/UX chrome glyphs: small grids of palette letters ('.' is clear),
+# drawn by rio and libux in the colour the style guide gives. Each
+# 'glyph NAME' block runs to the next blank line.
+
+glyph check
+........KK
+.......KK.
+K.....KK..
+KK...KK...
+.KK.KK....
+..KKK.....
+...K......
+
+glyph mod
+....K....
+...K.K...
+..K...K..
+.K.....K.
+K...K...K
+.K.....K.
+..K...K..
+...K.K...
+....K....
+
+glyph submenu
+K...
+KK..
+KKK.
+KKKK
+KKK.
+KK..
+K...
+
+glyph popup
+KKKKKKK
+.KKKKK.
+..KKK..
+...K...
+
+glyph arrow-up
+....K....
+...KWK...
+..KWWWK..
+.KWWWWWK.
+KKKWWWKKK
+..KWWWK..
+..KWWWK..
+..KKKKK..
+
+glyph arrow-right
+...K....
+...KK...
+KKKKWK..
+KWWWWWK.
+KWWWWWWK
+KWWWWWK.
+KKKKWK..
+...KK...
+...K....
+
+glyph arrow-down
+..KKKKK..
+..KWWWK..
+..KWWWK..
+KKKWWWKKK
+.KWWWWWK.
+..KWWWK..
+...KWK...
+....K....
+
+glyph arrow-left
+....K...
+...KK...
+..KWKKKK
+.KWWWWWK
+KWWWWWWK
+.KWWWWWK
+..KWKKKK
+...KK...
+....K...
+
+glyph grow
+...........
+...........
+..........K
+.........K.
+........K..
+.......K..K
+......K..K.
+.....K..K..
+....K..K..K
+...K..K..K.
+..K..K..K..
+
+glyph close
+K.....K
+.K...K.
+..K.K..
+...K...
+..K.K..
+.K...K.
+K.....K
+
+glyph zoom
+KKKKKK.
+K....K.
+K....K.
+K....K.
+K....K.
+KKKKKK.
+.......
+
+glyph radio
+.KK.
+KKKK
+KKKK
+.KK.
+
+glyph thumbgrip
+KKKKKKK
+.......
+KKKKKKK
+.......
+KKKKKKK
+
+glyph shift
+....K....
+...K.K...
+..K...K..
+.K.....K.
+KKK...KKK
+..K...K..
+..K...K..
+..KKKKK..
+
+glyph ctl
+...K...
+..K.K..
+.K...K.
+K.....K
+
+glyph alt
+KKK...KKK
+...K.....
+....K....
+.....K...
+......KKK
+
+glyph mixed
+KKKKKK
+KKKKKK
