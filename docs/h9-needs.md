@@ -123,3 +123,24 @@ takes them upstream.
   app, instead of stopping the app's process (`uxd/test/stall.rc`).
 - **h9 would need:** `stop`, `start` and `waitstop` in `/proc/N/ctl`, or
   an error from the write saying they aren't supported.
+
+## Occasional faults on fresh heap pages under load
+
+- **Found by:** S2 (rio) and S9, at H9_REV b27cacd, Linux x86\_64,
+  native backend, during GUI test runs.
+- **What happens:** now and then rio dies with `sys: trap: fault write
+  addr=0x47a5fc pc=0x231cf5` (S9 saw `addr=0x47a604`, the same heap
+  page), the pc in libc's `blocksetsize`; in the same run, `echo` in the
+  test's rc failed three times with "write error: Bad address". It
+  couldn't be reproduced on purpose: the same test passed 9 times in a
+  row afterwards, and 4 runs with rio's pool set to
+  `POOL_PARANOIA|POOL_ANTAGONISM|POOL_DEBUGGING` found no heap
+  corruption, so rio writing past a block is unlikely. A guess, not
+  confirmed: a freshly grown data-segment page is sometimes not mapped
+  yet when guest code touches it. A two-process `RFMEM` sbrk stress test
+  didn't reproduce the fault in 20 runs, but did hit "virtual memory
+  allocation failed" at only about 64 MB, which may be related.
+- **Workaround:** none; a rerun passes.
+- **h9 would need:** brk/segment growth that's visible to every process
+  sharing the segment before the call returns, and a larger limit on a
+  process's memory than about 64 MB (or a way to set it).
