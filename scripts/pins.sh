@@ -1,4 +1,4 @@
-# Pinned versions. Bump deliberately, in their own PR, with CI green.
+# Pinned versions. Bump deliberately, in their own commit, with CI green.
 
 # h9 (github.com/progrium/hyper9) is under active development, so 9/UX
 # pins a known-good commit. scripts/h9.sh builds it into .local/hyper9.

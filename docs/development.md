@@ -47,7 +47,7 @@ scripts/h9.sh --check            # first run builds h9; then shows the backends
 
 To use your own h9 checkout instead (for example while changing h9 for
 9/UX), set `H9=/path/to/hyper9/zig-out/bin/h9`. The pin is bumped in its
-own PR once CI passes on the new commit.
+own commit once CI passes on the new commit.
 
 On Linux, graphics needs a glibc build with X11: set
 `H9_BUILD_FLAGS=-Dgfx=x11` before the first run. Headless tests don't
