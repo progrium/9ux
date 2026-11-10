@@ -138,7 +138,7 @@ iconev(Uxev *e, void*)
 		setstatus("renamed %s to %s", e->item, e->text);
 }
 
-/* Notes takes text, and files (dropped from Finder, say): their contents */
+/* Notes takes text, and files (dropped from Desktop, say): their contents */
 static void
 notesev(Uxev *e, void*)
 {

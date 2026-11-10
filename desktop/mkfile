@@ -1,0 +1,62 @@
+</$objtype/mkfile
+
+# libfcore: Desktop's core as a library, and fcore, its shell front end.
+LIB=fcore.$O.a
+OFILES=\
+	meta.$O\
+	caps.$O\
+	vol.$O\
+	folder.$O\
+	ops.$O\
+	info.$O\
+	launch.$O\
+	trash.$O\
+
+HFILES=fcore.h
+BIN=/$objtype/bin
+
+# desktop, the app: on libux, with the look from assets/gen/uxstyle.h
+UIFILES=\
+	main.$O\
+	view.$O\
+	layout.$O\
+	infowin.$O\
+	alert.$O\
+	trashwin.$O\
+
+LIBUX=../libux/libux.a$O
+CFLAGS=$CFLAGS -I../libux -I../assets/gen
+
+all:V: $O.fcore $O.desktop
+
+$LIB: $OFILES
+	ar vu $LIB $OFILES
+
+$O.fcore: fcore.$O $LIB
+	$LD $LDFLAGS -o $target $prereq
+
+$O.desktop: $UIFILES $LIB $LIBUX
+	$LD $LDFLAGS -o $target $prereq
+
+$LIBUX:
+	cd ../libux && mk
+
+$UIFILES: desktop.h ../libux/ux.h ../assets/gen/uxstyle.h
+
+%.$O: $HFILES
+
+%.$O: %.c
+	$CC $CFLAGS $stem.c
+
+install:V: $O.fcore $O.desktop
+	cp $O.fcore $BIN/fcore
+	cp $O.desktop $BIN/desktop
+
+test:V: all
+	cd test && mk test
+
+clean:V:
+	rm -f *.[$OS] [$OS].* *.[$OS].a
+	cd test && mk clean
+
+nuke:V: clean

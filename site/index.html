@@ -51,11 +51,11 @@
 <figure id="demo">
 <div class="live" id="live">
 <img src="images/docs/desktop.png" width="1024" height="768"
-  alt="The 9/UX desktop: Finder's menu bar and volume icons, two spatial folder windows, and the libux sample app with a file just dropped onto its Notes field">
+  alt="The 9/UX desktop: Desktop's menu bar and volume icons, two spatial folder windows, and the libux sample app with a file just dropped onto its Notes field">
 </div>
 <figcaption>
 This is the real thing, running live in your browser:
-the rio fork in 9/UX mode, Finder, and the libux sample app,
+the rio fork in 9/UX mode, Desktop, and the libux sample app,
 compiled for 386 and run by <a href="https://progrium.github.io/hyper9/">h9</a>
 on the v86 emulator inside the page. Nothing is sent anywhere; it's about 17 MB to load, once.
 Click the screen to type; right-click (or Ctrl-click) is button 3, and Alt-click is button 2.
@@ -80,7 +80,7 @@ It needs a recent Chrome or Edge; other browsers see a screenshot,
 
 <p>
 9/UX brings the classic Mac and A/UX desktop
-(a spatial Finder, a global menu bar, consistent controls and dialogs,
+(a spatial desktop, a global menu bar, consistent controls and dialogs,
 icons, and resource-driven presentation)
 to <a href="https://9front.org/">9front</a>, built the Plan 9 way:
 rio and libdraw draw the screen,
@@ -106,7 +106,7 @@ and existing rio programs (acme, sam, rc windows, nested rio) keep working uncha
 <ul>
 <li><b>rio fork</b> (<tt>rio -u</tt>): a desktop layer, a global menu bar that follows the focused app,
   title-bar chrome, and a drag broker, all under <tt>/dev/ux</tt>. With 9/UX mode off it's stock rio.</li>
-<li><b>Finder</b>: volume icons, spatial folder windows, rename, duplicate, Get Info, Trash,
+<li><b>Desktop</b>: volume icons, spatial folder windows, rename, duplicate, Get Info, Trash,
   remembered layout, and double-click to open documents through the plumber.
   A remote 9P server works as a volume.</li>
 <li><b>libux</b>, the Toolbox: windows, menus, dialogs, alerts, and controls,
@@ -127,11 +127,11 @@ and drive the 9P files at the same time.
 
 <figure>
 <a href="images/e2e-demo.png"><img src="images/e2e-demo.png" width="1024" height="768"
-  alt="The end of the end-to-end demo: the libux sample with a text field set from rc, Finder windows behind it, an rc window, and acme with a file opened from Finder"></a>
+  alt="The end of the end-to-end demo: the libux sample with a text field set from rc, Desktop windows behind it, an rc window, and acme with a file opened from Desktop"></a>
 <figcaption>The last step of the end-to-end demo.
 From rc, the sample app's Name field was set to <q>from rc</q>
 and its Save button pressed through <tt>ctl</tt>;
-a double click in Finder plumbed a text file to acme;
+a double click in Desktop plumbed a text file to acme;
 and an ordinary rc window is still moved and typed into.</figcaption>
 </figure>
 
@@ -158,8 +158,8 @@ The mockups below are generated from the same palette and metrics files as the c
 <div class="pair">
 <figure>
 <a href="images/mockups/desktop@2x.png"><img src="images/mockups/desktop@2x.png" width="1600" height="1200"
-  alt="Mockup of the Finder desktop with icon and list views and an rc window"></a>
-<figcaption>Finder, with icon and list views and an rc window driving <tt>/mnt/ux</tt>.</figcaption>
+  alt="Mockup of the desktop with icon and list views and an rc window"></a>
+<figcaption>Desktop, with icon and list views and an rc window driving <tt>/mnt/ux</tt>.</figcaption>
 </figure>
 <figure>
 <a href="images/mockups/app@2x.png"><img src="images/mockups/app@2x.png" width="1600" height="1200"
@@ -243,7 +243,7 @@ Please report bugs and send questions through
 <ul>
 <li><a href="https://progrium.github.io/hyper9/">h9</a>, native 9front executables on host hypervisors</li>
 <li><a href="https://9front.org/">9front</a></li>
-<li><a href="https://en.wikipedia.org/wiki/A/UX">A/UX</a>, Apple's Unix with the Macintosh Finder</li>
+<li><a href="https://en.wikipedia.org/wiki/A/UX">A/UX</a>, Apple's Unix with the Macintosh Desktop</li>
 </ul>
 
 </body>

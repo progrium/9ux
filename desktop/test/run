@@ -1,0 +1,268 @@
+#!/bin/rc
+# Interface tests for Desktop's core through fcore: rc test/run [path/to/fcore]
+#
+#  - a server with no wstat: honest "not supported", capabilities
+#    learned by probing and by use, the explicit copy-and-delete
+#    fallback, and the volume going offline when the server dies
+#  - the volume registry and associations from a real uxmeta (skipped
+#    if ../uxmeta isn't built), including an external edit and layout
+#    following a rename
+#  - opening a document through a real plumber, and launching an app
+#    in the workspace context
+
+rfork ne
+O=`{sed -n 's/^O=//p' /$objtype/mkfile}
+fcore=$1
+if(~ $#fcore 0)
+	fcore=../$O.fcore
+if(! ~ $fcore /*)
+	fcore=`{pwd}^/$fcore
+here=`{pwd}
+nowstatfs=$here/$O.nowstatfs
+uxmeta=$here/../../uxmeta/$O.out
+t=/tmp/fcore-rc.$pid
+nfail=0
+npass=0
+
+fn pass { npass=`{echo $npass + 1 | hoc} }
+fn fail {
+	echo FAIL: $test: $* >[1=2]
+	nfail=`{echo $nfail + 1 | hoc}
+}
+
+# has file pattern...: each pattern (grep -s) is in file
+fn has {
+	f=$1
+	shift
+	for(p in $*){
+		if(grep -s -- $p $f)
+			pass
+		if not {
+			fail $f lacks $p
+			echo '--- got' >[1=2]; cat $f >[1=2]
+		}
+	}
+}
+
+# lacks file pattern...: no pattern is in file
+fn lacks {
+	f=$1
+	shift
+	for(p in $*){
+		if(! grep -s -- $p $f)
+			pass
+		if not
+			fail $f has $p
+	}
+}
+
+rm -rf $t
+mkdir -p $t
+
+test=nowstat
+# a server that can create and remove, but has no wstat
+mkdir -p $t/nw
+$nowstatfs -s fcore-nw.$pid -m $t/nw
+echo hello > $t/nw/a.txt
+mkdir $t/nw/dir
+$fcore -M -v 'nw='^$t/nw > $t/out >[2=1] <<'EOF'
+caps nw
+rename nw:a.txt b.txt
+caps nw
+rename -c nw:a.txt b.txt
+ls nw:
+probe nw
+chmod 600 nw:b.txt
+copy nw:b.txt nw:dir
+move nw:dir/b.txt nw:
+EOF
+has $t/out \
+	'^rename unknown$' \
+	'^error: not supported: nw can''t rename \(wstat prohibited\); copy and delete instead$' \
+	'^rename no ''wstat prohibited''$' \
+	'^b\.txt - 6 ' \
+	'^create yes$' '^remove yes$' '^chmod no ' '^mtime no ' \
+	'^error: not supported: chmod .*wstat prohibited' \
+	'^error: exists: '
+lacks $t/out '^a\.txt '
+if(~ `{cat $t/nw/b.txt} hello) pass
+if not fail renamed copy lost its contents
+
+test=trash
+# each volume's own Trash: in, listed, put back, emptied; a volume
+# without wstat can still have one (it's copy and delete anyway)
+mkdir -p $t/tv/docs/sub
+echo keep me > $t/tv/docs/a.txt
+echo deep > $t/tv/docs/sub/b.txt
+echo nw > $t/nw/c.txt
+$fcore -M -v 'tv='^$t/tv -v 'nw='^$t/nw > $t/out >[2=1] <<'EOF'
+trashlimit tv
+trash tv:docs/a.txt
+trash tv:docs/sub
+trash nw:c.txt
+trashlist tv
+trashlist nw
+trash tv:.trash
+trash tv:
+trash /tmp
+EOF
+has $t/out \
+	'^Items moved to the Trash are copied into tv''s own Trash' \
+	'^'^$t^'/tv/\.trash/[0-9]+\.0/a\.txt$' \
+	'^'^$t^'/tv/\.trash/[0-9]+\.[0-9]/sub$' \
+	'^'^$t^'/nw/\.trash/[0-9]+\.0/c\.txt$' \
+	'^'^$t^'/tv/\.trash/[0-9.]+/a\.txt '^$t^'/tv/docs/a\.txt [0-9]+$' \
+	'^'^$t^'/tv/\.trash/[0-9.]+/sub '^$t^'/tv/docs/sub [0-9]+$' \
+	'^error: bad value: .* is already in the Trash$' \
+	'^error: bad value: ' \
+	'^error: not supported: /tmp isn''t on a volume'
+if(test -e $t/tv/docs/a.txt || test -e $t/tv/docs/sub || test -e $t/nw/c.txt) fail originals still there
+if not pass
+if(~ `{cat $t/tv/.trash/*/sub/b.txt} deep) pass
+if not fail trashed folder lost its contents
+item=`{ls -d $t/tv/.trash/*/a.txt}
+echo again > $t/tv/docs/a.txt
+$fcore -M -v 'tv='^$t/tv putback $item > $t/out >[2=1]
+has $t/out 'exists: '^$t^'/tv/docs/a\.txt$'
+rm $t/tv/docs/a.txt
+$fcore -M -v 'tv='^$t/tv putback $item > $t/out >[2=1]
+has $t/out '^'^$t^'/tv/docs/a\.txt$'
+got=`{cat $t/tv/docs/a.txt}
+if(~ $"got 'keep me') pass
+if not fail put back lost the contents
+$fcore -M -v 'tv='^$t/tv > $t/out >[2=1] <<'EOF'
+trashlist tv
+emptytrash tv
+trashlist tv
+EOF
+has $t/out '^> trashlist tv$' '/tv/\.trash/[0-9.]+/sub '
+lacks $t/out 'a\.txt'
+if(! ~ `{ls $t/tv/.trash | wc -l} 0) fail emptytrash left things
+if not pass
+
+test=gone
+# the server goes away: the volume goes offline and says why
+$fcore -M -v 'nw='^$t/nw check nw > $t/out >[2=1]
+has $t/out '^nw .* online '
+kill 6.nowstatfs | rc
+sleep 0.2
+$fcore -M -v 'nw='^$t/nw > $t/out >[2=1] <<'EOF'
+check nw
+ls nw:
+EOF
+has $t/out '^nw .* offline .*''err=gone: nw: ' '^error: gone: '
+unmount $t/nw >[2]/dev/null
+rm -f /srv/fcore-nw.$pid
+
+if(! test -x $uxmeta){
+	echo run: uxmeta not built, skipping the registry, plumbing and launch tests
+	rm -rf $t
+	echo run: $npass passed, $nfail failed
+	if(! ~ $nfail 0)
+		exit fail
+	exit ''
+}
+
+test=registry
+home=$t/home
+mkdir -p $t/sys $t/apps $t/user $home/lib $t/vol/docs $t/other /n/fcmeta
+echo 'some text' > $t/vol/docs/notes.txt
+echo '#!/bin/rc' > $t/vol/run
+chmod +x $t/vol/run
+cat > $t/sys/base.ndb <<'EOF'
+ext=.txt type=text
+type=text open=edit icon=text desc="Plain text"
+EOF
+cat > $t/user/meta.ndb <<EOF
+volume=scratch path=$t/vol icon=disk desktop=yes x=20 y=40
+volume=relative path=not/absolute
+app=hello exec=$t/hello
+EOF
+srvname=fcore-meta.$pid
+$uxmeta -s $srvname -m /n/fcmeta -d $t/sys -a $t/apps -u $t/user -w testws -i 50
+F=($fcore -m /n/fcmeta -w testws)
+$F volumes > $t/out >[2=1]
+has $t/out '^scratch '^$t^'/vol online desktop=yes icon=disk$'
+lacks $t/out '^relative '
+$F info scratch:docs/notes.txt > $t/out >[2=1]
+has $t/out '^kind ''Plain text''$' '^type text$' '^open edit$' '^icon text$' '^volume scratch$' '^size 10$'
+$F info scratch:run > $t/out >[2=1]
+has $t/out '^kind program$'
+$F info scratch: > $t/out >[2=1]
+has $t/out '^kind volume$' '^items 2$'
+
+test=external-edit
+# a volume added to the ndb file by hand appears without a restart
+echo 'volume=other path='^$t/other >> $t/user/meta.ndb
+sleep 0.3
+$F volumes > $t/out >[2=1]
+has $t/out '^scratch ' '^other '^$t^'/other online'
+
+test=layout-follows-rename
+echo 'set item '^$t^'/vol/docs/notes.txt x=10 y=20' > /n/fcmeta/ctl
+$F rename scratch:docs/notes.txt readme.txt > $t/out >[2=1]
+{
+	echo 'item '^$t^'/vol/docs/readme.txt' >[1=3]
+	cat <[0=3]
+} <>[3]/n/fcmeta/query > $t/out
+has $t/out 'readme\.txt x=10 y=20'
+
+test=open
+# a double-click on a document goes to the plumber, addressed by its association
+mkdir -p /mnt/plumb
+echo 'type is text
+data matches ''.*\.txt''
+plumb to edit' > $home/lib/plumbing
+plumber -p $home/lib/plumbing
+cat /mnt/plumb/edit > $t/got &
+rd=$apid
+sleep 0.2
+$F open scratch:docs/readme.txt > $t/out >[2=1]
+$F open scratch:docs > $t/out2 >[2=1]
+sleep 0.2
+echo kill > /proc/$rd/note
+has $t/out '^plumbed '^$t^'/vol/docs/readme.txt edit$'
+has $t/out2 '^folder '
+has $t/got '^desktop$' '^edit$' '^'^$t^'/vol/docs$' '^workspace=testws$' '^'^$t^'/vol/docs/readme.txt$'
+echo hi > $t/vol/x.unknown
+$F open scratch:x.unknown > $t/out >[2=1]
+has $t/out 'not found: nothing opens x\.unknown'
+kill plumber | rc
+unmount /mnt/plumb
+
+test=launch
+# an app runs in Desktop's namespace, in the workspace, in the folder given
+cat > $t/hello <<'EOF'
+#!/bin/rc
+echo workspace $workspace > launched
+echo args $* >> launched
+EOF
+chmod +x $t/hello
+$F launch hello $t/vol one 'two words' > $t/out >[2=1]
+sleep 0.3
+has $t/out '^launched [0-9]+$'
+has $t/vol/launched '^workspace testws$' '^args one two words$'
+$F openwith scratch:docs/readme.txt hello > $t/out >[2=1]
+sleep 0.3
+has $t/out '^launched$'
+has $t/vol/docs/launched '^args '^$t^'/vol/docs/readme.txt$'
+# a double-click on a program no association claims launches it, in
+# its own folder (and a space in its name survives)
+echo '#!/bin/rc
+echo ran in `{pwd} > ran' > $t/vol/docs/'my app'
+chmod +x $t/vol/docs/'my app'
+$F open 'scratch:docs/my app' > $t/out >[2=1]
+sleep 0.3
+has $t/out '^launched '
+has $t/vol/docs/ran '^ran in '^$t^'/vol/docs$'
+$F launch nosuch > $t/out >[2=1]
+has $t/out 'not found: no application nosuch'
+
+unmount /n/fcmeta >[2]/dev/null
+rm -f /srv/$srvname
+kill $O.out | rc
+rm -rf $t
+echo run: $npass passed, $nfail failed
+if(! ~ $nfail 0)
+	exit fail
+exit ''

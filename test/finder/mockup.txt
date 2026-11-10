@@ -1,6 +1,0 @@
-% ls /mnt/ux/apps
-finder-1  sketch-42
-% cat /mnt/ux/apps/sketch-42/name
-Sketch
-% echo activate > .../controls/save/ctl
-% 

@@ -29,7 +29,7 @@ font=/lib/font/bit/vga/unicode.font
 fn say { echo 9ux: $* >/dev/cons }
 
 say starting the services
-# The demo's home, with some files for Finder to show.
+# The demo's home, with some files for Desktop to show.
 bind -c /9ux/web/home $home
 cd $home
 t=/tmp/9ux
@@ -40,7 +40,7 @@ mkdir -p $t/sys $t/apps $t/user $t/lib
 echo 'ext=.txt type=text
 type=text open=edit icon=doc-text desc="Plain text"' >$t/sys/base.ndb
 # Two volumes on the desktop: the home folder, and Applications, whose
-# programs (web/apps) Finder launches on a double-click.
+# programs (web/apps) Desktop launches on a double-click.
 echo 'volume=home path='$home' icon=disk desktop=yes
 volume=Applications path=/9ux/web/apps icon=disk desktop=yes' >$t/user/meta.ndb
 /9ux/uxmeta/8.out -s uxmeta.$user -m /mnt/meta -d $t/sys -a $t/apps -u $t/user -w $workspace -i 500

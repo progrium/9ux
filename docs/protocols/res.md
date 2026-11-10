@@ -2,7 +2,7 @@
 
 `resfs` serves classic Macintosh resource files, decoded, at `/mnt/res`.
 Clients are libux (icons, menus, strings and dialogs from an app's
-resources) and Finder (icons). The server is read-only.
+resources) and Desktop (icons). The server is read-only.
 
 This document follows the shared conventions in [README.md](README.md),
 with one addition for resource text (escapes, below).
@@ -135,7 +135,7 @@ masks are 1-bit every pixel is either opaque or all zero. Read it with
 
 `icon/<id>/image` is the deepest of `icl8`, `icl4`, `ICN#` with that ID
 that decodes; `icon/<id>/small` is the deepest of `ics8`, `ics4`, `ics#`.
-A file is absent when no member of its size exists. This is what Finder
+A file is absent when no member of its size exists. This is what Desktop
 and libux should normally read.
 
 ## cursor

@@ -576,7 +576,7 @@ drawlist(Uxctl *c, Rectangle r)
 	fill(w, Rect(hr.min.x, hr.max.y-1, hr.max.x, hr.max.y), UXcoldisabled);
 }
 
-/* darkens a selected icon (assets/README.md, Finder: Selected), through the icon's mask */
+/* darkens a selected icon (assets/README.md, Desktop: Selected), through the icon's mask */
 static Image*
 shade(Uxwin *w)
 {
@@ -585,7 +585,7 @@ shade(Uxwin *w)
 	return w->col[nelem(palette)];
 }
 
-/* grey3 on every other pixel, clear between: an open icon's hatching (assets/README.md, Finder: Open) */
+/* grey3 on every other pixel, clear between: an open icon's hatching (assets/README.md, Desktop: Open) */
 static Image*
 hatch(Uxwin *w)
 {

@@ -10,7 +10,7 @@
 role=system  font=lucidasans/boldunicode.7.font  large=dejavusansbd/unicode.16.font height=13
     use="menu bar, menu items, window titles, button labels, dialog text"
 role=body    font=lucidasans/unicode.7.font      large=dejavusans/unicode.16.font   height=13
-    use="labels, fields, lists, Finder icon labels"
+    use="labels, fields, lists, Desktop icon labels"
 role=small   font=lucidasans/unicode.6.font      large=dejavusans/unicode.12.font   height=11
     use="list headers, status lines, Get Info detail"
 role=mono    font=vga/unicode.font               large=terminus/unicode.18.font     height=16

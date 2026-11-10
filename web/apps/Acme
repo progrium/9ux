@@ -1,3 +1,3 @@
 #!/bin/rc
-# acme, in the window Finder opens for it.
+# acme, in the window Desktop opens for it.
 exec acme -c 1

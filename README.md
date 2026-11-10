@@ -2,13 +2,13 @@
 
 A Macintosh-inspired graphical environment for 9front.
 
-![The 9/UX desktop: Finder's menu bar and volume icons, two spatial folder windows, and the libux sample app with a file just dropped onto its Notes field](docs/images/desktop.png)
+![The 9/UX desktop: Desktop's menu bar and volume icons, two spatial folder windows, and the libux sample app with a file just dropped onto its Notes field](docs/images/desktop.png)
 
 <sub>A real frame from the end-to-end drag-and-drop test
 ([`test/e2e/drag_test.zig`](test/e2e/drag_test.zig)), running headless on h9:
-the rio fork in 9/UX mode, Finder, and the libux sample app.</sub>
+the rio fork in 9/UX mode, Desktop, and the libux sample app.</sub>
 
-9/UX brings the classic Mac and A/UX desktop experience (a spatial Finder,
+9/UX brings the classic Mac and A/UX desktop experience (a spatial desktop,
 a global menu bar, consistent controls and dialogs, icons, and
 resource-driven presentation) to 9front, built the Plan 9 way: rio and
 libdraw draw the screen, 9P exposes every application's UI state and
@@ -33,7 +33,7 @@ the end-to-end demo, and the open issues. What works today:
   bar that follows the focused app, title-bar chrome, and a drag broker,
   all under `/dev/ux`. With 9/UX mode off it's stock rio, and acme, sam,
   rc windows and nested rio keep working beside 9/UX apps.
-- **Finder**: volume icons on the desktop, spatial folder windows,
+- **Desktop**: volume icons on the desktop, spatial folder windows,
   open, rename, duplicate, Get Info, Trash, remembered layout, and
   double-click to open documents through the plumber. A remote 9P server
   works as a volume, and reports honestly what it can't do.
@@ -41,11 +41,11 @@ the end-to-end demo, and the open issues. What works today:
   (button, checkbox, text field, list, icon view), each app serving its
   control tree over 9P, so `echo activate >.../ctl` presses a button.
 - **uxd** aggregates every app's tree at `/mnt/ux` with per-app policy;
-  **uxmeta** keeps associations, volumes and Finder layout in ndb files
+  **uxmeta** keeps associations, volumes and Desktop layout in ndb files
   that survive restarts and external edits; **resfs** serves classic
   `ICN#`, `icl8`, menu, dialog and string resources at `/mnt/res`;
   **clipd** is a typed clipboard kept in step with rio's snarf.
-- **Drag and drop** between Finder windows, onto volumes, and into an
+- **Drag and drop** between Desktop windows, onto volumes, and into an
   app's text field, brokered by rio.
 
 Still to do by hand before tagging: CPU-server (`rcpu`, drawterm)
@@ -60,10 +60,10 @@ and framebuffer in QEMU.
 | [`rio/`](rio/) | Extended rio | Windows, desktop layer, global menu bar, input routing, drag brokering | Stock rio 9P files, plus `/dev/ux` ([devux.md](docs/protocols/devux.md)) |
 | [`libux/`](libux/) | Toolbox | Controls, layout, dialogs, menus, event model | C library; each app serves its control tree over 9P ([ux.md](docs/protocols/ux.md)) |
 | [`uxd/`](uxd/) | UI registry and broker | App registration, UI-tree aggregation, policy, event routing | `/mnt/ux` |
-| [`uxmeta/`](uxmeta/) | Metadata service | Associations, volumes, preferences, Finder layout | `/mnt/meta` over ndb files ([meta.md](docs/protocols/meta.md)) |
+| [`uxmeta/`](uxmeta/) | Metadata service | Associations, volumes, preferences, Desktop layout | `/mnt/meta` over ndb files ([meta.md](docs/protocols/meta.md)) |
 | [`resfs/`](resfs/) | Resource file server | Decoding classic `.rsrc` icons, menus, dialogs, strings | Read-only `/mnt/res` ([res.md](docs/protocols/res.md)) |
 | [`clipd/`](clipd/) | Typed clipboard | Several representations of one copy, synced with snarf | `/mnt/clip` ([clip.md](docs/protocols/clip.md)) |
-| [`finder/`](finder/) | Finder | Spatial desktop, folder windows, file operations, launching via plumber | A libux app with its own UI tree |
+| [`desktop/`](desktop/) | Desktop | Spatial desktop, folder windows, file operations, launching via plumber | A libux app with its own UI tree |
 | [`apps/sample/`](apps/sample/) | Sample app | A libux app showing every control, and a drop target | A libux app |
 
 `rio/` is stock 9front rio at release 11952 (see [`rio/UPSTREAM`](rio/UPSTREAM)),
@@ -74,7 +74,7 @@ always visible. Every interface between components is a file protocol in
 
 ```mermaid
 flowchart TD
-    R[Extended rio] --> F[Finder]
+    R[Extended rio] --> F[Desktop]
     R --> A[9/UX apps]
     L[Legacy rio apps] --> R
     F --> T[libux]
@@ -143,7 +143,7 @@ uxd/                   UI registry and event broker
 uxmeta/                ndb-backed metadata service
 resfs/                 resource-fork file server
 clipd/                 typed clipboard
-finder/                Finder
+desktop/                Desktop
 apps/sample/           libux sample app
 assets/                style guide, mockups, icons, cursors, patterns
 test/                  harness, fakes, rio regression, GUI and e2e tests

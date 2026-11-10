@@ -3,7 +3,7 @@
 //!
 //!  1. rio in 9/UX mode, with the session's services: the plumber, uxd
 //!     and uxmeta (services.rc).
-//!  2. Finder's desktop shows a local volume and a remote one, served
+//!  2. The desktop shows a local volume and a remote one, served
 //!     over 9P by a second h9 on the host (`h9 --serve`).
 //!  3. Opening the remote volume lists the server's files.
 //!  4. Opening a folder, then double-clicking a text file in it, plumbs
@@ -27,7 +27,7 @@ const Remote = c.Remote;
 const Changed = c.Changed;
 const rcf = c.rcf;
 const waitRcf = c.waitRcf;
-const finderWin = c.finderWin;
+const desktopWin = c.desktopWin;
 const itemAt = c.itemAt;
 const doubleClick = c.doubleClick;
 const waitItems = c.waitItems;
@@ -55,13 +55,13 @@ test "e2e: the v0.1 demo" {
     // outside its namespace.)
     gpa.free(try s.rc("cat /mnt/plumb/edit >$work/edit &"));
 
-    // 2. Finder takes the desktop and shows both volumes.
-    try s.openWindow(rect(100, 100, 600, 400), "rc /mnt/term/cwd/test/e2e/finder.rc");
-    try s.waitRc("ls -p /mnt/ux/apps | grep -s '^finder-'", 20_000);
-    gpa.free(try s.rc("mkdir -p /tmp/f && bind /mnt/ux/apps/`{ls -p /mnt/ux/apps | grep '^finder-' | sed 1q} /tmp/f"));
+    // 2. Desktop takes the desktop and shows both volumes.
+    try s.openWindow(rect(100, 100, 600, 400), "rc /mnt/term/cwd/test/e2e/desktop.rc");
+    try s.waitRc("ls -p /mnt/ux/apps | grep -s '^desktop-'", 20_000);
+    gpa.free(try s.rc("mkdir -p /tmp/f && bind /mnt/ux/apps/`{ls -p /mnt/ux/apps | grep '^desktop-' | sed 1q} /tmp/f"));
     try s.waitRc("! grep -s '^win=0 ' /dev/ux/desktop/state", 10_000);
     var db: [32]u8 = undefined;
-    const desk = try finderWin(s, "grep -s '^desktop$' $w/kind", &db);
+    const desk = try desktopWin(s, "grep -s '^desktop$' $w/kind", &db);
     try waitItems(s, desk, "label=home icon=disk");
     // not attached yet, so shown offline until it's opened (the label
     // is quoted: 'label=remote (offline)')
@@ -69,10 +69,10 @@ test "e2e: the v0.1 demo" {
     try s.settle();
     s.saveScreen("e2e-desktop");
 
-    // 3. The remote volume opens: Finder attaches it and lists the server's files.
+    // 3. The remote volume opens: Desktop attaches it and lists the server's files.
     doubleClick(s, try itemAt(s, desk, "remote .offline.."));
     var rb: [32]u8 = undefined;
-    const rwin = try finderWin(s, "grep -s '^remote$' $w/title", &rb);
+    const rwin = try desktopWin(s, "grep -s '^remote$' $w/title", &rb);
     try waitItems(s, rwin, "label=remote.txt icon=doc-text");
     try waitItems(s, rwin, "label=papers ");
     // and the desktop shows it online now
@@ -84,12 +84,12 @@ test "e2e: the v0.1 demo" {
     // text file plumbs it to acme.
     doubleClick(s, try itemAt(s, desk, "home"));
     var hb: [32]u8 = undefined;
-    const hwin = try finderWin(s, "grep -s '^home$' $w/title", &hb);
+    const hwin = try desktopWin(s, "grep -s '^home$' $w/title", &hb);
     try waitItems(s, hwin, "label=docs ");
     try s.settle();
     doubleClick(s, try itemAt(s, hwin, "docs"));
     var fb: [32]u8 = undefined;
-    const dwin = try finderWin(s, "grep -s '^docs$' $w/title", &fb);
+    const dwin = try desktopWin(s, "grep -s '^docs$' $w/title", &fb);
     try waitItems(s, dwin, "label=readme.txt icon=doc-text");
     try s.settle();
     try s.settle();
@@ -135,7 +135,7 @@ test "e2e: the v0.1 demo" {
     // 6. From rc: the apps, a text field's value, and a button pressed through ctl.
     const apps = try s.rc("ls -p /mnt/ux/apps");
     defer gpa.free(apps);
-    try std.testing.expect(std.mem.indexOf(u8, apps, "finder-") != null);
+    try std.testing.expect(std.mem.indexOf(u8, apps, "desktop-") != null);
     try std.testing.expect(std.mem.indexOf(u8, apps, app) != null);
     gpa.free(try rcf(s, "echo 'set ''from rc''' >{s}/name/ctl", .{ctl}));
     try waitRcf(s, 5_000, "~ `{{cat {s}/name/value}} 'from rc'", .{ctl});

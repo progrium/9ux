@@ -1,0 +1,49 @@
+#!/bin/rc
+# mockup.rc: run in a window by mockup_test.zig. Lays out the scene of
+# assets/mockups/desktop.png (the plan9, sources and ram volumes, the
+# plan9 folder in icon view over sources in list view) in uxmeta under
+# $work, then runs Desktop from the tree, publishing its tree at
+# /srv/ux.$user.desktop. Window rectangles are the mockup's, as rio
+# rectangles: x+1, y+17, w-2, h-18 for a frame at x,y,w,h.
+rfork ne
+cd /mnt/term/cwd
+O=`{sed -n 's/^O=//p' /$objtype/mkfile}
+t=$work/f
+p=$t/plan9
+src=$t/sources
+mkdir -p $t/sys $t/apps $t/user/workspace $t/ram /n/fmeta
+mkdir -p $p/bin $p/lib $p/apps $p/usr $src/plan9 $src/contrib $src/extra
+echo '# 9/UX' >$p/README
+echo 'not really a picture' >$p/spirit.png
+echo '#!/bin/rc' >$p/startux
+echo '#!/bin/rc' >$p/Sketch
+echo '#!/bin/rc' >$p/Notes
+chmod +x $p/startux $p/Sketch $p/Notes
+# sizes like the mockup's: 2 K, 487 M (sparse), 1 K
+dd -if /dev/zero -of $src/README -bs 2000 -count 1 >[2]/dev/null
+dd -if /dev/zero -of $src/motd -bs 1000 -count 1 >[2]/dev/null
+dd -if /dev/zero -of $src/9front.iso -bs 1 -count 1 -oseek 510656511 >[2]/dev/null
+cat > $t/sys/base.ndb <<'X'
+ext=.png type=image
+type=image open=image icon=doc-image desc="Image"
+type=text open=edit icon=doc-text desc="Plain text"
+X
+cat > $t/user/meta.ndb <<X
+volume=plan9 path=$p icon=disk desktop=yes
+volume=sources path=$src icon=disk-remote desktop=yes
+volume=ram path=$t/ram icon=disk-ram desktop=yes
+X
+cat > $t/user/workspace/gui.ndb <<X
+folder=$src x=301 y=77 width=378 height=182 view=list sort=name open=yes
+folder=$p x=41 y=127 width=428 height=232 view=icons sort=name open=yes
+item=$p/apps icon=folder-apps
+item=$p/usr icon=folder-home
+item=$p/README icon=doc-text
+item=$p/startux icon=doc-script
+item=$p/Sketch icon=app
+item=$p/Notes icon=app-editor
+X
+uxmeta/$O.out -s fmeta.$pid -m /n/fmeta -d $t/sys -a $t/apps -u $t/user -w gui -i 50
+resfs=`{pwd}^/resfs/$O.resfs uxsysres=`{pwd}^/assets/gen/system.rsrc \
+	uxpattern=`{pwd}^/assets/gen/patterns/nineteal.img uxpublic=1 \
+	exec desktop/$O.desktop -m /n/fmeta -w gui -i 200 >[2]$work/desktop.err

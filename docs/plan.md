@@ -102,7 +102,7 @@ second `events` reader update. Tests cover overflow and `lost`, a client
 that stalls on `events` without stalling the UI, an unauthorized write
 being refused, and `uxd` restarting. Meets acceptance criteria 4 and 8.
 
-## Phase 3: Finder MVP
+## Phase 3: Desktop MVP
 
 Goal: a usable desktop over local and remote volumes.
 
@@ -113,7 +113,7 @@ Work:
    external edits, and generated plumbing rules for associations.
 2. Volume registry and workspace context (design open question 3:
    explicit registry, no pretend global namespace).
-3. Finder on libux: desktop icons for registered volumes, folder windows
+3. Desktop on libux: desktop icons for registered volumes, folder windows
    with icon view, select, open, rename, Get Info; window geometry and
    icon positions saved through `uxmeta`.
 4. Opening documents through the plumber; launching libux apps.
@@ -136,7 +136,7 @@ Work:
 1. resfs parser for the resource map and priority types, fuzzed on the
    host from day one, then the 9P server for `/mnt/res`.
 2. Icons (`ICN#`, `icl4`, `icl8`, small variants) converted to 9front
-   images for Finder and libux; then `MENU`, `STR#`, `DLOG`/`DITL`/`ALRT`
+   images for Desktop and libux; then `MENU`, `STR#`, `DLOG`/`DITL`/`ALRT`
    feeding libux. Native resource source syntax waits (design open
    question 4).
 3. Drag and drop through `/dev/ux/drag`: typed offers, target acceptance,
@@ -162,12 +162,12 @@ VM, confirm all eight acceptance criteria, then tag.
 | # | Criterion | Phase |
 |---|---|---|
 | 1 | No regressions to stock rio's file interfaces | 0, then every phase |
-| 2 | Finder draws icons, opens directories, launches via plumbing | 3 |
+| 2 | Desktop draws icons, opens directories, launches via plumbing | 3 |
 | 3 | Menu bar follows a multi-window app's focus | 1 |
 | 4 | Three controls with state, commands, and independent event streams | 2 |
 | 5 | ndb persistence across restarts and external edits | 3 |
 | 6 | `ICN#` and `icl8` render on real 9front displays | 4 |
-| 7 | A remote 9P directory works as a Finder volume | 3 |
+| 7 | A remote 9P directory works as a Desktop volume | 3 |
 | 8 | Unprivileged clients can't mutate another app's controls | 2 |
 
 ## Running it in parallel
