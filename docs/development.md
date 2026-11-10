@@ -34,21 +34,26 @@ release's source, so the rio we fork is the rio h9 runs.
 
 ## Setup
 
-Follow h9's [README](https://github.com/progrium/hyper9#quick-start) and
-[DEVELOPING.md](https://github.com/progrium/hyper9/blob/main/DEVELOPING.md):
+9/UX pins a known-good h9 commit in [`scripts/pins.sh`](../scripts/pins.sh),
+since h9 is under active development. `scripts/h9.sh` runs h9 at that
+commit: on first use it clones h9 into `.local/hyper9`, builds it, and
+builds its 9front root with `/sys/src`. It needs what h9's
+[DEVELOPING.md](https://github.com/progrium/hyper9/blob/main/DEVELOPING.md)
+lists for your host (Zig, and QEMU for the root).
 
 ```sh
-git clone https://github.com/progrium/hyper9 && cd hyper9
-. scripts/env.sh && ./scripts/fetch.sh
-zig build                      # macOS: Cocoa graphics built in
-zig build mkroot -- --src      # full 9front root, with /sys/src
+scripts/h9.sh --check            # first run builds h9; then shows the backends
 ```
 
-On Linux, graphics needs a glibc build with X11 (`zig build -Dgfx=x11`);
-the default Linux build is static musl with no window. Headless tests don't
-need either.
+To use your own h9 checkout instead (for example while changing h9 for
+9/UX), set `H9=/path/to/hyper9/zig-out/bin/h9`. The pin is bumped in its
+own PR once CI passes on the new commit.
 
-Point `H9` at the binary if it isn't on `PATH`.
+On Linux, graphics needs a glibc build with X11: set
+`H9_BUILD_FLAGS=-Dgfx=x11` before the first run. Headless tests don't
+need it.
+
+Below, `h9` means `scripts/h9.sh` or your own `$H9`.
 
 ## Everyday loop
 
