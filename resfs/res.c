@@ -91,8 +91,73 @@ qcmp(const void *a, const void *b)
 #define rqsort(p, n, sz) qsort(p, n, sz, rescmp)
 #endif
 
+/*
+ * AppleSingle and AppleDouble: magic[4] version[4] filler[16]
+ * count[2], then count entries of id[4] offset[4] length[4].
+ * Entry 2 is the resource fork. Returns 1 and sets *off and *len
+ * for a wrapped file, 0 for a bare resource fork, -1 for a wrapped
+ * file without a usable resource fork.
+ */
+static int
+unwrap(uchar *buf, u32int n, u32int *off, u32int *len, int *kind, char *err, int nerr)
+{
+	u32int magic, ver, cnt, i, id, eoff, elen;
+	uchar *e;
+
+	if(n < 26)
+		return 0;
+	magic = get32(buf);
+	if(magic == 0x00051600)
+		*kind = Rapplesingle;
+	else if(magic == 0x00051607)
+		*kind = Rappledouble;
+	else
+		return 0;
+	ver = get32(buf+4);
+	if(ver != 0x00010000 && ver != 0x00020000)
+		return seterr(err, nerr, "unknown AppleSingle/AppleDouble version");
+	cnt = get16(buf+24);
+	if(!fits(26, cnt*12, n))
+		return seterr(err, nerr, "AppleSingle/AppleDouble entries overrun the file");
+	for(i = 0; i < cnt; i++){
+		e = buf + 26 + i*12;
+		id = get32(e);
+		eoff = get32(e+4);
+		elen = get32(e+8);
+		if(id != 2)
+			continue;
+		if(!fits(eoff, elen, n))
+			return seterr(err, nerr, "resource fork outside the file");
+		*off = eoff;
+		*len = elen;
+		return 1;
+	}
+	return seterr(err, nerr, "no resource fork in AppleSingle/AppleDouble file");
+}
+
 int
 resparse(uchar *buf, u32int n, Resfile *rf, char *err, int nerr)
+{
+	u32int off, len;
+	int kind, r;
+
+	memset(rf, 0, sizeof *rf);
+	kind = Rbare;
+	r = unwrap(buf, n, &off, &len, &kind, err, nerr);
+	if(r < 0)
+		return -1;
+	if(r > 0){
+		if(resparsefork(buf + off, len, rf, err, nerr) < 0)
+			return -1;
+		rf->wrapper = kind;
+		return 0;
+	}
+	return resparsefork(buf, n, rf, err, nerr);
+}
+
+/* a bare resource fork */
+int
+resparsefork(uchar *buf, u32int n, Resfile *rf, char *err, int nerr)
 {
 	u32int dataoff, mapoff, datalen, maplen, tl, nl, ntypes, total;
 	u32int i, j, cnt, refoff, roff, doff, len, noff, plen;

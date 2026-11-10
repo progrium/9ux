@@ -188,6 +188,8 @@ addfile(char *arg)
 	}else{
 		name = strrchr(path, '/');
 		name = estrdup9p(name != nil ? name+1 : path);
+		if(strncmp(name, "._", 2) == 0 && name[2] != 0)	/* AppleDouble's ._name */
+			memmove(name, name+2, strlen(name+2)+1);
 		p = strrchr(name, '.');
 		if(p != nil && p != name)
 			*p = 0;

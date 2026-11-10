@@ -41,7 +41,7 @@ $(O)/fuzzdriver: fuzz/fuzzres.c fuzz/driver.c $(LIBSRC) $(HDR) | $(O)
 	$(CC) -DRESHOST $(CFLAGS) $(SAN) -o $@ fuzz/fuzzres.c fuzz/driver.c $(LIBSRC)
 
 fuzz-driver: $(O)/fuzzdriver
-	$(O)/fuzzdriver -n $(FUZZRUNS) test/fixtures/*.rsrc fuzz/seeds/*
+	$(O)/fuzzdriver -n $(FUZZRUNS) test/fixtures/* test/fixtures/._* fuzz/seeds/*
 
 fixtures:
 	python3 test/mkfixtures.py

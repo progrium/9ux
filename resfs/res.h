@@ -24,6 +24,11 @@ enum {
 	Rprotected = 0x08,
 	Rpreload = 0x04,
 	Rchanged = 0x02,
+
+	/* Resfile.wrapper */
+	Rbare = 0,
+	Rapplesingle,
+	Rappledouble,
 };
 
 struct Res {
@@ -41,6 +46,7 @@ struct Resfile {
 	int	ndup;		/* refs dropped because (type, id) repeated */
 	int	nbad;		/* refs dropped because their data was out of bounds */
 	int	attr;		/* resource map attributes */
+	int	wrapper;	/* Rbare, Rapplesingle or Rappledouble */
 };
 
 /* A growable output buffer. On allocation failure err is set and
@@ -54,6 +60,7 @@ struct Rbuf {
 
 /* res.c */
 int	resparse(uchar *buf, u32int n, Resfile *rf, char *err, int nerr);
+int	resparsefork(uchar *buf, u32int n, Resfile *rf, char *err, int nerr);
 void	resfree(Resfile *rf);
 Res	*reslookup(Resfile *rf, char *type, int id);
 int	restypeeq(Res *r, char *type);

@@ -277,9 +277,10 @@ hexdata(Src *s, char *hex, int line, Rbuf *out)
 {
 	int h, l;
 
-	h = l = 0;
 	for(; *hex; hex += 2){
-		if((h = reshexval(hex[0])) < 0 || (l = reshexval(hex[1])) < 0)
+		h = reshexval(hex[0]);
+		l = h < 0 ? -1 : reshexval(hex[1]);
+		if(h < 0 || l < 0)
 			srcerr(s, line, "bad value", "hex");
 		rbufc(out, h<<4 | l);
 	}

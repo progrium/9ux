@@ -27,7 +27,7 @@ fn absent {
 		nfail=($nfail x)
 	}
 }
-if(! $1 -m $mnt fixtures/sample.rsrc 'empty=fixtures/empty.rsrc'){
+if(! $1 -m $mnt fixtures/sample.rsrc 'empty=fixtures/empty.rsrc' fixtures/._double){
 	echo FAIL: resfs did not start
 	exit fail
 }
@@ -39,6 +39,8 @@ if(! ~ $"ver 'res 1.0'){
 }
 check $s/index golden/sample.index
 check $mnt/empty/index golden/empty.index
+check $mnt/double/index golden/sample.index
+check $mnt/double/icon/128/image golden/icon128.image
 check $s/icon/128/image golden/icon128.image
 check $s/icon/128/small golden/icon128.small
 check $s/icon/129/image golden/icon129.image

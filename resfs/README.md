@@ -1,7 +1,7 @@
 # resfs: resource file server
 
 A read-only 9P server that parses classic Macintosh resource files
-(`.rsrc`, later AppleSingle/AppleDouble) and serves decoded resources:
+(`.rsrc`, AppleSingle and AppleDouble) and serves decoded resources:
 
 ```text
 /mnt/res/sketch/icon/128/image        # best 32x32 icon, image(6)
