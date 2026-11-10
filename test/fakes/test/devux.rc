@@ -4,8 +4,7 @@
 rfork ne
 suite=devux
 . test/lib.rc
-bin=./$objtype.fakedevux
-if(! test -x $bin) bin=./7.fakedevux
+bin=./$O.fakedevux
 
 $bin -s fakedevux.$pid
 mount -a /srv/fakedevux.$pid /dev 7

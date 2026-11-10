@@ -3,8 +3,7 @@
 rfork ne
 suite=lost
 . test/lib.rc
-bin=./$objtype.fakedevux
-if(! test -x $bin) bin=./7.fakedevux
+bin=./$O.fakedevux
 
 $bin -q 4 -s fakedevux.lost.$pid
 mount -a /srv/fakedevux.lost.$pid /dev

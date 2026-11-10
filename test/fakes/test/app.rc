@@ -4,8 +4,7 @@
 rfork ne
 suite=app
 . test/lib.rc
-bin=./$objtype.fakeapp
-if(! test -x $bin) bin=./7.fakeapp
+bin=./$O.fakeapp
 
 mkdir -p /tmp/fakeapp.$pid
 $bin -w 9 -s fakeapp.$pid -m /tmp/fakeapp.$pid

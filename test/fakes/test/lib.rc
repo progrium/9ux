@@ -1,5 +1,8 @@
 # Helpers for the fakes' rc tests. Source with: . lib.rc
 failed=0
+# the object letter for this machine (6 on amd64, 7 on arm64); mk passes $O
+if(~ $#O 0)
+	O=`{sed -n 's/^O=//p' /$objtype/mkfile}
 out=/tmp/fakes.$pid
 mkdir -p $out
 
