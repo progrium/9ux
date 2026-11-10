@@ -309,7 +309,8 @@ committed, so nobody needs to run the tools to use the assets.
 | `patterns/NAME.img` | one 8x8 `r8g8b8` tile, to use with `replclipr` |
 | `uxstyle.h` | `UXink`... colours and `UXmenubarheight`... metrics |
 | `uxcursors.c` | Plan 9 `Cursor` structs |
-| `uxglyphs.c` | the chrome glyphs |
+| `uxglyphs.c`, `uxglyphs.h` | the chrome glyphs (`UXglyph` with `black` and `white` rows, MSB first, padded to bytes) |
+| `uxcursors.h` | `extern` declarations for `uxcursors.c` |
 | `cursors/NAME.img` | each cursor as a 16x16 image, for rescomp |
 | `system.res`, `system.rsrc` | the system resource file and its source |
 

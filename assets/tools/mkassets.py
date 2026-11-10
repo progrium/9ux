@@ -9,7 +9,8 @@ Writes:
     gen/patterns/NAME.img         r8g8b8 image(6), one 8x8 tile
     gen/uxstyle.h                 colours and metrics for rio and libux
     gen/uxcursors.c               Plan 9 Cursor structs
-    gen/uxglyphs.c                chrome glyph bitmaps
+    gen/uxglyphs.c, uxglyphs.h    chrome glyph bitmaps
+    gen/uxcursors.h               extern declarations for uxcursors.c
     gen/cursors/NAME.img          a8r8g8b8 image(6), 16x16
     gen/system.res                rescomp source for gen/system.rsrc
 
@@ -156,10 +157,21 @@ def build(out):
     # uxglyphs.c: k is the ink layer, w the white layer, MSB first,
     # (w+7)/8 bytes a row; load each with loadimage into a GREY1 image
     # and use it as a mask.
-    gl = [HEADER, "#include <u.h>", "#include <libc.h>", "",
+    gh = [HEADER, "/* chrome glyphs: rows padded to whole bytes, MSB first, 1 = set.",
+          " * black is the ink layer, white the white layer; a pixel set in",
+          " * neither is clear. The table ends with a nil name. */",
           "typedef struct UXglyph UXglyph;",
           "struct UXglyph {", "\tchar\t*name;", "\tint\tw, h;",
-          "\tuchar\t*k;", "\tuchar\t*w;", "};", ""]
+          "\tuchar\t*black;", "\tuchar\t*white;", "};", "",
+          "extern UXglyph uxglyphs[];", ""]
+    with open(os.path.join(out, "uxglyphs.h"), "w") as f:
+        f.write("\n".join(gh))
+    ch = [HEADER, "/* needs <draw.h> and <cursor.h> */"]
+    for cur in load_cursors():
+        ch.append("extern Cursor ux%scursor;" % cname(cur.name))
+    with open(os.path.join(out, "uxcursors.h"), "w") as f:
+        f.write("\n".join(ch) + "\n")
+    gl = [HEADER, "#include <u.h>", "#include <libc.h>", '#include "uxglyphs.h"', ""]
     glyphs = load_glyphs()
     for name, g in glyphs.items():
         n = cname(name)

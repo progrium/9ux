@@ -2,14 +2,7 @@
 
 #include <u.h>
 #include <libc.h>
-
-typedef struct UXglyph UXglyph;
-struct UXglyph {
-	char	*name;
-	int	w, h;
-	uchar	*k;
-	uchar	*w;
-};
+#include "uxglyphs.h"
 
 static uchar checkk[] = {
 	0x00, 0xc0, 0x01, 0x80, 0x83, 0x00, 0xc6, 0x00,
