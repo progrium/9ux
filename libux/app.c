@@ -367,6 +367,16 @@ uxlabel(Uxwin *w, char *id, char *text, Rectangle r)
 	return c;
 }
 
+void
+uxlabelstyle(Uxctl *c, int flags)
+{
+	qlock(&uxlk);
+	c->state = (c->state & ~(UXsmall|UXright)) | (flags & (UXsmall|UXright));
+	c->w->dirty = 1;
+	qunlock(&uxlk);
+	kick();
+}
+
 Uxctl*
 uxgroup(Uxwin *w, char *id, char *label, Rectangle r)
 {
@@ -399,8 +409,32 @@ uxscrollview(Uxwin *w, char *id, Rectangle r)
 	c = mk(w, id, 7, "", r);
 	qlock(&uxlk);
 	c->extent = Rect(0, 0, Dx(r), Dy(r));
+	c->bars = UXvbar;
 	qunlock(&uxlk);
 	return c;
+}
+
+void
+uxscrollbars(Uxctl *c, int bars, int header)
+{
+	qlock(&uxlk);
+	c->bars = bars & (UXvbar|UXhbar|UXgrowbox);
+	c->header = header < 0 ? 0 : header;
+	_clamporigin(c, UXui);
+	c->w->dirty = 1;
+	qunlock(&uxlk);
+	kick();
+}
+
+Rectangle
+uxscrollport(Uxctl *c)
+{
+	Rectangle port, vb, hb, gb;
+
+	qlock(&uxlk);
+	_scrollparts(c, c->r, &port, &vb, &hb, &gb);
+	qunlock(&uxlk);
+	return port;
 }
 
 Uxctl*
@@ -599,12 +633,26 @@ uxfocus(Uxctl *c)
 	kick();
 }
 
+static void
+freeicons(Uxctl *c)
+{
+	int i;
+
+	if(c->ricons == nil)
+		return;
+	for(i = 0; i < c->nitems; i++)
+		free(c->ricons[i]);
+	free(c->ricons);
+	c->ricons = nil;
+}
+
 void
 uxsetitems(Uxctl *c, char **items, int n)
 {
 	int i;
 
 	qlock(&uxlk);
+	freeicons(c);
 	for(i = 0; i < c->nitems; i++)
 		free(c->items[i]);
 	free(c->items);
@@ -617,6 +665,48 @@ uxsetitems(Uxctl *c, char **items, int n)
 	c->top = 0;
 	c->w->dirty = 1;
 	_event(c, "items", nil);
+	qunlock(&uxlk);
+	kick();
+}
+
+void
+uxsetcolumns(Uxctl *c, char **titles, int *widths, int n)
+{
+	int i;
+
+	qlock(&uxlk);
+	for(i = 0; i < c->ncols; i++)
+		free(c->cols[i]);
+	free(c->cols);
+	free(c->colw);
+	c->cols = nil;
+	c->colw = nil;
+	c->ncols = n > 0 ? n : 0;
+	if(n > 0){
+		c->cols = emalloc(n*sizeof(char*));
+		c->colw = emalloc(n*sizeof(int));
+		for(i = 0; i < n; i++){
+			c->cols[i] = estrdup(titles[i]);
+			c->colw[i] = widths[i];
+		}
+	}
+	c->w->dirty = 1;
+	qunlock(&uxlk);
+	kick();
+}
+
+/* after uxsetitems, which forgets them; n is at most the number of items */
+void
+uxsetitemicons(Uxctl *c, char **icons, int n)
+{
+	int i;
+
+	qlock(&uxlk);
+	freeicons(c);
+	c->ricons = emalloc((c->nitems+1)*sizeof(char*));
+	for(i = 0; i < n && i < c->nitems; i++)
+		c->ricons[i] = icons[i] != nil ? estrdup(icons[i]) : nil;
+	c->w->dirty = 1;
 	qunlock(&uxlk);
 	kick();
 }
@@ -743,6 +833,21 @@ uxicongetsel(Uxctl *c, char ***ids)
 }
 
 void
+uxiconopen(Uxctl *c, char *id, int open)
+{
+	int i;
+
+	qlock(&uxlk);
+	for(i = 0; i < c->nicons; i++)
+		if(strcmp(c->icons[i].id, id) == 0 && c->icons[i].open != (open != 0)){
+			c->icons[i].open = open != 0;
+			c->w->dirty = 1;
+		}
+	qunlock(&uxlk);
+	kick();
+}
+
+void
 uxiconselect(Uxctl *c, char **ids, int n)
 {
 	int i, j;
@@ -781,6 +886,7 @@ uxsetextent(Uxctl *c, Rectangle r)
 	c->extent = r;
 	snprint(buf, sizeof buf, "%d,%d,%d,%d", r.min.x, r.min.y, r.max.x, r.max.y);
 	_event(c, "extent", "rect", buf, nil);
+	_clamporigin(c, UXui);
 	c->w->dirty = 1;
 	qunlock(&uxlk);
 	kick();
@@ -792,6 +898,7 @@ uxsetorigin(Uxctl *c, Point p)
 	char buf[32];
 
 	qlock(&uxlk);
+	p = _clampedorigin(c, p);
 	c->origin = p;
 	snprint(buf, sizeof buf, "%d,%d", p.x, p.y);
 	_event(c, "origin", "pt", buf, nil);

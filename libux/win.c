@@ -92,6 +92,123 @@ mainwin(Uxwin *w)
 }
 
 /*
+ * Where a window's image goes in rio's window image r: inside rio's
+ * border, or, when rio draws classic chrome to the edge, out to the
+ * frame at the left, right and bottom (the top border rows are the
+ * title bar's).
+ */
+static Rectangle
+edgerect(Uxwin *w, Rectangle r)
+{
+	if(w->edge)
+		return Rect(r.min.x, r.min.y+Borderwidth, r.max.x, r.max.y);
+	return insetrect(r, Borderwidth);
+}
+
+/* rio's rectangle for the window, from its image */
+Rectangle
+_riorect(Uxwin *w)
+{
+	Rectangle r;
+
+	r = w->img->r;
+	if(w->edge)
+		return Rect(r.min.x, r.min.y-Borderwidth, r.max.x, r.max.y);
+	return insetrect(r, -Borderwidth);
+}
+
+static Image*	winimage(Uxwin*, char*);
+
+/* the window's rectangle or size changed: tell its watchers and handler */
+static void
+newsize(Uxwin *w, Rectangle old, Point oldsz)
+{
+	char buf[128];
+	Point sz;
+	Uxev e;
+
+	if(w->img != nil)
+		w->r = _riorect(w);
+	sz = w->img != nil ? subpt(w->img->r.max, w->img->r.min) : ZP;
+	if(!eqrect(old, w->r) || !eqpt(oldsz, sz)){
+		if(!eqrect(old, w->r)){
+			snprint(buf, sizeof buf, "%d,%d,%d,%d", w->r.min.x, w->r.min.y, w->r.max.x, w->r.max.y);
+			_event(w, "rect", "rect", buf, nil);
+		}
+		if(w->fn != nil){
+			memset(&e, 0, sizeof e);
+			e.type = UXresize;
+			e.via = UXui;
+			e.win = w;
+			_notify(w->fn, w->arg, &e);
+		}
+	}
+	w->dirty = 1;
+}
+
+/* rio's 9/UX mode changed: windows with chrome edge grow over rio's border, or go back inside it */
+void
+_riomode(int on)
+{
+	Uxwin *w;
+	int i;
+
+	ux.riooff = !on;
+	for(i = 0; i < ux.nwin; i++){
+		w = ux.win[i];
+		if(!w->edgeok || w->edge == on)
+			continue;
+		w->edge = on;
+		_edgeimage(w);
+	}
+}
+
+/* the main window's image: getwindow's screen, or a window of ours over its border too */
+static void
+mainimage(Uxwin *w)
+{
+	if(w->edgeimg != nil){
+		freeimage(w->edgeimg);
+		w->edgeimg = nil;
+	}
+	w->img = screen;
+	if(w->edge){
+		w->edgeimg = _allocwindow(nil, _screen, edgerect(w, insetrect(screen->r, -Borderwidth)), Refnone, DWhite);
+		if(w->edgeimg != nil)
+			w->img = w->edgeimg;
+	}
+}
+
+/*
+ * The image again, now that w->edge says how big it is: the main
+ * window gets a window of its own over getwindow's screen; the others
+ * are remade over rio's image.
+ */
+void
+_edgeimage(Uxwin *w)
+{
+	char buf[128];
+	int n;
+	Rectangle old;
+	Point oldsz;
+
+	if(w->img == nil)
+		return;
+	old = w->r;
+	oldsz = subpt(w->img->r.max, w->img->r.min);
+	if(w->main)
+		mainimage(w);
+	else{
+		n = pread(w->winnamefd, buf, sizeof buf-1, 0);
+		if(n <= 0)
+			return;
+		buf[n] = 0;
+		winimage(w, buf);
+	}
+	newsize(w, old, oldsz);
+}
+
+/*
  * A further window's image, made the way getwindow makes screen: our
  * own window on a Screen over rio's named image, inset by the border.
  * Drawing straight into rio's image breaks replclipr (devdraw won't
@@ -116,7 +233,7 @@ winimage(Uxwin *w, char *name)
 	if(w->scr == nil)
 		return nil;
 	w->d->screenimage = w->named;	/* _allocwindow takes the chan from it */
-	w->img = _allocwindow(nil, w->scr, insetrect(w->named->r, Borderwidth), Refnone, DWhite);
+	w->img = _allocwindow(nil, w->scr, edgerect(w, w->named->r), Refnone, DWhite);
 	if(w->img != nil)
 		w->d->screenimage = w->img;
 	return w->img;
@@ -208,7 +325,7 @@ _dialogwin(Uxwin *w, Rectangle r)
 		return 0;
 	}
 	if(Dx(w->img->r) > 0)
-		w->r = insetrect(w->img->r, -Borderwidth);
+		w->r = _riorect(w);
 	return 1;
 }
 
@@ -406,7 +523,7 @@ ctlat(Uxwin *w, Point p)
 
 	for(i = w->nctl-1; i >= 0; i--){
 		c = w->ctl[i];
-		if((c->state & Cvisible) && c->t->mouse != nil && ptinrect(p, _abs(c)))
+		if((c->state & Cvisible) && c->t->mouse != nil && ptinrect(p, _vis(c)))
 			return c;
 	}
 	return nil;
@@ -496,11 +613,18 @@ _winresize(Uxwin *w)
 	char buf[128];
 	int n;
 	Rectangle old;
+	Point oldsz;
 
+	old = w->r;
+	oldsz = w->img != nil ? subpt(w->img->r.max, w->img->r.min) : ZP;
 	if(w->main){
+		if(w->edgeimg != nil){
+			freeimage(w->edgeimg);
+			w->edgeimg = nil;
+		}
 		if(getwindow(display, Refnone) < 0)
 			sysfatal("libux: can't reattach to window: %r");
-		w->img = screen;
+		mainimage(w);
 	}else{
 		n = pread(w->winnamefd, buf, sizeof buf-1, 0);
 		if(n <= 0)
@@ -511,20 +635,5 @@ _winresize(Uxwin *w)
 			return;
 		}
 	}
-	old = w->r;
-	w->r = insetrect(w->img->r, -Borderwidth);
-	if(!eqrect(old, w->r)){
-		snprint(buf, sizeof buf, "%d,%d,%d,%d", w->r.min.x, w->r.min.y, w->r.max.x, w->r.max.y);
-		_event(w, "rect", "rect", buf, nil);
-		if(w->fn != nil){
-			Uxev e;
-
-			memset(&e, 0, sizeof e);
-			e.type = UXresize;
-			e.via = UXui;
-			e.win = w;
-			_notify(w->fn, w->arg, &e);
-		}
-	}
-	w->dirty = 1;
+	newsize(w, old, oldsz);
 }

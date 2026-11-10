@@ -183,7 +183,7 @@ No verbs.
 
 | File | Content |
 |---|---|
-| `items` | One line per item, the item's text. The first line is item 0 |
+| `items` | One line per item, the item's text. The first line is item 0. A list with columns (a Finder list window) separates them with tabs |
 | `selection` | The selected item numbers, separated by spaces, then `\n` |
 
 | Verb | Right | Meaning |
@@ -219,9 +219,15 @@ Events: `select` (`sel=a,b`), `open` (`items=a,b`), `items`.
 
 | Verb | Right | Meaning |
 |---|---|---|
-| `scroll x,y` | activate | Scroll so `x,y` is at the top left |
+| `scroll x,y` | activate | Scroll so `x,y` is at the top left, kept within `extent` |
 
 Events: `origin`, `extent`.
+
+Controls whose `parent` is a scroll view are laid out in content
+coordinates and shown moved by `origin`, clipped to what shows of the
+view; their `rect` doesn't change as it scrolls. The view's scroll bars
+(the vertical one, or both and a grow box as in a folder window) are
+always drawn, live when the extent is bigger than what shows.
 
 **`file-chooser`**
 

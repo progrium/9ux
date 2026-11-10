@@ -973,10 +973,14 @@ indexicon(Rroot *rt, char *name, int small)
 		return -1;
 	nl = lines(buf, &l);
 	id = -1;
+	t = nil;
 	/* names are on the 1-bit member, as rescomp's icon writes them; then any member */
 	for(pass = 0; pass < 2 && id < 0; pass++)
 		for(i = 0; i < nl && id < 0; i++){
-			nf = tokenize(l[i], f, nelem(f));
+			/* tokenize a copy: the second pass reads the lines again */
+			free(t);
+			t = estrdup(l[i]);
+			nf = tokenize(t, f, nelem(f));
 			if(nf < 2)
 				continue;
 			if(pass == 0 && strcmp(f[0], small ? "ics#" : "ICN#") != 0)
@@ -995,6 +999,7 @@ indexicon(Rroot *rt, char *name, int small)
 			if(strcmp(n, name) == 0)
 				id = atoi(f[1]);
 		}
+	free(t);
 	free(l);
 	free(buf);
 	return id;

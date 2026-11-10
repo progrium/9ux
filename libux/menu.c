@@ -150,7 +150,7 @@ uxevreader(void*)
 		p = buf;
 		while((e = strchr(p, '\n')) != nil){
 			*e = 0;
-			if(strstr(p, " close win=") != nil || strstr(p, " focus win=") != nil)
+			if(strstr(p, " close win=") != nil || strstr(p, " focus win=") != nil || strstr(p, " mode ux=") != nil)
 				sendp(ux.menuc, estrdup(p));
 			p = e+1;
 		}
@@ -158,6 +158,24 @@ uxevreader(void*)
 		memmove(buf, p, off);
 	}
 	close(fd);
+}
+
+/* is rio's 9/UX mode off? (/dev/ux/ctl's mode line) */
+static int
+riooff(void)
+{
+	char buf[256];
+	int fd, n;
+
+	fd = open("/dev/ux/ctl", OREAD);
+	if(fd < 0)
+		return 0;
+	n = read(fd, buf, sizeof buf-1);
+	close(fd);
+	if(n <= 0)
+		return 0;
+	buf[n] = 0;
+	return strstr(buf, "mode off") != nil;
 }
 
 /*
@@ -172,8 +190,24 @@ _chrome(Uxwin *w)
 	fd = open("/dev/ux/ctl", OWRITE);
 	if(fd < 0)
 		return;
-	if(strcmp(w->kind, "dialog") != 0 && strcmp(w->kind, "alert") != 0)
-		fprint(fd, "chrome %d on\n", w->winid);	/* fails harmlessly before devux 1.2 */
+	if(strcmp(w->kind, "dialog") != 0 && strcmp(w->kind, "alert") != 0){
+		/*
+		 * chrome edge: rio leaves its border to us, so the window's
+		 * content (scroll bars, the grow box) meets the frame; an older
+		 * rio takes only chrome on, and before devux 1.2 neither. In
+		 * mode off rio paints its own border, so we keep inside it.
+		 */
+		if(strcmp(w->kind, "desktop") != 0 && w->img != nil && fprint(fd, "chrome %d edge\n", w->winid) > 0){
+			w->edgeok = 1;
+			if(!ux.evreader)
+				ux.riooff = riooff();
+			if(!ux.riooff){
+				w->edge = 1;
+				_edgeimage(w);
+			}
+		}else
+			fprint(fd, "chrome %d on\n", w->winid);
+	}
 	close(fd);
 	if(!ux.evreader){
 		ux.evreader = 1;
@@ -272,6 +306,10 @@ _barevent(char *line)
 	Uxwin *w;
 
 	nf = tokenize(line, f, nelem(f));
+	if(nf >= 3 && strcmp(f[1], "mode") == 0){
+		_riomode(strcmp(f[2], "ux=on") == 0);
+		return;
+	}
 	if(nf >= 3 && strcmp(f[1], "focus") == 0){
 		for(i = 2; i < nf; i++)
 			if(strncmp(f[i], "win=", 4) == 0)

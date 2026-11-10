@@ -220,7 +220,7 @@ threadmain(int argc, char *argv[])
 	uxhandler(list, listev, nil);
 	scroll = uxscrollview(win, "files", Rect(16, 200, 460, 340));
 	uxsetextent(scroll, Rect(0, 0, 440, 400));
-	icons = uxiconview(win, "icons", Rect(17, 201, 443, 339));
+	icons = uxiconview(win, "icons", Rect(17, 201, 443, 601));	/* the whole extent, scrolled */
 	uxsetparent(icons, scroll);
 	uxiconadd(icons, "readme", "Read Me", "doc-text", Pt(48, 40));
 	uxiconadd(icons, "tmp", "tmp", "folder", Pt(140, 40));
