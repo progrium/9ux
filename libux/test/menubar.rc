@@ -52,8 +52,13 @@ fake key z
 grep 'key z' /dev/fake/log >$out/l
 want swallowed $out/l
 
-test=quit
-fake key q
+test=chrome
+want '^window win=1 .*state=.*chrome' /dev/ux/windows
+
+test=closebox
+# the close box in rio's chrome closes the window; the sample's main
+# window has no close handler, so the app quits
+fake closebox 1
 sleep 0.3
 if(grep -s '^app sample-' /dev/ux/menubar/menus){
 	echo 'FAIL '^$test^': registration outlived the app'

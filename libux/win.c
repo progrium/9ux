@@ -201,6 +201,7 @@ _newwin(char *kind, char *title, Rectangle r)
 			ux.headless = 1;
 	}
 	if(w->img == nil){
+		w->main = ux.nwin == 0 && ux.nextwinid == 0;	/* the app's first window, as with a display */
 		w->winid = ++ux.nextwinid;
 		w->r = Dx(r) > 0 ? r : Rect(0, 0, 400, 300);
 	}
@@ -211,6 +212,7 @@ _newwin(char *kind, char *title, Rectangle r)
 	_event(w, "new", "kind", kind, nil);
 	_regwin(w->winid, 1);
 	_menuwin(w, 1);
+	_chrome(w);
 	return w;
 }
 

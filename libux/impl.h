@@ -251,6 +251,7 @@ struct App {
 	char	*barid;	/* the app ID the menu bar knows us by */
 	int	rebar;	/* register with the bar again */
 	int	barreader;
+	int	evreader;
 	int	responding;	/* the responder is answering a batch */
 };
 
@@ -340,6 +341,7 @@ void	_menuaction(char*, int, char*);
 void	_menuregister(void);
 char*	_menuitems(Uxmenu*);
 void	_menuwin(Uxwin*, int);
+void	_chrome(Uxwin*);
 
 /* res.c */
 Image*	_resicon(Uxwin*, char*, int);
