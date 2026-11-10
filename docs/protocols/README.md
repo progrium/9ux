@@ -14,6 +14,7 @@ the real server exists.
 | [ux.md](ux.md) | each libux app, aggregated by uxd | uxd, scripts, tests, other apps | `/mnt/ux` |
 | [meta.md](meta.md) | uxmeta | Finder, libux, launcher | `/mnt/meta` |
 | [res.md](res.md) | resfs | libux, Finder | `/mnt/res` |
+| [clip.md](clip.md) | clipd | libux, any program | `/mnt/clip` |
 
 `rio.md`, `meta.md` and `res.md` are written by the streams that own those
 servers (see [workplan.md](../workplan.md#ownership)). This file holds
