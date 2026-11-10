@@ -20,6 +20,7 @@ enum
 	Kdesk,
 	Kfolder,
 	Kinfo,
+	Ktrash,		/* the Trash window: every volume's Trash */
 };
 
 /* View.mode: how a folder window shows its items */
@@ -43,6 +44,11 @@ struct Fev
 	Point	pt;
 	View	*v;	/* the view the handler was registered for */
 	Alert	*a;	/* or the alert */
+
+	/* UXdrop of our own drag: where its files were, and where they go */
+	char	**paths;
+	int	npaths;
+	char	*dest;	/* a folder, "trash", or nil: nowhere */
 };
 
 /* one icon in a view: a folder entry, or a volume on the desktop */
@@ -57,6 +63,7 @@ struct Item
 	int	placed;	/* pt came from uxmeta (or the user), not auto placement */
 	Fcvol	*vol;	/* desktop volumes */
 	int	offline;
+	int	trash;	/* the desktop's Trash */
 };
 
 struct View
@@ -105,6 +112,14 @@ struct Alert
 	Alert	*next;
 };
 
+/*
+ * itemlk guards each view's item list and each item's path, which
+ * libux's UI thread reads while starting a drag or taking a drop.
+ * Finder's proc holds it only while changing them, never across a
+ * libux call.
+ */
+extern Lock	itemlk;
+
 /* main.c */
 extern Fcws	*ws;
 extern Fcmeta	*meta;
@@ -143,6 +158,21 @@ void	renamestart(View*);
 void	renameend(View*, int commit);
 void	metachange(char *line);
 char*	viewlabel(Item*);
+void	itemsetpath(Item*, char*);
+void	viewdrop(View*, Fev*);
+void	dragsetup(View*);
+void	droplookup(View*, Uxev*, Fev*);
+
+/* trashwin.c */
+View*	trashopen(void);
+void	trashrefresh(View*);
+void	trashcheck(void);
+void	trashitems(View*);
+void	trashstatus(View*);
+void	totrash(View*, Item*);
+void	putback(View*, Item*);
+void	emptytrash(void);
+Point	trashpt(View*);
 
 /* info.c */
 View*	infoopen(char *path);

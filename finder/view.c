@@ -19,6 +19,20 @@ enum
 
 static void	populate(View*);
 
+Lock	itemlk;
+
+void
+itemsetpath(Item *it, char *path)
+{
+	char *old;
+
+	lock(&itemlk);
+	old = it->path;
+	it->path = path;
+	unlock(&itemlk);
+	free(old);
+}
+
 static void
 addview(View *v)
 {
@@ -89,8 +103,10 @@ newitem(View *v, char *name, char *path)
 	it->id = smprint("i%d", ++v->nextid);
 	it->name = festrdup(name);
 	it->path = festrdup(path);
+	lock(&itemlk);
 	v->item = realloc(v->item, (v->nitem+1)*sizeof(Item*));
 	v->item[v->nitem++] = it;
+	unlock(&itemlk);
 	return it;
 }
 
@@ -99,12 +115,14 @@ delitem(View *v, Item *it)
 {
 	int i;
 
+	lock(&itemlk);
 	for(i = 0; i < v->nitem; i++)
 		if(v->item[i] == it){
 			memmove(v->item+i, v->item+i+1, (v->nitem-i-1)*sizeof(Item*));
 			v->nitem--;
 			break;
 		}
+	unlock(&itemlk);
 	if(v->editing == it)
 		renameend(v, 0);
 	if(v->icons != nil)
@@ -239,8 +257,20 @@ deskopen(void)
 	v->icons = uxiconview(v->w, "icons", contentrect(v));
 	uxwinhandler(v->w, viewhandler, v);
 	uxhandler(v->icons, viewhandler, v);
+	dragsetup(v);
 	addview(v);
 	return v;
+}
+
+static Item*
+desktrash(View *v)
+{
+	int i;
+
+	for(i = 0; i < v->nitem; i++)
+		if(v->item[i]->trash)
+			return v->item[i];
+	return nil;
 }
 
 static char*
@@ -270,7 +300,7 @@ deskload(void)
 	/* drop volumes that left the registry or the desktop */
 	for(i = 0; i < v->nitem; ){
 		it = v->item[i];
-		found = 0;
+		found = it->trash;
 		for(j = 0; j < ws->nvol; j++)
 			if(ws->vol[j] == it->vol && ws->vol[j]->desktop)
 				found = 1;
@@ -303,8 +333,8 @@ deskload(void)
 			continue;
 		}
 		/* path, icon or position changed in the registry */
-		free(it->path);
-		it->path = festrdup(vol->path);
+		if(strcmp(it->path, vol->path) != 0)
+			itemsetpath(it, festrdup(vol->path));
 		if(strcmp(it->icon, volicon(vol)) != 0){
 			free(it->icon);
 			it->icon = festrdup(volicon(vol));
@@ -314,6 +344,14 @@ deskload(void)
 			it->placed = 1;
 		}
 		uxiconset(v->icons, it->id, nil, it->icon, it->pt);
+	}
+	if(desktrash(v) == nil){
+		it = newitem(v, "Trash", "");
+		it->trash = 1;
+		it->icon = festrdup("trash");
+		it->pt = trashpt(v);
+		showitem(v, it);
+		trashcheck();
 	}
 	deskcheck();
 }
@@ -347,6 +385,13 @@ deskcheck(void)
 
 /* folder windows */
 
+/* each volume's Trash is shown on the desktop, not in its root folder */
+static int
+hidden(View *v, char *name)
+{
+	return strcmp(name, ".trash") == 0 && v->vol != nil && strcmp(v->vol->path, v->path) == 0;
+}
+
 static void
 loaditems(View *v)
 {
@@ -357,7 +402,8 @@ loaditems(View *v)
 	recs = itemrecs(v->path);
 	dv = fcsorted(v->f, v->sort);
 	for(i = 0; i < v->f->n; i++)
-		entryitem(v, dv[i], recs);
+		if(!hidden(v, dv[i]->name))
+			entryitem(v, dv[i], recs);
 	free(dv);
 	fcrecfree(recs);
 	placeall(v);
@@ -429,9 +475,13 @@ viewclose(View *v, int forget)
 	if(front == v)
 		front = nil;
 	uxwinclose(v->w);
+	lock(&itemlk);
 	for(i = 0; i < v->nitem; i++)
 		itemfree(v->item[i]);
 	free(v->item);
+	v->item = nil;
+	v->nitem = 0;
+	unlock(&itemlk);
 	for(i = 0; i < v->nrows; i++)
 		free(v->rows[i]);
 	free(v->rows);
@@ -493,6 +543,7 @@ populate(View *v)
 		if(v->icons == nil){
 			v->icons = uxiconview(v->w, "icons", contentrect(v));
 			uxhandler(v->icons, viewhandler, v);
+			dragsetup(v);
 		}else
 			uxiconclear(v->icons);
 		for(i = 0; i < v->nitem; i++)
@@ -656,7 +707,7 @@ viewrescan(View *v)
 	for(i = 0; i < n; i++){
 		switch(c[i].op){
 		case Cadd:
-			if(itembyname(v, c[i].name) != nil)
+			if(itembyname(v, c[i].name) != nil || hidden(v, c[i].name))
 				break;
 			d = fcfind(v->f, c[i].name);
 			if(d == nil)
@@ -677,8 +728,7 @@ viewrescan(View *v)
 				break;	/* we renamed it ourselves */
 			free(it->name);
 			it->name = festrdup(c[i].name);
-			free(it->path);
-			it->path = fcjoin(v->path, it->name);
+			itemsetpath(it, fcjoin(v->path, it->name));
 			l = viewlabel(it);
 			if(v->icons != nil)
 				uxiconset(v->icons, it->id, l, nil, it->pt);
@@ -732,6 +782,12 @@ viewcleanup(View *v)
 	if(v->kind == Kdesk){
 		for(i = 0; i < v->nitem; i++){
 			it = v->item[i];
+			if(it->trash){
+				it->pt = trashpt(v);
+				it->placed = 0;
+				uxiconset(v->icons, it->id, nil, nil, it->pt);
+				continue;
+			}
 			it->pt = freecell(v);
 			it->placed = 1;
 			uxiconset(v->icons, it->id, nil, nil, it->pt);
@@ -775,7 +831,7 @@ resized(View *v)
 		for(i = 0; i < v->nitem; i++){
 			it = v->item[i];
 			if(!it->placed){
-				it->pt = freecell(v);
+				it->pt = it->trash ? trashpt(v) : freecell(v);
 				uxiconset(v->icons, it->id, nil, nil, it->pt);
 			}
 		}
@@ -792,6 +848,12 @@ openit(View *v, Item *it)
 	/* the same as File > Open on just this item */
 	USED(v);
 	memset(&e, 0, sizeof e);
+	if(it->trash){
+		trashopen();
+		return;
+	}
+	if(v->kind == Ktrash)
+		return;	/* things in the Trash don't open; Put Back first */
 	if(it->vol != nil || it->dir){
 		if(it->vol != nil && fcvolcheck(it->vol) < 0
 		&& (it->vol->addr != nil || it->vol->srv != nil) && !it->vol->attached
@@ -838,19 +900,31 @@ viewevent(View *v, Fev *e)
 	case UXselection:
 		if(v->edit != nil && e->ctl != v->edit)
 			renameend(v, 1);
-		viewstatus(v);
+		if(v->kind == Ktrash)
+			trashstatus(v);
+		else
+			viewstatus(v);
+		front = v;	/* selecting in a window is working in it */
 		updatemenus();
 		break;
 	case UXmove:
 		if(e->item == nil || (it = itembyid(v, e->item)) == nil)
 			break;
 		it->pt = e->pt;
+		if(it->trash || v->kind == Ktrash)
+			break;	/* the Trash's place isn't saved */
 		it->placed = 1;
 		saveitem(v, it);
 		break;
 	case UXrename:
 		if(e->item == nil || (it = itembyid(v, e->item)) == nil)
 			break;
+		if(it->trash || v->kind == Ktrash){
+			l = viewlabel(it);
+			uxiconset(v->icons, it->id, l, nil, it->pt);
+			free(l);
+			break;
+		}
 		if(it->vol != nil){
 			l = viewlabel(it);
 			uxiconset(v->icons, it->id, l, nil, it->pt);
@@ -865,11 +939,17 @@ viewevent(View *v, Fev *e)
 			renameend(v, 1);
 		break;
 	case UXclose:
-		if(v->kind == Kfolder)
-			viewclose(v, 1);
+		if(v->kind == Kfolder || v->kind == Ktrash)
+			viewclose(v, v->kind == Kfolder);
 		break;
 	case UXresize:
 		resized(v);
+		break;
+	case UXdrop:
+		viewdrop(v, e);
+		break;
+	case UXdragend:
+		viewrescan(v);
 		break;
 	}
 }
@@ -926,8 +1006,7 @@ itemrename(View *v, Item *it, char *newname)
 	if(fcrename(ws, it->path, newname, 0) == 0){
 		free(it->name);
 		it->name = festrdup(newname);
-		free(it->path);
-		it->path = fcjoin(v->path, newname);
+		itemsetpath(it, fcjoin(v->path, newname));
 		l = viewlabel(it);
 		if(v->icons != nil)
 			uxiconset(v->icons, it->id, l, nil, it->pt);
@@ -974,7 +1053,7 @@ renamestart(View *v)
 	}
 	it = sel[0];
 	free(sel);
-	if(it->vol != nil)
+	if(it->vol != nil || it->trash || v->kind == Ktrash)
 		return;
 	if(v->mode == Micons){
 		r = Rect(it->pt.x - UXiconviewlabelmax/2 - 8, it->pt.y + UXiconlarge/2 + UXiconviewlabelgap,
@@ -1105,4 +1184,150 @@ metachange(char *line)
 		}
 	}
 	fcrecfree(recs);
+}
+
+/* drag and drop */
+
+/* on libux's UI thread, with its lock held: offer the dragged icons' files */
+static void
+dragfn(Uxdrag *d, char **ids, int n, void *arg)
+{
+	View *v;
+	Item *it;
+	int i;
+
+	v = arg;
+	lock(&itemlk);
+	for(i = 0; i < n; i++)
+		if((it = itembyid(v, ids[i])) != nil && !it->trash && it->vol == nil && it->path[0])
+			uxdragfile(d, it->path);
+	unlock(&itemlk);
+	uxdragops(d, "move,copy");
+}
+
+/* icon views are drag sources and take files dropped on them */
+void
+dragsetup(View *v)
+{
+	if(v->icons == nil)
+		return;
+	uxicondrag(v->icons, dragfn, v);
+	if(v->kind != Ktrash)
+		uxdroptypes(v->icons, "file", "move,copy");
+}
+
+/*
+ * On libux's UI thread, inside the drop's handler: where the drop goes
+ * (a folder icon under the pointer, the Trash, or the window's folder),
+ * and what's dropped. Our own drags carry paths, which Finder's proc
+ * moves or copies; another app's files are saved here and now, since
+ * their data is only there while the handler runs.
+ */
+void
+droplookup(View *v, Uxev *e, Fev *f)
+{
+	Item *it;
+	Uxdropfile *df;
+	char *p;
+	int i, n;
+
+	lock(&itemlk);
+	it = e->item != nil ? itembyid(v, e->item) : nil;
+	if(it != nil && it->trash)
+		f->dest = festrdup("trash");
+	else if(it != nil && it->dir && it->path[0])
+		f->dest = festrdup(it->path);
+	else if(v->kind == Kfolder && v->path != nil)
+		f->dest = festrdup(v->path);
+	unlock(&itemlk);
+	if(f->dest == nil){
+		uxdropresult(e, nil, "not supported: drop onto a volume, a folder or the Trash");
+		return;
+	}
+	if(uxdragfromself(e)){
+		f->paths = uxdragpaths(e, &f->npaths);
+		return;
+	}
+	if(strcmp(f->dest, "trash") == 0){
+		uxdropresult(e, nil, "not supported: only Finder's own items go in the Trash");
+		free(f->dest);
+		f->dest = nil;
+		return;
+	}
+	/* from another app: save each file into the folder */
+	n = uxdropfiles(e, &df);
+	for(i = 0; i < n; i++){
+		if(df[i].dir)
+			continue;
+		p = fcjoin(f->dest, df[i].name);
+		if(access(p, AEXIST) == 0 || uxdropsave(e, i, p, df[i].mode) < 0){
+			char err[ERRMAX];
+
+			rerrstr(err, sizeof err);
+			uxdropresult(e, nil, access(p, AEXIST) == 0 ? "exists" : err);
+		}
+		free(p);
+	}
+	uxdropfilesfree(df, n);
+	uxdropresult(e, "copy", nil);
+}
+
+static View*
+folderview(char *path)
+{
+	View *v;
+
+	for(v = views; v != nil; v = v->next)
+		if(v->kind == Kfolder && strcmp(v->path, path) == 0)
+			return v;
+	return nil;
+}
+
+/* in Finder's proc: carry out a drop of our own items */
+void
+viewdrop(View *v, Fev *e)
+{
+	View *w;
+	char *p, *dir, *r;
+	int i, move;
+	Fcvol *sv, *dv;
+
+	if(e->dest == nil)
+		return;
+	move = e->action == nil || strcmp(e->action, "move") == 0;
+	for(i = 0; i < e->npaths; i++){
+		p = e->paths[i];
+		dir = fcdirname(p);
+		if(strcmp(e->dest, "trash") == 0){
+			r = fctrash(ws, p, 0);
+			if(r == nil)
+				alerterr(fcbasename(p));
+			free(r);
+		}else if(strcmp(dir, e->dest) != 0 && strcmp(p, e->dest) != 0){
+			/*
+			 * Dragging is asking to move (on one volume) or copy (onto
+			 * another). 9P can't move between folders, so a move is a
+			 * copy and then a delete; the user asked for exactly that.
+			 */
+			sv = fcvolof(ws, p);
+			dv = fcvolof(ws, e->dest);
+			if(move && sv == dv){
+				if(fcmove(ws, p, e->dest, Fcopydel) < 0)
+					alerterr(fcbasename(p));
+			}else{
+				r = fccopy(ws, p, e->dest, nil);
+				if(r == nil)
+					alerterr(fcbasename(p));
+				free(r);
+			}
+		}
+		if((w = folderview(dir)) != nil)
+			viewrescan(w);
+		free(dir);
+	}
+	if((w = folderview(e->dest)) != nil)
+		viewrescan(w);
+	if(v->kind == Kfolder)
+		viewrescan(v);
+	trashcheck();
 }

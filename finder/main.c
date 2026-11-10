@@ -60,6 +60,8 @@ viewhandler(Uxev *e, void *arg)
 
 	f = femalloc(sizeof *f);
 	f->v = arg;
+	if(e->type == UXdrop)
+		droplookup(arg, e, f);
 	handoff(f, e);
 }
 
@@ -82,6 +84,12 @@ apphandler(Uxev *e, void*)
 static void
 fevfree(Fev *f)
 {
+	int i;
+
+	for(i = 0; i < f->npaths; i++)
+		free(f->paths[i]);
+	free(f->paths);
+	free(f->dest);
 	free(f->action);
 	free(f->item);
 	free(f->text);
@@ -103,6 +111,9 @@ menus(void)
 	uxitem(m, "duplicate", "Duplicate", "d");
 	uxitem(m, "rename", "Rename", "r");
 	uxsep(m, "file2");
+	uxitem(m, "trash", "Move to Trash", "bs");
+	uxitem(m, "putback", "Put Back", nil);
+	uxsep(m, "file3");
 	uxitem(m, "eject", "Eject", "e");
 	m = uxmenu("edit", "Edit");
 	uxitem(m, "selectall", "Select All", "a");
@@ -116,6 +127,8 @@ menus(void)
 	uxitem(m, "bysize", "by Size", nil);
 	uxsep(m, "view2");
 	uxitem(m, "cleanup", "Clean Up", nil);
+	m = uxmenu("special", "Special");
+	uxitem(m, "emptytrash", "Empty Trash…", nil);
 }
 
 void
@@ -140,15 +153,17 @@ updatemenus(void)
 	for(i = 0; i < n; i++)
 		if(sel[i]->vol != nil)
 			vols++;
-		else
+		else if(!sel[i]->trash)
 			files++;
 	if(n > 0)
 		free(sel);
 	uxitemenable("open", n > 0);
 	uxitemenable("info", n > 0 || (v != nil && v->kind == Kfolder));
-	uxitemenable("duplicate", files > 0 && vols == 0);
+	uxitemenable("duplicate", files > 0 && vols == 0 && v->kind == Kfolder);
 	uxitemenable("rename", n == 1 && files == 1);
 	uxitemenable("eject", vols > 0);
+	uxitemenable("trash", files > 0 && vols == 0 && v->kind == Kfolder);
+	uxitemenable("putback", n > 0 && v->kind == Ktrash);
 	uxitemenable("newfolder", v != nil && v->kind == Kfolder);
 	uxitemenable("close", v != nil && v->kind != Kdesk);
 	uxitemenable("cleanup", v != nil && (v->kind == Kdesk || v->mode == Micons));
@@ -209,7 +224,8 @@ eachsel(View *v, void (*fn)(View*, Item*))
 static void
 infoitem(View*, Item *it)
 {
-	infoopen(it->path);
+	if(!it->trash)
+		infoopen(it->path);
 }
 
 static void
@@ -282,7 +298,7 @@ action(Fev *e)
 		eachsel(v, openit);
 	else if(strcmp(a, "close") == 0){
 		if(v->kind != Kdesk)
-			viewclose(v, 1);
+			viewclose(v, v->kind == Kfolder);
 	}else if(strcmp(a, "info") == 0){
 		Item **sel;
 		int n;
@@ -299,6 +315,12 @@ action(Fev *e)
 		renamestart(v);
 	else if(strcmp(a, "eject") == 0)
 		eachsel(v, ejectitem);
+	else if(strcmp(a, "trash") == 0)
+		eachsel(v, totrash);
+	else if(strcmp(a, "putback") == 0)
+		eachsel(v, putback);
+	else if(strcmp(a, "emptytrash") == 0)
+		emptytrash();
 	else if(strcmp(a, "newfolder") == 0)
 		newfolder(v);
 	else if(strcmp(a, "selectall") == 0)
@@ -363,6 +385,7 @@ tick(void)
 	View *v;
 
 	deskcheck();
+	trashcheck();
 	for(v = views; v != nil; v = v->next)
 		if(v->kind == Kfolder)
 			viewrescan(v);

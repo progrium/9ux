@@ -22,6 +22,7 @@ UIFILES=\
 	layout.$O\
 	infowin.$O\
 	alert.$O\
+	trashwin.$O\
 
 LIBUX=../libux/libux.a$O
 CFLAGS=$CFLAGS -I../libux -I../assets/gen

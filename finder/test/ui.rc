@@ -238,6 +238,52 @@ echo invoke byicon win^'='^`{basename $f} > $a/menus/view/ctl
 sleep 0.3
 has $f/controls/icons/items 'label=c.txt '
 
+test=trash
+# Move to Trash puts it in the volume's own Trash; the folder view hides .trash
+d=$a/windows/1
+has $d/controls/icons/items 'label=Trash icon=trash '
+echo select `{itemid $f b' 'copy.txt} > $f/controls/icons/ctl
+echo invoke trash win^'='^`{basename $f} > $a/menus/file/ctl
+sleep 0.5
+if(! test -e $t/vol/'b copy.txt' && test -d $t/vol/.trash)
+	pass
+if not
+	fail b copy.txt did not go to the Trash
+lacks $f/controls/icons/items 'label=.trash' '''label=b copy.txt'''
+waitfor $d/controls/icons/items 'label=Trash icon=trash-full '
+echo open `{itemid $d Trash} > $d/controls/icons/ctl
+for(i in `{seq 50}) if(~ $#tw 0) { tw=`{winof trash}; sleep 0.1 }
+if(~ $#tw 0)
+	fail no Trash window
+tw=$tw(1)
+has $tw/controls/icons/items '''label=b copy.txt'''
+has $tw/controls/status/value '^1 item\. '
+# Put Back returns it where it was
+echo select `{itemid $tw b' 'copy.txt} > $tw/controls/icons/ctl
+echo invoke putback win^'='^`{basename $tw} > $a/menus/file/ctl
+sleep 0.5
+if(test -e $t/vol/'b copy.txt')
+	pass
+if not
+	fail Put Back did not put it back
+waitfor $f/controls/icons/items '''label=b copy.txt'''
+waitfor $d/controls/icons/items 'label=Trash icon=trash '
+# Empty Trash asks first, then deletes
+echo select `{itemid $f b' 'copy.txt} > $f/controls/icons/ctl
+echo invoke trash win^'='^`{basename $f} > $a/menus/file/ctl
+sleep 0.5
+echo invoke emptytrash > $a/menus/special/ctl
+for(i in `{seq 50}) if(~ $#al 0) { al=`{winof dialog}; sleep 0.1 }
+if(~ $#al 0)
+	fail no Empty Trash alert
+al=$al(1)
+has $al/controls/other/label '^Empty Trash$'
+echo activate > $al/controls/other/ctl
+waitfor $d/controls/icons/items 'label=Trash icon=trash '
+lacks $tw/controls/icons/items 'label='
+echo close > $tw/ctl
+al=()
+
 test=external-edit
 # an icon moved by editing the ndb file moves on screen
 sed 's;(item='^$t^'/vol/c\.txt) x=[0-9]+ y=[0-9]+;\1 x=300 y=200;' $ws > $t/ws.new
