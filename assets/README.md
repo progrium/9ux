@@ -303,6 +303,8 @@ committed, so nobody needs to run the tools to use the assets.
 | `uxstyle.h` | `UXink`... colours and `UXmenubarheight`... metrics |
 | `uxcursors.c` | Plan 9 `Cursor` structs |
 | `uxglyphs.c` | the chrome glyphs |
+| `cursors/NAME.img` | each cursor as a 16x16 image, for rescomp |
+| `system.res`, `system.rsrc` | the system resource file and its source |
 
 The mockups are drawn by a small software renderer (`tools/mockup.py`)
 that follows this guide to the pixel. When rio or libux draws something
@@ -310,12 +312,25 @@ differently, decide which is right and fix the other, and this file.
 
 ## Packaging as resources
 
-When resfs has its resource compiler (S6, work item 5), the same sources
-compile into a 9/UX system `.rsrc`: each icon as `ICN#` and `ics#` (from
-the 1-bit form and mask) plus `icl4`/`ics4` and `icl8`/`ics8`, each
-cursor as `CURS`. The classic 4- and 8-bit colour tables don't contain
-the 9/UX palette, so colour icons are mapped to the nearest table entry
-on export, and the native `image(6)` files stay the reference.
+`gen/system.rsrc` is the 9/UX system resource file: every icon as a
+full `ICN#`/`icl4`/`icl8`/`ics#`/`ics4`/`ics8` family and every cursor
+as `CURS`, with names. mkassets writes its source, `gen/system.res`,
+taking IDs from [`resources.ndb`](resources.ndb) (stable; alert icons
+are 0, 1 and 2, the IDs dialog item lists use). resfs's `rescomp`
+compiles it:
+
+```sh
+python3 assets/tools/mkassets.py
+make -C resfs host/rescomp SAN=
+resfs/host/rescomp -o assets/gen/system.rsrc assets/gen/system.res
+```
+
+The classic 4- and 8-bit colour tables don't contain the 9/UX palette,
+so `icl4`/`icl8` are the nearest table colours (the teal accents suffer
+most in `icl4`); the 1-bit forms come from each colour's `bit`
+attribute. The native `image(6)` files stay the reference for 9/UX's
+own drawing; the `.rsrc` is for resfs and for apps that load icons
+through it.
 
 ## Still to do
 
