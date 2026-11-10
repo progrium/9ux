@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>9/UX: a Macintosh-inspired desktop for 9front</title>
+<link rel="icon" href="data:,">
+<!-- The project's page, published to GitHub Pages by
+     .github/workflows/pages.yml. Plain on purpose, after h9's page.
+     The workflow copies docs/images/ to images/docs/ and
+     assets/mockups/ to images/mockups/ next to this file. -->
+<style>
+  body { max-width: 46em; margin: 1em auto; padding: 0 1em; background: #fff; color: #000; }
+  h1, .authors { text-align: center; }
+  .authors { font-size: 1.2em; font-weight: bold; margin-bottom: 0; }
+  .nav { text-align: center; }
+  abbr { text-decoration: none; border-bottom: 1px dotted; cursor: help; }
+  pre { margin-left: 2em; overflow-x: auto; }
+  blockquote { margin-left: 2em; font-style: italic; }
+  figure { margin: 1.5em 0; }
+  figure img { display: block; width: 100%; height: auto; border: 1px solid #888; }
+  figcaption { font-size: 0.9em; margin-top: 0.4em; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1em; }
+  .pair figure { margin: 0; }
+  @media (max-width: 36em) { .pair { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<p class="nav">[
+<a href="#about">about</a> |
+<a href="#screenshots">screenshots</a> |
+<a href="#design">design</a> |
+<a href="#docs">docs</a> |
+<a href="#code">code</a> |
+<a href="#warning">warning!</a> |
+<a href="#contact">contact</a> |
+<a href="#links">links</a> ]</p>
+
+<h1>9/UX: a Macintosh-inspired desktop for 9front</h1>
+
+<p class="authors"><a href="https://github.com/progrium">Jeff Lindsay</a>, <abbr title="AI-assisted work substantially directed by the named person, who takes responsibility for the result.">h.d.a.</abbr></p>
+
+<figure>
+<a href="images/docs/desktop.png"><img src="images/docs/desktop.png" width="1024" height="768"
+  alt="The 9/UX desktop: Finder's menu bar and volume icons, two spatial folder windows, and the libux sample app with a file just dropped onto its Notes field"></a>
+<figcaption>A real frame from the end-to-end drag-and-drop test, running headless on
+<a href="https://progrium.github.io/hyper9/">h9</a>:
+the rio fork in 9/UX mode, Finder, and the libux sample app,
+with a file just dropped onto its Notes field.</figcaption>
+</figure>
+
+<h2 id="about">About</h2>
+
+<p>
+9/UX brings the classic Mac and A/UX desktop
+(a spatial Finder, a global menu bar, consistent controls and dialogs,
+icons, and resource-driven presentation)
+to <a href="https://9front.org/">9front</a>, built the Plan 9 way:
+rio and libdraw draw the screen,
+9P exposes every application's UI state and commands as files,
+namespaces define the working environment,
+the plumber opens documents,
+and ndb holds human-editable metadata.
+</p>
+
+<blockquote>
+Keep the Macintosh's direct-manipulation desktop,
+but make every meaningful object, action, and resource visible as a Plan 9 file.
+</blockquote>
+
+<p>
+It is not an emulator, a Macintosh ABI, or an A/UX reimplementation.
+Native 9front programs stay first-class,
+and existing rio programs (acme, sam, rc windows, nested rio) keep working unchanged beside 9/UX apps.
+</p>
+
+<p>The pieces:</p>
+
+<ul>
+<li><b>rio fork</b> (<tt>rio -u</tt>): a desktop layer, a global menu bar that follows the focused app,
+  title-bar chrome, and a drag broker, all under <tt>/dev/ux</tt>. With 9/UX mode off it's stock rio.</li>
+<li><b>Finder</b>: volume icons, spatial folder windows, rename, duplicate, Get Info, Trash,
+  remembered layout, and double-click to open documents through the plumber.
+  A remote 9P server works as a volume.</li>
+<li><b>libux</b>, the Toolbox: windows, menus, dialogs, alerts, and controls,
+  each app serving its control tree over 9P, so <tt>echo activate &gt;.../ctl</tt> presses a button.</li>
+<li><b>uxd</b> gathers every app's tree at <tt>/mnt/ux</tt> with per-app policy;
+  <b>uxmeta</b> keeps associations, volumes and layout in ndb files;
+  <b>resfs</b> serves classic <tt>ICN#</tt>, <tt>icl8</tt>, menu, dialog and string resources at <tt>/mnt/res</tt>;
+  <b>clipd</b> is a typed clipboard kept in step with rio's snarf.</li>
+</ul>
+
+<h2 id="screenshots">Screenshots</h2>
+
+<p>
+These are real frames, not mockups.
+The GUI tests embed h9 with a headless screen, inject mouse and keyboard input,
+and drive the 9P files at the same time.
+</p>
+
+<figure>
+<a href="images/e2e-demo.png"><img src="images/e2e-demo.png" width="1024" height="768"
+  alt="The end of the end-to-end demo: the libux sample with a text field set from rc, Finder windows behind it, an rc window, and acme with a file opened from Finder"></a>
+<figcaption>The last step of the end-to-end demo.
+From rc, the sample app's Name field was set to <q>from rc</q>
+and its Save button pressed through <tt>ctl</tt>;
+a double click in Finder plumbed a text file to acme;
+and an ordinary rc window is still moved and typed into.</figcaption>
+</figure>
+
+<figure>
+<a href="images/vm-sample-32.png"><img src="images/vm-sample-32.png" width="540" height="460" style="max-width: 30em"
+  alt="The libux sample app on 9front's own kernel and VESA framebuffer at 32 bits"></a>
+<figcaption>The libux sample on 9front's own kernel and VESA framebuffer in QEMU, at 32 bits per pixel.
+Its <tt>ICN#</tt> and <tt>icl8</tt> icons match the headless golden images pixel for pixel.</figcaption>
+</figure>
+
+<h2 id="design">Visual Design</h2>
+
+<p>
+Macintosh structure, Plan 9 colour:
+butter title bars from rio's selection yellow, acme's cream and olive,
+and rio's greygreen for the desktop,
+so 9/UX windows and legacy rio windows sit together on one screen.
+Everything reads in one bit, uses a sixteen-colour palette,
+and is drawn in whole pixels.
+Every graphic is original to 9/UX; it ships no Apple resources.
+The mockups below are generated from the same palette and metrics files as the code.
+</p>
+
+<div class="pair">
+<figure>
+<a href="images/mockups/desktop@2x.png"><img src="images/mockups/desktop@2x.png" width="1600" height="1200"
+  alt="Mockup of the Finder desktop with icon and list views and an rc window"></a>
+<figcaption>Finder, with icon and list views and an rc window driving <tt>/mnt/ux</tt>.</figcaption>
+</figure>
+<figure>
+<a href="images/mockups/app@2x.png"><img src="images/mockups/app@2x.png" width="1600" height="1200"
+  alt="Mockup of an app with its File menu open in the menu bar and a settings dialog"></a>
+<figcaption>An app's menu in the global bar, and a dialog.</figcaption>
+</figure>
+</div>
+
+<figure>
+<a href="images/mockups/controls@3x.png"><img src="images/mockups/controls@3x.png" width="1290" height="804"
+  alt="Buttons, check boxes, radio buttons, text fields and scroll bars in each state"></a>
+<figcaption>Controls in each state.</figcaption>
+</figure>
+
+<figure>
+<a href="images/mockups/themes/titlebars@2x.png"><img src="images/mockups/themes/titlebars@2x.png" width="2864" height="300"
+  alt="Window title bars in six themes: nine, nine-sea, butter-deep, nine-grey, seven and win"></a>
+<figcaption>Title bars in each theme.</figcaption>
+</figure>
+
+<figure>
+<a href="images/mockups/icons@2x.png"><img src="images/mockups/icons@2x.png" width="688" height="1688" style="max-width: 22em; margin: 0 auto"
+  alt="The 9/UX icon set"></a>
+<figcaption style="text-align: center">The icon set.</figcaption>
+</figure>
+
+<h2 id="docs">Documentation</h2>
+
+<p>
+The <a href="https://github.com/progrium/9ux/blob/main/docs/design.md">design document</a>
+describes 9/UX and its v0.1 acceptance criteria;
+<a href="https://github.com/progrium/9ux/blob/main/docs/release.md">release.md</a>
+has where each one stands, the end-to-end demo, and the open issues.
+Every interface between components is a file protocol in
+<a href="https://github.com/progrium/9ux/tree/main/docs/protocols">docs/protocols</a>,
+and the <a href="https://github.com/progrium/9ux/blob/main/assets/README.md">visual design</a>
+covers the palette, fonts, metrics, chrome, icons and cursors.
+</p>
+
+<h2 id="code">Source Code</h2>
+
+<p>
+The source is on <a href="https://github.com/progrium/9ux">GitHub</a>,
+under the MIT license.
+Development runs on <a href="https://progrium.github.io/hyper9/">h9</a>,
+which runs 9front's own compilers, <tt>mk</tt> and rio directly from the host shell, without booting a VM.
+<tt>scripts/h9.sh</tt> clones and builds the pinned h9 on its first run:
+</p>
+
+<pre>
+git clone https://github.com/progrium/9ux
+cd 9ux
+scripts/h9.sh --rc 'mk'
+scripts/h9.sh --gfx rio/7.out -u
+scripts/test.sh
+</pre>
+
+<p>
+Use <tt>rio/6.out</tt> on amd64.
+<a href="https://github.com/progrium/9ux/blob/main/docs/development.md">development.md</a>
+and <a href="https://github.com/progrium/9ux/blob/main/docs/testing.md">testing.md</a>
+have the details.
+</p>
+
+<h2 id="warning">Warning!</h2>
+
+<p>
+9/UX is at v0.1 and under active development.
+Interfaces and behaviour change without notice.
+</p>
+
+<h2 id="contact">Contact Info</h2>
+
+<p>
+Please report bugs and send questions through
+<a href="https://github.com/progrium/9ux/issues">GitHub issues</a>.
+</p>
+
+<h2 id="links">Related Links</h2>
+
+<ul>
+<li><a href="https://progrium.github.io/hyper9/">h9</a>, native 9front executables on host hypervisors</li>
+<li><a href="https://9front.org/">9front</a></li>
+<li><a href="https://en.wikipedia.org/wiki/A/UX">A/UX</a>, Apple's Unix with the Macintosh Finder</li>
+</ul>
+
+</body>
+</html>
