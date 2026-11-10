@@ -21,6 +21,7 @@ $O.nowstatfs: nowstatfs.$O
 test:V: all
 	./$O.unit
 	rc ./run ../$O.fcore
+	rc ./ui.rc ../$O.finder
 
 clean:V:
 	rm -f *.[$OS] [$OS].*

@@ -14,7 +14,18 @@ OFILES=\
 HFILES=fcore.h
 BIN=/$objtype/bin
 
-all:V: $O.fcore
+# finder, the app: on libux, with the look from assets/gen/uxstyle.h
+UIFILES=\
+	main.$O\
+	view.$O\
+	layout.$O\
+	infowin.$O\
+	alert.$O\
+
+LIBUX=../libux/libux.a$O
+CFLAGS=$CFLAGS -I../libux -I../assets/gen
+
+all:V: $O.fcore $O.finder
 
 $LIB: $OFILES
 	ar vu $LIB $OFILES
@@ -22,13 +33,22 @@ $LIB: $OFILES
 $O.fcore: fcore.$O $LIB
 	$LD $LDFLAGS -o $target $prereq
 
+$O.finder: $UIFILES $LIB $LIBUX
+	$LD $LDFLAGS -o $target $prereq
+
+$LIBUX:
+	cd ../libux && mk
+
+$UIFILES: finder.h ../libux/ux.h ../assets/gen/uxstyle.h
+
 %.$O: $HFILES
 
 %.$O: %.c
 	$CC $CFLAGS $stem.c
 
-install:V: $O.fcore
+install:V: $O.fcore $O.finder
 	cp $O.fcore $BIN/fcore
+	cp $O.finder $BIN/finder
 
 test:V: all
 	cd test && mk test

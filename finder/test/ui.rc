@@ -1,0 +1,310 @@
+#!/bin/rc
+# Interface tests for the Finder app: rc test/ui.rc [path/to/finder]
+#
+# Finder runs headless (uxheadless=1) and publishes its control tree
+# (uxpublic=1); the tests drive it from rc the way a script or uxd
+# client would, with a real uxmeta behind it:
+#
+#  - the desktop shows the registry's volumes; opening one opens a
+#    folder window with the folder's entries
+#  - rename, move, new folder, duplicate, view by list, Get Info
+#  - files made or removed behind Finder's back show up on a rescan
+#  - layout (window, view, icon positions) is saved in uxmeta, follows
+#    an external edit of the ndb file, and survives a restart
+#  - a server that can't rename: an alert that offers copy and delete
+
+rfork ne
+O=`{sed -n 's/^O=//p' /$objtype/mkfile}
+finder=$1
+if(~ $#finder 0)
+	finder=../$O.finder
+if(! ~ $finder /*)
+	finder=`{pwd}^/$finder
+here=`{pwd}
+uxmeta=$here/../../uxmeta/$O.out
+nowstatfs=$here/$O.nowstatfs
+t=/tmp/finder-ui.$pid
+nfail=0
+npass=0
+
+if(! test -x $uxmeta){
+	echo ui: uxmeta not built, skipping
+	exit ''
+}
+
+fn pass { npass=`{echo $npass + 1 | hoc} }
+fn fail {
+	echo FAIL: $test: $* >[1=2]
+	nfail=`{echo $nfail + 1 | hoc}
+}
+
+# has file pattern...
+fn has {
+	_f=$1
+	shift
+	for(_p in $*){
+		if(grep -s -- $_p $_f)
+			pass
+		if not {
+			fail $_f lacks $_p
+			echo '--- got' >[1=2]; cat $_f >[1=2]
+		}
+	}
+}
+
+# lacks file pattern...
+fn lacks {
+	_f=$1
+	shift
+	for(_p in $*){
+		if(! grep -s -- $_p $_f)
+			pass
+		if not {
+			fail $_f has $_p
+			echo '--- got' >[1=2]; cat $_f >[1=2]
+		}
+	}
+}
+
+# waitfor file pattern: up to 5 s for the file to have a line matching
+fn waitfor {
+	_ok=no
+	for(_i in `{seq 50}) if(~ $_ok no){
+		if(grep -s -- $2 $1 >[2]/dev/null)
+			_ok=yes
+		if not
+			sleep 0.1
+	}
+	if(~ $_ok yes)
+		pass
+	if not {
+		fail $1 never had $2
+		echo '--- got' >[1=2]; cat $1 >[1=2] >[2]/dev/null
+	}
+}
+
+# itemid view label: the icon item ID of the label in a window's icon view
+fn itemid {
+	grep -e 'label='^$2^'( |$)' -e '''label='^$2^'''' $1/controls/icons/items | awk '{print $2}'
+}
+
+# winof kind: the windows of that kind
+fn winof {
+	for(w in $a/windows/*)
+		if(~ `{cat $w/kind} $1)
+			echo $w
+}
+
+fn startfinder {
+	rm -f /srv/ux.$user.finder
+	uxheadless=1 uxpublic=1 $finder -m /n/fuimeta -w uiws -i 100 >[2]$t/finder.err &
+	finderpid=$apid
+	for(i in `{seq 50}) if(! test -e /srv/ux.$user.finder) sleep 0.1
+	a=$t/app
+	mkdir -p $a
+	mount -c /srv/ux.$user.finder $a
+	for(i in `{seq 50}) if(! test -s $a/windows/1/controls/icons/items) sleep 0.1
+}
+
+fn stopfinder {
+	echo quit > $a/ctl
+	for(i in `{seq 50}) if(test -d /proc/$finderpid) sleep 0.1
+	unmount $a >[2]/dev/null
+}
+
+rm -rf $t
+mkdir -p $t/sys $t/apps $t/user $t/vol/docs /n/fuimeta
+echo hello > $t/vol/docs/notes.txt
+echo hello > $t/vol/a.txt
+echo '#!/bin/rc' > $t/vol/run
+chmod +x $t/vol/run
+cat > $t/sys/base.ndb <<'EOF'
+ext=.txt type=text
+type=text open=edit icon=doc-text desc="Plain text"
+EOF
+cat > $t/user/meta.ndb <<EOF
+volume=scratch path=$t/vol icon=disk desktop=yes
+volume=hidden path=$t/vol/docs desktop=no
+EOF
+srvname=fuimeta.$pid
+$uxmeta -s $srvname -m /n/fuimeta -d $t/sys -a $t/apps -u $t/user -w uiws -i 50
+ws=$t/user/workspace/uiws.ndb
+
+test=desktop
+startfinder
+d=$a/windows/1
+has $d/kind '^desktop$'
+has $d/controls/icons/items '^item i1 label=scratch icon=disk pos='
+lacks $d/controls/icons/items 'label=hidden'
+has $a/menus/file/items '^item newfolder ' '^item info ' '^item rename ' '^item close '
+has $a/menus/view/items '^item byicon ' '^item bylist ' '^item cleanup '
+
+test=open-volume
+echo open `{itemid $d scratch} > $d/controls/icons/ctl
+for(i in `{seq 50}) if(~ $#f 0) { f=`{winof folder}; sleep 0.1 }
+if(~ $#f 0)
+	fail no folder window
+f=$f(1)
+has $f/title '^scratch$'
+has $f/controls/icons/items 'label=a.txt icon=doc-text ' 'label=docs icon=folder ' 'label=run icon=app '
+has $f/controls/status/value '^3 items$'
+waitfor $ws '^folder='^$t^'/vol '
+has $ws 'open=yes' 'view=icons'
+
+test=rename
+echo rename `{itemid $f a.txt} b.txt > $f/controls/icons/ctl
+sleep 0.3
+if(test -e $t/vol/b.txt && ! test -e $t/vol/a.txt)
+	pass
+if not
+	fail a.txt was not renamed to b.txt
+has $f/controls/icons/items 'label=b.txt '
+
+test=move
+echo move `{itemid $f b.txt} 250,120 > $f/controls/icons/ctl
+waitfor $ws '^item='^$t^'/vol/b.txt x=250 y=120'
+
+test=rescan
+echo new > $t/vol/new.txt
+waitfor $f/controls/icons/items 'label=new.txt '
+rm $t/vol/new.txt
+for(i in `{seq 50}) if(grep -s 'label=new.txt' $f/controls/icons/items) sleep 0.1
+lacks $f/controls/icons/items 'label=new.txt'
+
+test=newfolder
+echo invoke newfolder win^'='^`{basename $f} > $a/menus/file/ctl
+sleep 0.3
+if(test -d $t/vol/'untitled folder')
+	pass
+if not
+	fail no untitled folder
+has $f/controls/icons/items '''label=untitled folder'' icon=folder .*state=selected'
+# rename in place: a text field over the label; Enter renames
+if(test -d $f/controls/rename){
+	pass
+	echo set projects > $f/controls/rename/ctl
+	echo submit > $f/controls/rename/ctl
+	sleep 0.3
+	if(test -d $t/vol/projects)
+		pass
+	if not
+		fail rename in place did not rename
+}
+if not
+	fail no rename field
+
+test=duplicate
+echo select `{itemid $f b.txt} > $f/controls/icons/ctl
+echo invoke duplicate win^'='^`{basename $f} > $a/menus/file/ctl
+sleep 0.3
+if(test -e $t/vol/'b copy.txt')
+	pass
+if not
+	fail no b copy.txt
+has $f/controls/icons/items '''label=b copy.txt'''
+
+test=info
+echo select `{itemid $f b.txt} > $f/controls/icons/ctl
+echo invoke info win^'='^`{basename $f} > $a/menus/file/ctl
+for(i in `{seq 50}) if(~ $#g 0) { g=`{winof info}; sleep 0.1 }
+if(~ $#g 0)
+	fail no info window
+g=$g(1)
+has $g/title '^b.txt Info$'
+has $g/controls/kind/value '^Plain text$'
+has $g/controls/size/value '^6 bytes$'
+has $g/controls/volume/value '^scratch$'
+has $g/controls/opens/value '^edit$'
+has $g/controls/mode/value '^-rw'
+# renaming from Get Info
+echo set c.txt > $g/controls/name/ctl
+echo submit > $g/controls/name/ctl
+sleep 0.3
+if(test -e $t/vol/c.txt)
+	pass
+if not
+	fail Get Info did not rename
+has $g/title '^c.txt Info$'
+has $f/controls/icons/items 'label=c.txt '
+echo close > $g/ctl
+
+test=list
+echo invoke bylist win^'='^`{basename $f} > $a/menus/view/ctl
+sleep 0.3
+has $f/controls/list/items '^c\.txt +document' '^docs +folder'
+has $a/menus/view/items '^item bylist .*check=on'
+waitfor $ws 'view=list'
+echo invoke byicon win^'='^`{basename $f} > $a/menus/view/ctl
+sleep 0.3
+has $f/controls/icons/items 'label=c.txt '
+
+test=external-edit
+# an icon moved by editing the ndb file moves on screen
+sed 's;(item='^$t^'/vol/c\.txt) x=[0-9]+ y=[0-9]+;\1 x=300 y=200;' $ws > $t/ws.new
+if(grep -s 'c\.txt x=300 y=200' $t/ws.new)
+	cat $t/ws.new > $ws
+if not
+	fail could not edit $ws
+waitfor $f/controls/icons/items 'label=c.txt icon=doc-text pos=300,200'
+
+test=restart
+# window, view and positions come back after a restart
+fwin=`{basename $f}
+stopfinder
+startfinder
+for(i in `{seq 50}) if(~ $#f2 0) { f2=`{winof folder}; sleep 0.1 }
+if(~ $#f2 0)
+	fail the folder window did not reopen
+f=$f2(1)
+has $f/title '^scratch$'
+has $f/rect '^80 60 520 360$'
+has $f/controls/icons/items 'label=c.txt icon=doc-text pos=300,200'
+# closing it means it stays closed
+echo close > $f/ctl
+waitfor $ws 'open=no'
+stopfinder
+
+test=copydel
+# a server with no wstat: an honest alert, and copy and delete only when asked
+mkdir -p $t/nw
+$nowstatfs -s finder-nw.$pid -m $t/nw
+echo data > $t/nw/x.txt
+echo 'volume=nw path='^$t^'/nw desktop=yes' >> $t/user/meta.ndb
+sleep 0.3
+startfinder
+d=$a/windows/1
+waitfor $d/controls/icons/items 'label=nw '
+echo open `{itemid $d nw} > $d/controls/icons/ctl
+for(i in `{seq 50}) if(~ $#f3 0) { f3=`{for(w in `{winof folder}) if(grep -s '^nw$' $w/title) echo $w}; sleep 0.1 }
+f=$f3(1)
+echo rename `{itemid $f x.txt} y.txt > $f/controls/icons/ctl
+for(i in `{seq 50}) if(~ $#al 0) { al=`{winof dialog}; sleep 0.1 }
+if(~ $#al 0)
+	fail no alert
+al=$al(1)
+cat $al/controls/msg*/value > $t/msg
+has $t/msg 'can''t be renamed' 'not supported'
+has $al/controls/other/label '^Copy and Delete$'
+has $f/controls/icons/items 'label=x.txt '
+echo activate > $al/controls/other/ctl
+sleep 0.5
+if(test -e $t/nw/y.txt && ! test -e $t/nw/x.txt)
+	pass
+if not
+	fail copy and delete did not happen
+waitfor $f/controls/icons/items 'label=y.txt '
+stopfinder
+unmount $t/nw >[2]/dev/null
+rm -f /srv/finder-nw.$pid
+
+if(test -s $t/finder.err){
+	echo '--- finder stderr' >[1=2]
+	cat $t/finder.err >[1=2]
+}
+unmount /n/fuimeta >[2]/dev/null
+rm -f /srv/$srvname
+rm -rf $t
+echo ui: $npass passed, $nfail failed
+if(! ~ $nfail 0)
+	exit fail
+exit ''
