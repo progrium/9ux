@@ -1,0 +1,91 @@
+#!/bin/rc
+# libux's clipboard: text fields' cut, copy and paste through snarf
+# (a plain file here), legacy copies, and several types through clipd.
+# Run from libux: rc test/clip.rc
+rfork ne
+suite=clip
+. test/lib.rc
+
+fn waitfile { for(i in `{seq 50}) if(! test -s $1) sleep 0.1 }
+fn press { echo activate >$ctl/$1/ctl; sleep 0.2 }
+
+dragout=$out/d
+mkdir -p $dragout
+dragfile=/dev/null
+uxsnarf=$out/snarf
+uxclip=$out/clip
+mkdir -p $uxclip
+echo -n >$uxsnarf
+srvname=ux.$user.dragapp
+rm -f /srv/$srvname
+dragout=$dragout dragfile=$dragfile uxheadless=1 uxpublic=1 test/$O.dragapp &
+for(i in `{seq 50}) if(! test -e /srv/$srvname) sleep 0.1
+app=$out/app
+mkdir -p $app
+mount -c /srv/$srvname $app
+ctl=$app/windows/1/controls
+f=$ctl/field
+
+test=copy-to-snarf
+echo focus >$f/ctl
+echo set '''hello world''' >$f/ctl
+echo select 0 5 >$f/ctl
+press copy
+same $uxsnarf 'hello'
+echo select 5 11 >$f/ctl
+press paste
+same $f/value 'hellohello
+'
+
+test=cut
+echo select 0 5 >$f/ctl
+echo -n x >$uxsnarf
+press cut
+same $uxsnarf 'hello'
+same $f/value 'hello
+'
+
+test=legacy-copy
+echo -n 'from acme' >$uxsnarf
+press selectall
+press paste
+same $f/value 'from acme
+'
+
+test=two-types-without-clipd
+# only the text goes anywhere: snarf
+press two
+waitfile $dragout/types
+same $dragout/types 'text
+'
+same $uxsnarf 'two kinds'
+rm -f $dragout/types
+echo -n x >$uxsnarf
+
+test=two-types-with-clipd
+../clipd/$O.out -n $uxsnarf -s clip.$pid -m $uxclip
+press two
+waitfile $dragout/types
+same $dragout/types 'text
+x.test
+'
+same $uxclip/data/x.test '<b>two kinds</b>'
+same $uxsnarf 'two kinds'
+press selectall
+press paste
+same $f/value 'two kinds
+'
+
+test=legacy-copy-with-clipd
+echo -n 'from sam' >$uxsnarf
+press selectall
+press paste
+same $f/value 'from sam
+'
+cat $uxclip/types >$out/t
+want '^type text size=8$' $out/t
+
+echo quit >$app/ctl >[2]/dev/null
+unmount $uxclip
+rm -f /srv/clip.$pid
+done

@@ -367,6 +367,11 @@ Image*	_resicon(Uxwin*, char*, int);
 void	_resdraw(Uxwin*);
 void	_resfreewin(Uxwin*);
 
+/* clip.c */
+long	_clipput(char*);
+char*	_clipget(void);
+char*	_tfedit(Uxctl*, char*);	/* ctl.c */
+
 /* drag.c */
 int	_dragstart(Uxdrag*, Uxctl*);
 

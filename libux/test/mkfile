@@ -3,6 +3,7 @@
 # Run from libux with `mk test`.
 test:V: $O.dragapp
 	@{cd ../../resfs && mk $O.resfs}
+	@{cd ../../clipd && mk}
 	@{cd ../../apps/sample && mk}
 	cd .. && O=$O rc test/run.rc
 

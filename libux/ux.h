@@ -201,3 +201,15 @@ int	uxdropsave(Uxev*, int item, char *path, ulong mode);	/* file item into a new
 void	uxdropresult(Uxev*, char *op, char *err);	/* what the drop did, if not the op offered */
 int	uxdragfromself(Uxev*);	/* the drop came from this app */
 char**	uxdragpaths(Uxev*, int *n);	/* and if so, its files' paths (malloc'd) */
+
+/*
+ * The clipboard (clip.c): clipd's /mnt/clip when it is mounted (several
+ * types per copy; docs/protocols/clip.md), rio's /dev/snarf otherwise
+ * (text only). Either way, text copied here is what legacy programs
+ * paste, and what they copy is what uxclipget("text") returns.
+ */
+char*	uxclipget(char *type, long *n);	/* malloc'd, NUL-terminated; nil if not held */
+int	uxclipput(char *type, void *data, long n);	/* the clipboard becomes this one type */
+int	uxclipputn(char **types, char **data, long *n, int ntypes);	/* several types of one copy */
+char**	uxcliptypes(int *n);	/* the types held now, richest first as copied; malloc'd */
+int	uxedit(char *cmd);	/* cut, copy, paste, selectall on the front window's focused text field */

@@ -4,6 +4,7 @@ LIB=libux.a$O
 OFILES=\
 	app.$O\
 	cmd.$O\
+	clip.$O\
 	ctl.$O\
 	draw.$O\
 	drag.$O\

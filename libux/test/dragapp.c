@@ -5,6 +5,7 @@
  *		$dragfile as "file" and the text "hello from dragapp"
  *	dst	a label (100,100)-(200,200): a drop target for file and text,
  *		copy only
+ *	field, cut, copy, paste, selectall, two: the clipboard (test/clip.rc)
  *	icons	an icon view (0,210)-(300,300) taking text, with folder1 at 50,30
  *
  * and writes what happens to files in $dragout: drop (type, op, pt,
@@ -114,6 +115,39 @@ iconfn(Uxev *e, void*)
 		note("icondrop", "drop %s on %s\n", e->text, e->item != nil ? e->item : "nothing");
 }
 
+/* clipboard buttons: cut, copy, paste, selectall run uxedit; two copies text and x.test */
+static void
+editfn(Uxev *e, void*)
+{
+	char *id, **t;
+	int i, n;
+	Fmt f;
+	static char *types[] = { "text", "x.test" };
+	static char *data[] = { "two kinds", "<b>two kinds</b>" };
+	static long len[] = { 9, 16 };
+
+	if(e->type != UXactivate)
+		return;
+	id = uxctlid(e->ctl);
+	if(strcmp(id, "two") == 0){
+		if(uxclipputn(types, data, len, 2) < 0)
+			note("editerr", "%r\n");
+		t = uxcliptypes(&n);
+		fmtstrinit(&f);
+		for(i = 0; i < n; i++){
+			fmtprint(&f, "%s\n", t[i]);
+			free(t[i]);
+		}
+		free(t);
+		id = fmtstrflush(&f);
+		note("types", "%s", id);
+		free(id);
+		return;
+	}
+	if(uxedit(id) < 0)
+		note("editerr", "%s: %r\n", id);
+}
+
 void
 threadmain(int, char**)
 {
@@ -135,6 +169,12 @@ threadmain(int, char**)
 	uxiconadd(c, "folder1", "Folder", "folder", Pt(50, 30));
 	uxhandler(c, iconfn, nil);
 	uxdroptypes(c, "text", nil);
+	uxtextfield(w, "field", "Field", Rect(0, 30, 90, 50), 0);
+	uxhandler(uxbutton(w, "cut", "Cut", Rect(220, 0, 260, 20)), editfn, nil);
+	uxhandler(uxbutton(w, "copy", "Copy", Rect(220, 20, 260, 40)), editfn, nil);
+	uxhandler(uxbutton(w, "paste", "Paste", Rect(220, 40, 260, 60)), editfn, nil);
+	uxhandler(uxbutton(w, "selectall", "All", Rect(220, 60, 260, 80)), editfn, nil);
+	uxhandler(uxbutton(w, "two", "Two", Rect(220, 80, 260, 100)), editfn, nil);
 	uxmain();
 	threadexitsall(nil);
 }

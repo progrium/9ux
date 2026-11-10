@@ -93,8 +93,12 @@ replace(Uxctl *c, int q0, int q1, char *s)
 				r[i] = ' ';
 	}else
 		r = runesmprint("%s", s);
+	/* move the tail before shrinking, after growing */
+	if(n < q1-q0)
+		memmove(c->text+q0+n, c->text+q1, (c->ntext-q1)*sizeof(Rune));
 	c->text = erealloc(c->text, (c->ntext - (q1-q0) + n + 1)*sizeof(Rune));
-	memmove(c->text+q0+n, c->text+q1, (c->ntext-q1)*sizeof(Rune));
+	if(n > q1-q0)
+		memmove(c->text+q0+n, c->text+q1, (c->ntext-q1)*sizeof(Rune));
 	memmove(c->text+q0, r, n*sizeof(Rune));
 	c->ntext += n - (q1-q0);
 	free(r);
@@ -131,6 +135,61 @@ vinsert(Uxctl *c, int, char **argv)
 	selevent(c);
 	note(c, UXvalue, UXctl);
 	return nil;
+}
+
+/*
+ * Cut, copy, paste and select all on a text field, with the clipboard
+ * (clip.c: clipd's text if it runs, rio's snarf otherwise). uxlk held.
+ */
+char*
+_tfedit(Uxctl *c, char *cmd)
+{
+	char *s;
+	long n;
+
+	if(c == nil || strcmp(c->t->name, "text-field") != 0)
+		return "not found: no text field has focus";
+	if(strcmp(cmd, "selectall") == 0){
+		c->q0 = 0;
+		c->q1 = c->ntext;
+		dirty(c);
+		selevent(c);
+		return nil;
+	}
+	if(strcmp(cmd, "copy") == 0 || strcmp(cmd, "cut") == 0){
+		if(c->state & UXsecret)
+			return "permission denied: a secret field";
+		if(cmd[1] == 'u' && (c->state & UXreadonly))
+			return "bad value: readonly";
+		if(c->q1 > c->q0){
+			s = _runestr(c->text+c->q0, c->q1-c->q0);
+			n = _clipput(s);
+			free(s);
+			if(n < 0)
+				return "failed: can't write the clipboard";
+		}
+		if(cmd[1] == 'u' && c->q1 > c->q0){
+			replace(c, c->q0, c->q1, "");
+			valueevent(c);
+			selevent(c);
+			note(c, UXvalue, UXui);
+		}
+		return nil;
+	}
+	if(strcmp(cmd, "paste") == 0){
+		if(c->state & UXreadonly)
+			return "bad value: readonly";
+		s = _clipget();
+		if(s == nil)
+			return "failed: can't read the clipboard";
+		replace(c, c->q0, c->q1, s);
+		free(s);
+		valueevent(c);
+		selevent(c);
+		note(c, UXvalue, UXui);
+		return nil;
+	}
+	return "unknown command";
 }
 
 static int

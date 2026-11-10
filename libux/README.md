@@ -162,6 +162,16 @@ travel through rio, so a target never gets a path; only when the drop
 came from the same app (`uxdragfromself`) does `uxdragpaths` give the
 source's paths, for moves within one program.
 
+## Clipboard
+
+[clip.c](clip.c): `uxclipget`, `uxclipput`, `uxclipputn` (several types
+of one copy) and `uxcliptypes` use clipd's `/mnt/clip`
+([clip.md](../docs/protocols/clip.md)) when it is mounted, and rio's
+`/dev/snarf` (text only) when it isn't, so text always interoperates
+with legacy programs. `uxedit("cut" | "copy" | "paste" | "selectall")`
+works on the front window's focused text field; wire an Edit menu's
+actions to it. Secret fields refuse copy and cut.
+
 ## Building and testing
 
 ```sh
@@ -201,7 +211,5 @@ Not yet:
   have no automated test until S0's harness can inject input.
 - Window `close` from rio's own close (deleting the window) isn't
   reported for dialogs yet; the dialog just goes away.
-- Icon views don't start drags by themselves yet: Finder (S7b) calls
-  `_dragstart` from its icon tracking. Text fields have no snarf yet.
 - The uxd registration path is written to ux.md but untested until uxd
   (S4) or a fake uxd exists.
