@@ -257,6 +257,41 @@ run(int argc, char **argv)
 			return err();
 		Bprint(&out, "%q\n", dst);
 		free(dst);
+	}else if(strcmp(verb, "trash") == 0 || strcmp(verb, "putback") == 0){
+		if(need(argc, 1, 1) < 0)
+			return err();
+		p = fcresolve(ws, argv[0]);
+		dst = verb[0] == 't' ? fctrash(ws, p, 0) : fcputback(ws, p);
+		free(p);
+		if(dst == nil)
+			return err();
+		Bprint(&out, "%q\n", dst);
+		free(dst);
+	}else if(strcmp(verb, "trashlist") == 0 || strcmp(verb, "emptytrash") == 0 || strcmp(verb, "trashlimit") == 0){
+		Fcvol *tv;
+		Fctrashitem *it;
+		long i, nt;
+
+		if(need(argc, 1, 1) < 0)
+			return err();
+		tv = fcvolbyname(ws, argv[0]);
+		if(tv == nil){
+			werrstr("not found: no volume %s", argv[0]);
+			return err();
+		}
+		if(strcmp(verb, "trashlist") == 0){
+			nt = fctrashlist(ws, tv, &it);
+			for(i = 0; i < nt; i++)
+				Bprint(&out, "%q %q %ld\n", it[i].path, it[i].origin != nil ? it[i].origin : "", it[i].date);
+			fctrashfree(it, nt);
+		}else if(strcmp(verb, "emptytrash") == 0){
+			if(fcemptytrash(ws, tv) < 0)
+				return err();
+		}else{
+			p = fctrashlimit(ws, tv);
+			Bprint(&out, "%s\n", p);
+			free(p);
+		}
 	}else if(strcmp(verb, "rm") == 0){
 		f = flag(&argc, &argv, "-r") ? Frecursive : 0;
 		if(need(argc, 1, 1) < 0)

@@ -27,6 +27,7 @@ shell through [`fcore`](#fcore-from-the-shell). The UI (S7b) builds on it.
 | [`caps.c`](caps.c) | Classifying a server's error strings, and what each volume's server supports, learned by probing or from use |
 | [`ops.c`](ops.c) | Rename, move, copy, duplicate, delete, new folder, permissions |
 | [`info.c`](info.c) | Get Info: kind, size (optionally of a whole folder), owner, mode, writability, and the association uxmeta resolves |
+| [`trash.c`](trash.c) | The Trash: one per volume, Put Back, emptying, and what each volume's Trash can't do |
 | [`launch.c`](launch.c) | Opening documents through the plumber, Open With, and launching apps in the workspace |
 
 ### Volumes and the workspace
@@ -103,6 +104,24 @@ callers match on the phrase. They extend the shared list in
 | `bad value` | A bad name, a folder into itself, a volume's root |
 | `failed` | Any other error from the server, with its text |
 
+### Trash
+
+Every volume has its own Trash, `.trash` at its root, and nothing ever
+goes to another volume's Trash. 9P can't move a file between folders,
+so `fctrash` copies the item into a fresh slot of its volume's Trash
+(`.trash/STAMP/NAME`, next to `.trash/STAMP/.origin`, which records
+`path=` within the volume and `date=`) and then deletes the original;
+if the delete fails, the copy is removed again and the original stays.
+`fcputback` copies an item back where it came from (`exists` if
+something has taken its place, `not found` if its folder is gone),
+`fctrashlist` lists a volume's Trash oldest first, and `fcemptytrash`
+deletes everything in it. A path not on a volume, or a volume that
+can't make the folder, fails with `not supported`, and the UI offers
+Delete instead. `fctrashlimit` gives the sentence the UI shows about a
+volume's Trash: that items are copied then deleted (slow for big
+folders), or why this volume can't have one. Folder views should hide
+`.trash`.
+
 ### Opening and launching
 
 `fcopen` returns `Ofolder` for a folder (Finder opens it itself).
@@ -140,6 +159,10 @@ identity) between them, printing `> command` before each result and
 | `rename [-c] PATH NAME`, `move [-c] PATH DIR` | nothing; `-c` allows copy and delete |
 | `copy PATH DIR [NAME]`, `dup PATH`, `mkdir DIR [NAME]` | the new path |
 | `rm [-r] PATH`, `chmod MODE PATH` | nothing |
+| `trash PATH`, `putback TRASHPATH` | where it went |
+| `trashlist VOL` | `TRASHPATH ORIGIN DATE` per item, oldest first |
+| `emptytrash VOL` | nothing |
+| `trashlimit VOL` | the sentence the UI shows about the volume's Trash |
 | `open PATH` | `folder PATH` or `plumbed PATH PORT` |
 | `openwith PATH APP`, `launch APP [DIR [ARGS...]]` | `plumbed`, `launched` or `launched PID` |
 
@@ -166,5 +189,4 @@ uxmeta part is skipped if `uxmeta/` isn't built.
 a remote volume, does the operations over it, then stops it and checks
 the volume reports `gone`.
 
-Not here yet: Trash (S9), drag and drop (S9), and the UI with its
-layout (S7b).
+

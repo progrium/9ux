@@ -10,6 +10,7 @@ OFILES=\
 	ops.$O\
 	info.$O\
 	launch.$O\
+	trash.$O\
 
 HFILES=fcore.h
 BIN=/$objtype/bin

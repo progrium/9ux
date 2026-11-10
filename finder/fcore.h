@@ -21,6 +21,7 @@ typedef struct Fcws Fcws;
 typedef struct Fcfolder Fcfolder;
 typedef struct Fcchange Fcchange;
 typedef struct Fcinfo Fcinfo;
+typedef struct Fctrashitem Fctrashitem;
 
 /* metadata records (meta.c), as uxmeta serves them: ndb text */
 struct Fcattr
@@ -231,3 +232,21 @@ enum
 int	fcopen(Fcws*, char *path, char **dst);
 int	fcopenwith(Fcws*, char *path, char *app);
 int	fclaunch(Fcws*, char *app, char *dir, char **argv);
+
+/* Trash, one per volume (trash.c) */
+struct Fctrashitem
+{
+	char	*path;		/* where it is now, in the Trash */
+	char	*name;
+	char	*origin;	/* where it came from; nil if unknown */
+	long	date;		/* when it was trashed */
+	Fcvol	*vol;
+};
+char*	fctrash(Fcws*, char *path, int flags);	/* returns where it went */
+long	fctrashlist(Fcws*, Fcvol*, Fctrashitem**);	/* oldest first */
+void	fctrashfree(Fctrashitem*, long);
+char*	fcputback(Fcws*, char *item);		/* returns where it went back to */
+int	fcemptytrash(Fcws*, Fcvol*);
+char*	fctrashlimit(Fcws*, Fcvol*);	/* a sentence for the UI, malloc'd */
+char*	fctrashdir(Fcvol*);
+int	fcintrash(Fcws*, char *path);

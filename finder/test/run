@@ -88,6 +88,58 @@ lacks $t/out '^a\.txt '
 if(~ `{cat $t/nw/b.txt} hello) pass
 if not fail renamed copy lost its contents
 
+test=trash
+# each volume's own Trash: in, listed, put back, emptied; a volume
+# without wstat can still have one (it's copy and delete anyway)
+mkdir -p $t/tv/docs/sub
+echo keep me > $t/tv/docs/a.txt
+echo deep > $t/tv/docs/sub/b.txt
+echo nw > $t/nw/c.txt
+$fcore -M -v 'tv='^$t/tv -v 'nw='^$t/nw > $t/out >[2=1] <<'EOF'
+trashlimit tv
+trash tv:docs/a.txt
+trash tv:docs/sub
+trash nw:c.txt
+trashlist tv
+trashlist nw
+trash tv:.trash
+trash tv:
+trash /tmp
+EOF
+has $t/out \
+	'^Items moved to the Trash are copied into tv''s own Trash' \
+	'^'^$t^'/tv/\.trash/[0-9]+\.0/a\.txt$' \
+	'^'^$t^'/tv/\.trash/[0-9]+\.[0-9]/sub$' \
+	'^'^$t^'/nw/\.trash/[0-9]+\.0/c\.txt$' \
+	'^'^$t^'/tv/\.trash/[0-9.]+/a\.txt '^$t^'/tv/docs/a\.txt [0-9]+$' \
+	'^'^$t^'/tv/\.trash/[0-9.]+/sub '^$t^'/tv/docs/sub [0-9]+$' \
+	'^error: bad value: .* is already in the Trash$' \
+	'^error: bad value: ' \
+	'^error: not supported: /tmp isn''t on a volume'
+if(test -e $t/tv/docs/a.txt || test -e $t/tv/docs/sub || test -e $t/nw/c.txt) fail originals still there
+if not pass
+if(~ `{cat $t/tv/.trash/*/sub/b.txt} deep) pass
+if not fail trashed folder lost its contents
+item=`{ls -d $t/tv/.trash/*/a.txt}
+echo again > $t/tv/docs/a.txt
+$fcore -M -v 'tv='^$t/tv putback $item > $t/out >[2=1]
+has $t/out 'exists: '^$t^'/tv/docs/a\.txt$'
+rm $t/tv/docs/a.txt
+$fcore -M -v 'tv='^$t/tv putback $item > $t/out >[2=1]
+has $t/out '^'^$t^'/tv/docs/a\.txt$'
+got=`{cat $t/tv/docs/a.txt}
+if(~ $"got 'keep me') pass
+if not fail put back lost the contents
+$fcore -M -v 'tv='^$t/tv > $t/out >[2=1] <<'EOF'
+trashlist tv
+emptytrash tv
+trashlist tv
+EOF
+has $t/out '^> trashlist tv$' '/tv/\.trash/[0-9.]+/sub '
+lacks $t/out 'a\.txt'
+if(! ~ `{ls $t/tv/.trash | wc -l} 0) fail emptytrash left things
+if not pass
+
 test=gone
 # the server goes away: the volume goes offline and says why
 $fcore -M -v 'nw='^$t/nw check nw > $t/out >[2=1]
