@@ -18,3 +18,73 @@ takes them upstream.
   (refuse a second open of a `DMEXCL` file while one is open in the
   machine), or a documented statement that it doesn't, so programs don't
   rely on it.
+
+## isoroot trees lack the kernel's mount points
+
+- **Found by:** S0 (harness and CI), at H9_REV b27cacd, native backend.
+- **What happens:** a root unpacked from the release's amd64 ISO with
+  `zig build isoroot` has no `/dev`, `/env`, `/mnt/term`, `/srv` and the
+  other directories the 9front kernel supplies, so the first run fails
+  with `bind #y /dev: file does not exist: '/dev'`. `zig build mkroot`
+  adds them (its `mount_points` list); isoroot doesn't.
+- **Workaround:** `scripts/h9.sh` makes the same list of directories
+  after unpacking, and drops the installer payload in `dist/`.
+- **h9 would need:** isoroot to add `mount_points` as mkroot does (and
+  perhaps skip `dist/`), so an ISO tree is a usable `--root` as is.
+
+## h9 can't be a fetched Zig package
+
+- **Found by:** S0, at H9_REV b27cacd.
+- **What happens:** h9's `build.zig.zon` `paths` leave out
+  `third_party/` (drawterm) and `scripts/` (the pins), so a URL or hash
+  dependency on h9 doesn't build. h9's docs/embedding.md says so.
+- **Workaround:** `test/harness/build.zig.zon` depends on h9 by path,
+  `../../.local/hyper9`, the checkout `scripts/h9.sh` keeps at `H9_REV`.
+  The harness therefore needs `scripts/h9.sh --setup` first.
+- **h9 would need:** the package paths to include what the build reads,
+  so `zig fetch --save git+https://github.com/progrium/hyper9#REV` works
+  and the pin can live in `build.zig.zon`.
+
+## No headless screen from the command line
+
+- **Found by:** S0.
+- **What happens:** the headless gfx backend and its hooks (inject keys
+  and mouse, read pixels and the clipboard, close the window) exist only
+  in `-Dgfx=headless` builds of the library, so a GUI test has to be a
+  Zig program embedding h9. `h9 --gfx` on Linux needs an X11 build and a
+  display.
+- **Workaround:** the Zig harness in `test/harness`, with an rc agent
+  inside rio so tests can still be mostly rc commands.
+- **h9 would need:** a CLI switch for a headless screen, with input
+  injection and screenshots through files or a control socket, so tests
+  for 9/UX components could be plain rc (as development.md hoped). Not
+  urgent: the harness covers it.
+
+## --serve exports the plan's namespace, not the program's
+
+- **Found by:** S0, checking development.md's assumption that rio's
+  `/dev/ux` could be exported with `--serve` while rio runs.
+- **What happens:** as the manual says, a `--serve` client sees the
+  namespace h9 built, not binds the program made later, so rio's
+  `/dev/wsys` and `/dev/ux` aren't there. The machine's `/srv` is,
+  though (checked: a file posted in `/srv` by the program shows up in
+  the client's mount of the export), and rio posts its file server as
+  `/srv/rio.USER.PID`.
+- **Workaround:** none needed yet. A host-side client reaches rio by
+  mounting the exported tree and then the posted `/srv/rio.*` (with a
+  window id or `none` as the attach spec). The harness doesn't use
+  `--serve`; its agent runs inside rio.
+- **h9 would need:** nothing, unless tests want a host-side 9P client;
+  then a way to export a named process's namespace would be simpler.
+
+## A GUI session once failed to start under load
+
+- **Found by:** S0, running five GUI test binaries at once (each a
+  machine running rio) on a 4-core container, native backend.
+- **What happens:** one session's rio was running but its `-i` command
+  hadn't run after 60 seconds. Seen once in about ten runs; not
+  reproduced since.
+- **Workaround:** the harness runs test binaries one after another, and
+  saves the screen as `start-failed.png` if a start times out.
+- **h9 would need:** to be looked at if it happens again; record the
+  run here.
