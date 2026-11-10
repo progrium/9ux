@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>9/UX live demo</title>
+<link rel="icon" href="data:,">
+<!-- The live demo: 9/UX on h9's browser host. scripts/web.sh copies this
+     page next to h9's runtime (h9-web.js, worker.js, h9.wasm, v86.wasm)
+     and the demo's root archive (root.h9a). The guest runs
+     /9ux/web/boot.rc (web/boot.rc in the repository).
+
+     ?embed leaves out the header, for the project page's iframe.
+     ?debug prints what the session started, below the screen.
+     ?scale=N draws N device pixels per screen pixel (default 1 CSS pixel). -->
+<style>
+  html, body { margin: 0; height: 100%; background: #fff; color: #000; }
+  body { display: flex; flex-direction: column; font: 14px/1.4 sans-serif; }
+  header { display: flex; gap: 1em; align-items: center; flex-wrap: wrap; padding: 6px 12px; border-bottom: 1px solid #888; }
+  header .grow { flex: 1; }
+  header button { font: inherit; }
+  #stage { position: relative; flex: 1; min-height: 0; background: #5f8f8f; }
+  #screen { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+  #status { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    text-align: center; padding: 1em; color: #fff; font-size: 16px; text-shadow: 0 1px 2px #000; pointer-events: none; }
+  #status[hidden] { display: none; }
+  #status a { color: #fff; pointer-events: auto; }
+  #log { margin: 0; max-height: 8em; overflow: auto; padding: 4px 12px; font: 12px/1.3 ui-monospace, Menlo, Consolas, monospace;
+    white-space: pre-wrap; border-top: 1px solid #888; }
+  #log:empty { display: none; }
+  body.embed header { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <b>9/UX</b>
+  <span class="grow">rio in 9/UX mode, Finder and the libux sample, compiled for 386 and run by
+    <a href="https://github.com/progrium/hyper9">h9</a> on v86 in this tab.
+    Click the screen to type; right-click (or Ctrl-click) for button 3, Alt-click for button 2.</span>
+  <button id="restart">restart</button>
+  <a href="../">back to the project page</a>
+</header>
+<div id="stage">
+  <canvas id="screen" tabindex="0" aria-label="the 9/UX desktop"></canvas>
+  <div id="status">Loading 9/UX…</div>
+</div>
+<pre id="log"></pre>
+<script type="module">
+import { createMachine, haveJSPI } from './h9-web.js';
+
+const params = new URLSearchParams(location.search);
+if (params.has('embed')) document.body.classList.add('embed');
+const status = document.getElementById('status');
+const log = document.getElementById('log');
+const dec = new TextDecoder();
+const say = (html) => { status.innerHTML = html; status.hidden = false; };
+// The guest's console. Lines starting "9ux: " are boot.rc's and
+// session.rc's progress, shown over the screen until "9ux: ready".
+let pending = '';
+const print = (s) => {
+  pending += s;
+  let i;
+  while ((i = pending.indexOf('\n')) >= 0) {
+    const line = pending.slice(0, i);
+    pending = pending.slice(i + 1);
+    const p = line.match(/^9ux: (.*)/);
+    if (!p || params.has('debug')) { log.textContent += line + '\n'; log.scrollTop = log.scrollHeight; }
+    if (p?.[1] === 'ready') status.hidden = true;
+    else if (p) say(`${p[1][0].toUpperCase()}${p[1].slice(1)}…`);
+  }
+};
+document.getElementById('restart').onclick = () => location.reload();
+
+// The screen's size in its own pixels, as h9-web.js computes it, so
+// boot.rc can place windows: CSS pixels at scale 1, device pixels at 0,
+// device pixels / N at N.
+const screenSize = (c, scale) => [c.clientWidth, c.clientHeight].map((v) =>
+  String(Math.floor(scale === 1 ? v : v * devicePixelRatio / (scale || 1))));
+
+async function main() {
+  if (!haveJSPI || typeof OffscreenCanvas === 'undefined') {
+    say('This demo needs a browser with JavaScript Promise Integration and OffscreenCanvas: ' +
+      'Chrome or Edge 137 or later.<br><br><a href="../images/docs/desktop.png" target="_top">Here is a screenshot instead.</a>');
+    return;
+  }
+  const canvas = document.getElementById('screen');
+  const scale = Number(params.get('scale') ?? 1);
+  const m = await createMachine({
+    root: 'root.h9a',
+    memory: params.get('memory') ?? undefined,
+    gfx: { canvas, scale },
+    terminal: { write: (b) => print(dec.decode(b, { stream: true })) },
+  });
+  m.addEventListener('snarf', (e) => print(`[the clipboard refused: ${JSON.stringify(e.text)}]\n`));
+  say('Loading 9/UX… (about 17 MB, once)');
+  canvas.focus();
+  const code = await m.run(['rc', '/9ux/web/boot.rc', ...(params.has('debug') ? ['-d'] : []), ...screenSize(canvas, scale)]).catch((e) => { print(`${e.message}\n`); return null; });
+  say(`9/UX stopped${code !== null ? ` (${code || 'exit 0'})` : ''}. <a href="" target="_self">Start it again</a>`);
+}
+main().catch((e) => say(`Couldn't start the demo: ${e.message}`));
+</script>
+</body>
+</html>

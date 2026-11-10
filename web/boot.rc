@@ -1,0 +1,52 @@
+#!/bin/rc
+# The website's live demo (scripts/web.sh): what the page asks h9 to run,
+# as `rc /9ux/web/boot.rc`. The archive holds 9front's 386 programs and
+# the 9/UX tree at /9ux, read-only under an overlay in memory, so
+# anything written lasts until the tab closes.
+#
+# Sets up the session the way a 9/UX profile would: the environment,
+# uxd on /mnt/ux and uxmeta on /mnt/meta (with the home volume), before
+# rio, so every window has them. Then it runs the rio fork in 9/UX mode
+# with session.rc as its -i command. Lines on the console that start
+# "9ux: " are progress the page shows over the screen.
+#
+#	rc boot.rc [-d] [WIDTH HEIGHT]
+#
+# WIDTH and HEIGHT are the screen's size, for placing windows; -d (the
+# page's ?debug) has session.rc print what it started.
+debug=()
+if(~ $1 -d){
+	debug=-d
+	shift
+}
+uxscreen=($*)
+user=glenda
+home=/usr/glenda
+workspace=demo
+cputype=386
+objtype=386
+prompt=('% ' '	')
+path=(. /bin)
+font=/lib/font/bit/vga/unicode.font
+fn say { echo 9ux: $* >/dev/cons }
+
+say starting the services
+# The demo's home, with some files for Finder to show.
+bind -c /9ux/web/home $home
+cd $home
+t=/tmp/9ux
+mkdir -p $t/sys $t/apps $t/user $t/lib
+
+/9ux/uxd/8.out -m /mnt/ux -g $t/grants
+
+echo 'ext=.txt type=text
+type=text open=edit icon=doc-text desc="Plain text"' >$t/sys/base.ndb
+echo 'volume=home path='$home' icon=disk desktop=yes' >$t/user/meta.ndb
+/9ux/uxmeta/8.out -s uxmeta.$user -m /mnt/meta -d $t/sys -a $t/apps -u $t/user -w $workspace -i 500
+
+for(f in /mnt/ux/register /mnt/meta/ctl)
+	if(! test -e $f)
+		echo boot.rc: no $f >[1=2]
+
+say starting rio
+exec /9ux/rio/8.out -u -i 'rc /9ux/web/session.rc '$"debug

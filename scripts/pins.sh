@@ -6,6 +6,10 @@
 H9_REPO=https://github.com/progrium/hyper9
 H9_REV=178dcfb9147ed9e3be9127b8ab72c546c44ddb2a
 
+# h9 for the website's live demo (scripts/web.sh): its browser host,
+# with graphics on a canvas (hyper9's design/0120-browser-gfx.md).
+H9_WEB_REV=73bb66056162407cc50c9b75cbe3043335b50293
+
 # 9front release: must match h9's NINEFRONT_RELEASE and rio/UPSTREAM.
 NINEFRONT_RELEASE=11952
 
