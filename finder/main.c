@@ -473,6 +473,8 @@ finderproc(void*)
 static void
 claimdesk(void)
 {
+	int fd;
+
 	deskfd = open("/dev/ux/desktop/ctl", ORDWR);
 	if(deskfd < 0)
 		return;
@@ -480,6 +482,12 @@ claimdesk(void)
 		fprint(2, "finder: can't claim the desktop: %r\n");
 		close(deskfd);
 		deskfd = -1;
+		return;
+	}
+	/* libux asks for classic chrome on its windows; not on the desktop */
+	if((fd = open("/dev/ux/ctl", OWRITE)) >= 0){
+		fprint(fd, "chrome %d off\n", uxwinid(desk->w));
+		close(fd);
 	}
 }
 
@@ -548,6 +556,15 @@ threadmain(int argc, char **argv)
 	metac = chancreate(sizeof(char*), 256);
 
 	uxinit("finder", "Finder");
+	/* Finder has no resources of its own; it uses the system's icons */
+	s = getenv("uxsysres");
+	if(s == nil || *s == 0){
+		free(s);
+		s = festrdup("/lib/ux/system.rsrc");
+	}
+	if(access(s, AREAD) == 0 && uxres(s) < 0)
+		fprint(2, "finder: system icons: %r\n");
+	free(s);
 	uxapphandler(apphandler, nil);
 	menus();
 	desk = deskopen();

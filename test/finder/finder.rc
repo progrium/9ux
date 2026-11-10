@@ -1,0 +1,24 @@
+#!/bin/rc
+# finder.rc: run in a window by finder_test.zig. Sets up a volume and a
+# uxmeta under $work, then runs Finder from the tree with resfs and the
+# system resources, publishing its tree at /srv/ux.$user.finder.
+rfork ne
+cd /mnt/term/cwd
+O=`{sed -n 's/^O=//p' /$objtype/mkfile}
+t=$work/f
+mkdir -p $t/sys $t/apps $t/user $t/vol/docs /n/fmeta
+echo hello > $t/vol/notes.txt
+echo hello > $t/vol/docs/a.txt
+echo '#!/bin/rc' > $t/vol/run
+chmod +x $t/vol/run
+cat > $t/sys/base.ndb <<'X'
+ext=.txt type=text
+type=text open=edit icon=doc-text desc="Plain text"
+X
+cat > $t/user/meta.ndb <<X
+volume=scratch path=$t/vol icon=disk desktop=yes
+X
+uxmeta/$O.out -s fmeta.$pid -m /n/fmeta -d $t/sys -a $t/apps -u $t/user -w gui -i 50
+resfs=`{pwd}^/resfs/$O.resfs uxsysres=`{pwd}^/assets/gen/system.rsrc \
+	uxpattern=`{pwd}^/assets/gen/patterns/nineteal.img uxpublic=1 \
+	exec finder/$O.finder -m /n/fmeta -w gui -i 200 >[2]$work/finder.err
