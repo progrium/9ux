@@ -1,0 +1,10 @@
+# Plan 9 compiler output
+*.[05678qvk]
+[05678qvk].out
+*.a
+syms
+y.tab.[ch]
+y.debug
+
+# local tool state (h9 root trees, caches)
+.local/
