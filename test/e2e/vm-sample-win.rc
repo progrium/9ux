@@ -1,0 +1,6 @@
+#!/bin/rc
+# vm-sample-win.rc: the sample app, in the window vm-sample.rc opens.
+cd /n/9ux/apps/sample
+resfs=/n/9ux/resfs/6.resfs uxsysres=/n/9ux/assets/gen/system.rsrc uxpublic=1 \
+	./6.out >[2]/n/9ux/.local/test/artifacts/vm-sample.err
+sleep 1000

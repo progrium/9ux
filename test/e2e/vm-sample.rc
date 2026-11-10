@@ -1,0 +1,12 @@
+#!/bin/rc
+# vm-sample.rc: rio's -i command in the 9front VM (vm-display.py): the
+# libux sample in a window at 20,20,520,440 with its icon "sample"
+# selected, as test/libux/res_test.zig shows it headless. The checkout
+# is /n/9ux.
+window -r 20 20 520 440 rc /n/9ux/test/e2e/vm-sample-win.rc
+for(i in `{seq 1 600})
+	if(! test -e /srv/ux.$user.sample)
+		sleep 0.1
+mkdir -p /tmp/sample
+mount /srv/ux.$user.sample /tmp/sample
+echo select sample >/tmp/sample/windows/1/controls/icons/ctl

@@ -18,7 +18,7 @@ Run once, on Linux x86\_64 with plain emulation (no KVM), on
 | Make the VM a CPU and auth server (below) | works: nvram key, `glenda` in keyfs, listeners on 17019 and 567 |
 | `rcpu` from an h9 machine on the host into the VM | **not yet**: the connection opens and closes without a session (the client's factotum never gets the server's protocol list). Not settled whether this is h9's networking, QEMU's user-mode forwarding, or the setup; to be retried with drawterm |
 | drawterm into the VM, then run the fork in the session | **not yet**: needs drawterm and a display on the host. Jeff, by hand |
-| The fork on the VM's own VESA display | not yet |
+| The fork on the VM's own display | works at 32 bits through UEFI (OVMF): `test/e2e/vm-display.py` runs the libux sample and matches the headless golden pixel for pixel ([release.md](release.md)) |
 | `mk install` and booting into the fork | not yet |
 
 ## Booting
