@@ -34,10 +34,13 @@ fi
 
 build_h9() {
 	if [ ! -d "$src/.git" ]; then
-		mkdir -p "$top/.local"
-		git clone -q "$H9_REPO" "$src"
+		# Not clone: the root may already be in .local/hyper9/.local
+		# (CI restores it from its own cache).
+		mkdir -p "$src"
+		git -C "$src" init -q
+		git -C "$src" remote add origin "$H9_REPO"
 	fi
-	if [ "$(git -C "$src" rev-parse HEAD)" != "$H9_REV" ]; then
+	if [ "$(git -C "$src" rev-parse -q --verify HEAD || true)" != "$H9_REV" ]; then
 		git -C "$src" fetch -q origin "$H9_REV"
 		git -C "$src" checkout -q "$H9_REV"
 		rm -f "$src/.9ux-built"
@@ -66,7 +69,16 @@ iso_root() {
 	mkdir -p "$nine"
 	if [ ! -f "$iso" ]; then
 		echo "h9.sh: fetching the 9front $NINEFRONT_RELEASE amd64 ISO" >&2
-		curl -fL --retry 3 -s -S -o "$iso.gz" "$NINEFRONT_ISO_URL/9front-$NINEFRONT_RELEASE.amd64.iso.gz"
+		# 9front.org is one small server: give up on a stalled
+		# transfer rather than hang, and resume on retry.
+		url="$NINEFRONT_ISO_URL/9front-$NINEFRONT_RELEASE.amd64.iso.gz"
+		i=0
+		until curl -fL -sS -C - --connect-timeout 30 --speed-limit 20000 --speed-time 60 -o "$iso.gz" "$url"; do
+			i=$((i + 1))
+			[ $i -lt 5 ] || { echo "h9.sh: can't fetch $url" >&2; exit 1; }
+			echo "h9.sh: retrying $url" >&2
+			sleep $((i * 10))
+		done
 		gunzip -c "$iso.gz" >"$iso.tmp"
 		echo "$NINEFRONT_AMD64_ISO_SHA256  $iso.tmp" | sha256sum -c --quiet >&2
 		mv "$iso.tmp" "$iso"

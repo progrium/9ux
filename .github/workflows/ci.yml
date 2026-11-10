@@ -28,7 +28,17 @@ jobs:
       - uses: actions/checkout@v4
 
       # Restored and saved separately so a failing test still saves them.
-      - name: Restore Zig, h9 and the 9front root
+      # The root changes only with the ISO, so it has its own cache and
+      # 9front.org's ISO is fetched once, not on every pin change.
+      - name: Restore the 9front root
+        id: root-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .local/hyper9/.local/9front
+          # Bump with NINEFRONT_RELEASE in scripts/pins.sh.
+          key: root-amd64-iso-11952-v1
+
+      - name: Restore Zig and h9
         id: h9-cache
         uses: actions/cache/restore@v4
         with:
@@ -36,6 +46,7 @@ jobs:
             .local/zig
             .local/hyper9
             !.local/hyper9/.zig-cache
+            !.local/hyper9/.local/9front
           key: h9-${{ runner.os }}-${{ hashFiles('scripts/pins.sh', 'scripts/h9.sh', 'scripts/zig.sh') }}
 
       - name: Restore the harness build
@@ -50,9 +61,17 @@ jobs:
             harness-${{ runner.os }}-${{ hashFiles('scripts/pins.sh') }}-
 
       - name: Set up h9 and the root
+        timeout-minutes: 25
         run: scripts/h9.sh --setup && scripts/h9.sh --check
 
-      - name: Save Zig, h9 and the 9front root
+      - name: Save the 9front root
+        if: steps.root-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .local/hyper9/.local/9front
+          key: ${{ steps.root-cache.outputs.cache-primary-key }}
+
+      - name: Save Zig and h9
         if: steps.h9-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
@@ -60,6 +79,7 @@ jobs:
             .local/zig
             .local/hyper9
             !.local/hyper9/.zig-cache
+            !.local/hyper9/.local/9front
           key: ${{ steps.h9-cache.outputs.cache-primary-key }}
 
       - name: Test
