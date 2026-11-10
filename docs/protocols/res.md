@@ -29,8 +29,8 @@ with one addition for resource text (escapes, below).
 resfs [-D] [-m mtpt] [-s srvname] [name=]file ...
 ```
 
-- `-m` sets the mount point (default `/mnt/res`; `-m ''` mounts
-  nothing). `-s` posts the service in `/srv`. `-D` traces 9P.
+- `-m` sets the mount point (default `/mnt/res`, which must exist;
+  `-m ''` mounts nothing). `-s` posts the service in `/srv`. `-D` traces 9P.
 - Each file appears as a directory named after it, without directory
   or extension: `sketch/resources.rsrc` is `resources`. `name=file`
   gives the name instead. A name used twice, or `version`, is an
