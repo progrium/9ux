@@ -151,7 +151,7 @@ ls $app/menus >$out/m
 want '/file$' $out/m
 want '/edit$' $out/m
 want '^item new label=New key=n$' $app/menus/file/items
-want '^item s1 sep=on$' $app/menus/file/items
+want '^item file-4 sep=on$' $app/menus/file/items
 want '^item undo label=Undo key=z enabled=off$' $app/menus/edit/items
 fails disabled echo invoke undo >$app/menus/edit/ctl
 fails 'not found' echo invoke nosuch >$app/menus/file/ctl
@@ -185,6 +185,42 @@ if(test -e $app/windows/2){
 	echo 'FAIL '^$test^': dialog still there'
 	failed=1
 }
+
+test=resources
+# menus from MENU 128 and 129, IDs from the titles
+want '^item about-sample ''label=About Sample…''$' $app/menus/file/items
+want '^item confirm label=Confirm… key=k$' $app/menus/file/items
+want '^item quit label=Quit key=q$' $app/menus/file/items
+# the list's strings from STR# 128
+want '^Yellow$' $c/colors/items
+# the mount is in libux's own namespace, not ours
+if(test -e /mnt/uxres.app){
+	echo 'FAIL '^$test^': resfs mount leaked into the namespace'
+	failed=1
+}
+
+test=alert
+echo invoke about-sample >$app/menus/file/ctl
+sleep 0.2
+same $app/windows/3/kind 'dialog
+'
+same $app/windows/3/title 'Sample
+'
+a=$app/windows/3/controls
+ls $a >$out/a
+want '/ok$' $out/a
+want '/item3$' $out/a
+want '/item4$' $out/a
+dontwant '/item2$' $out/a
+# ^0 is the number of saves
+same $a/item3/value 'Sample, built from resources.
+'
+want '^Saved [0-9]+ times.$' $a/item4/value
+want default $a/ok/state
+echo default >$app/windows/3/ctl
+sleep 0.2
+same $c/status/value 'confirmed
+'
 
 test=gone
 fails 'gone|does not exist' cat $app/windows/2/kind

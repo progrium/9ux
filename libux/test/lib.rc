@@ -69,7 +69,9 @@ fn done {
 fn startsample {
 	srvname=ux.$user.sample
 	rm -f /srv/$srvname
-	uxheadless=1 uxpublic=1 ../apps/sample/$O.out &
+	# resources through resfs from the tree, not /bin
+	resfs=../resfs/$O.resfs uxsysres=../assets/gen/system.rsrc \
+		uxheadless=1 uxpublic=1 ../apps/sample/$O.out &
 	samplepid=$apid
 	for(i in `{seq 50}) if(! test -e /srv/$srvname) sleep 0.1
 	app=$out/app

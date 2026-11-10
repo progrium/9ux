@@ -141,3 +141,17 @@ void	uxsep(Uxmenu*, char *id);
 void	uxitemenable(char *action, int);
 void	uxitemcheck(char *action, int);
 void	uxaction(char *action, Uxfn*, void*);
+
+/*
+ * resources, read through resfs (docs/protocols/res.md): the app's
+ * resource file, then the system's (/lib/ux/system.rsrc). Icon names
+ * in icon views may name an icon family or give its resource ID.
+ */
+int	uxres(char *file);	/* a resource file or resfs directory; nil: the default */
+char*	uxresstr(int id, int n);	/* malloc'd: string n of STR# id, or STR  id if n is 0 */
+Uxmenu*	uxresmenu(int id);	/* the menu in MENU id */
+Uxwin*	uxresdialog(int id, Uxfn*, void*);	/* DLOG id and its DITL; fn gets every event */
+Uxwin*	uxresalert(int id, Uxfn*, void*);	/* ALRT id and its DITL */
+void	uxresparam(int n, char *s);	/* ^n in dialog text, n 0 to 3 */
+int	uxresitem(Uxctl*);	/* the DITL item number a control came from, or 0 */
+Uxctl*	uxresctl(Uxwin*, int n);	/* the control made from DITL item n, or nil */

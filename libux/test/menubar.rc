@@ -20,7 +20,7 @@ want '^app sample-[0-9]+ title=Sample$' $out/m
 want '^window 1$' $out/m
 want '^menu file title=File$' $out/m
 want '^item file new label=New key=n$' $out/m
-want '^item file s1 sep=on$' $out/m
+want '^item file file-4 sep=on$' $out/m
 want '^item edit undo label=Undo key=z enabled=off$' $out/m
 
 test=click

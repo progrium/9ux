@@ -236,6 +236,7 @@ _delwin(Uxwin *w)
 		ux.front = nil;
 	_regwin(w->winid, 0);
 	_menuwin(w, 0);
+	_resfreewin(w);
 	if(w->img != nil && !w->main){
 		if(w->wctlfd >= 0)
 			write(w->wctlfd, "delete", 6);

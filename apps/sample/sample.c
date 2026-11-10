@@ -2,6 +2,9 @@
  * sample: a small libux app using every control, for trying libux by
  * hand and for the libux tests.
  *
+ * Its menus, dialogs, list strings and icon come from sample.rsrc, next
+ * to the binary (made from sample.res), read through resfs.
+ *
  *	sample		in a rio window
  *	uxheadless=1 uxpublic=1 sample	no display; tree at /srv/ux.$user.sample
  */
@@ -28,45 +31,55 @@ setstatus(char *fmt, ...)
 	free(s);
 }
 
+/* the confirm dialog (DLOG 128) and the about alert (ALRT 129) */
 static void
 dlgev(Uxev *e, void*)
 {
+	char *what;
+
+	if(dlg == nil || e->win != dlg)
+		return;
 	switch(e->type){
+	case UXactivate:
+		what = uxresitem(e->ctl) == 1 ? "confirmed" : "cancelled";
+		break;
 	case UXdefault:
+		what = "confirmed";
+		break;
 	case UXcancel:
 	case UXclose:
-		uxwinclose(dlg);
-		dlg = nil;
-		setstatus(e->type == UXdefault ? "confirmed" : "cancelled");
+		what = "cancelled";
 		break;
-	}
-}
-
-static void
-dlgbutton(Uxev *e, void *arg)
-{
-	if(e->type != UXactivate)
+	default:
 		return;
+	}
 	uxwinclose(dlg);
 	dlg = nil;
-	setstatus("%s", (char*)arg);
+	setstatus("%s", what);
 }
 
 static void
 confirm(void)
 {
-	Uxctl *ok, *cancel;
+	if(dlg != nil)
+		return;
+	dlg = uxresdialog(128, dlgev, nil);
+	if(dlg == nil)
+		setstatus("no dialog: %r");
+}
+
+static void
+about(void)
+{
+	char buf[16];
 
 	if(dlg != nil)
 		return;
-	dlg = uxdialog("Confirm", Rect(200, 200, 520, 330));
-	uxwinhandler(dlg, dlgev, nil);
-	uxlabel(dlg, "msg", "Save the document?", Rect(16, 16, 300, 36));
-	cancel = uxbutton(dlg, "cancel", "Cancel", Rect(140, 80, 210, 104));
-	ok = uxbutton(dlg, "ok", "OK", Rect(226, 80, 296, 104));
-	uxhandler(cancel, dlgbutton, "cancelled");
-	uxhandler(ok, dlgbutton, "confirmed");
-	uxdefault(dlg, ok);
+	snprint(buf, sizeof buf, "%d", saves);
+	uxresparam(0, buf);
+	dlg = uxresalert(129, dlgev, nil);
+	if(dlg == nil)
+		setstatus("no alert: %r");
 }
 
 static void
@@ -92,6 +105,8 @@ action(Uxev *e, void*)
 		setstatus("new");
 	}else if(strcmp(e->action, "confirm") == 0)
 		confirm();
+	else if(strcmp(e->action, "about-sample") == 0)
+		about();
 	else if(strcmp(e->action, "close") == 0)
 		uxquit();
 	else
@@ -133,8 +148,8 @@ usage(void)
 void
 threadmain(int argc, char *argv[])
 {
-	Uxmenu *m;
-	static char *colors[] = { "Red", "Green", "Blue", "Cyan", "Magenta", "Yellow" };
+	char *colors[16];
+	int ncolors;
 
 	ARGBEGIN{
 	default:
@@ -146,15 +161,13 @@ threadmain(int argc, char *argv[])
 	uxinit("sample", "Sample");
 	uxapphandler(appev, nil);
 
-	m = uxmenu("file", "File");
-	uxitem(m, "new", "New", "n");
-	uxitem(m, "confirm", "Confirm…", "k");
-	uxsep(m, "s1");
-	uxitem(m, "close", "Close", "w");
-	uxitem(m, "quit", "Quit", "q");
-	m = uxmenu("edit", "Edit");
-	uxitem(m, "undo", "Undo", "z");
-	uxitemenable("undo", 0);
+	if(uxres(nil) < 0)
+		sysfatal("resources: %r");
+	if(uxresmenu(128) == nil || uxresmenu(129) == nil)
+		sysfatal("menus: %r");
+	for(ncolors = 0; ncolors < nelem(colors); ncolors++)
+		if((colors[ncolors] = uxresstr(128, ncolors+1)) == nil)
+			break;
 
 	win = uxwindow("window", "Sample", Rect(0, 0, 480, 400));
 	uxlabel(win, "name-label", "Name:", Rect(16, 18, 70, 34));
@@ -166,14 +179,15 @@ threadmain(int argc, char *argv[])
 	agree = uxcheckbox(win, "agree", "I agree", Rect(316, 46, 460, 68));
 	notes = uxtextfield(win, "notes", "Notes", Rect(16, 80, 300, 160), UXmultiline);
 	list = uxlist(win, "colors", Rect(316, 80, 460, 190));
-	uxsetitems(list, colors, nelem(colors));
+	uxsetitems(list, colors, ncolors);
 	uxhandler(list, listev, nil);
 	scroll = uxscrollview(win, "files", Rect(16, 200, 460, 340));
 	uxsetextent(scroll, Rect(0, 0, 440, 400));
 	icons = uxiconview(win, "icons", Rect(17, 201, 447, 339));
 	uxsetparent(icons, scroll);
-	uxiconadd(icons, "readme", "Read Me", "document", Pt(48, 40));
+	uxiconadd(icons, "readme", "Read Me", "doc-text", Pt(48, 40));
 	uxiconadd(icons, "tmp", "tmp", "folder", Pt(140, 40));
+	uxiconadd(icons, "sample", "Sample", "sample", Pt(232, 40));
 	uxhandler(icons, iconev, nil);
 	status = uxlabel(win, "status", "", Rect(16, 352, 460, 372));
 	USED(pass, agree, notes);

@@ -10,6 +10,7 @@ OFILES=\
 	menu.$O\
 	obj.$O\
 	reg.$O\
+	res.$O\
 	srv.$O\
 	win.$O\
 

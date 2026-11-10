@@ -20,13 +20,14 @@ static ulong colors[Ncolor] = {
 	[Cdark]	0x444444FF,
 	[Clight]	0xDDDDDDFF,
 	[Csel]	DBlack,
+	[Cshade]	0x00000080,	/* half black, premultiplied: darkens a selected icon */
 };
 
 Image*
 _color(Uxwin *w, int i)
 {
 	if(w->col[i] == nil)
-		w->col[i] = allocimage(w->d, Rect(0,0,1,1), w->img->chan, 1, colors[i]);
+		w->col[i] = allocimage(w->d, Rect(0,0,1,1), i == Cshade ? RGBA32 : w->img->chan, 1, colors[i]);
 	return w->col[i];
 }
 
@@ -231,6 +232,7 @@ drawicons(Uxctl *c, Rectangle r)
 	Icon *ic;
 	Point p;
 	Rectangle ir;
+	Image *img;
 	int i;
 
 	w = c->w;
@@ -240,8 +242,14 @@ drawicons(Uxctl *c, Rectangle r)
 		ic = &c->icons[i];
 		p = addpt(subpt(addpt(r.min, ic->pt), c->origin), Pt(0, 0));
 		ir = Rect(p.x-16, p.y-16, p.x+16, p.y+16);
-		draw(w->img, ir, _color(w, ic->sel ? Cdark : Clight), nil, ZP);
-		border(w->img, ir, 1, _color(w, Cblack), ZP);
+		if((img = _resicon(w, ic->icon, 0)) != nil){
+			draw(w->img, ir, img, nil, img->r.min);
+			if(ic->sel)
+				draw(w->img, ir, _color(w, Cshade), img, img->r.min);
+		}else{
+			draw(w->img, ir, _color(w, ic->sel ? Cdark : Clight), nil, ZP);
+			border(w->img, ir, 1, _color(w, Cblack), ZP);
+		}
 		p = Pt(p.x - stringwidth(w->font, ic->label)/2, ir.max.y+2);
 		if(ic->sel)
 			stringbg(w->img, p, _color(w, Cwhite), ZP, w->font, ic->label, _color(w, Csel), ZP);
@@ -313,6 +321,7 @@ _redraw(Uxwin *w)
 	draw(w->img, w->img->r, _color(w, Cwhite), nil, ZP);
 	for(i = 0; i < w->nctl; i++)
 		_drawctl(w->ctl[i]);
+	_resdraw(w);
 	flushimage(w->d, 1);
 }
 

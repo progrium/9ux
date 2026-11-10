@@ -326,7 +326,7 @@ int	_dialogwin(Uxwin*, Rectangle);
 void	_drawctl(Uxctl*);
 Rectangle	_abs(Uxctl*);
 Image*	_color(Uxwin*, int);
-enum { Cwhite, Cblack, Cgray, Cdark, Clight, Csel, Ncolor };
+enum { Cwhite, Cblack, Cgray, Cdark, Clight, Csel, Cshade, Ncolor };
 
 /* menu.c */
 void	_barevent(char*);
@@ -334,6 +334,11 @@ void	_menuaction(char*, int, char*);
 void	_menuregister(void);
 char*	_menuitems(Uxmenu*);
 void	_menuwin(Uxwin*, int);
+
+/* res.c */
+Image*	_resicon(Uxwin*, char*, int);
+void	_resdraw(Uxwin*);
+void	_resfreewin(Uxwin*);
 
 /* reg.c */
 void	_register(void);

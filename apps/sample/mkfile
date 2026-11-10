@@ -5,8 +5,22 @@ OFILES=sample.$O
 BIN=/$objtype/bin
 LIB=../../libux/libux.a$O
 CFLAGS=$CFLAGS -I../../libux
+CLEANFILES=sample.rsrc
 
 </sys/src/cmd/mkone
 
+# the app's resources, next to its binary (uxres looks there)
+default:V: sample.rsrc
+all:V: sample.rsrc
+
+sample.rsrc: sample.res ../../resfs/$O.rescomp
+	../../resfs/$O.rescomp -o $target sample.res
+
+../../resfs/$O.rescomp:
+	cd ../../resfs && mk $O.rescomp
+
 $LIB:
 	cd ../../libux && mk
+
+# libux's tests run the sample (cd libux; mk test)
+test:V: all

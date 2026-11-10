@@ -66,6 +66,56 @@ called from any thread; handlers run on the UI thread with no lock held.
 Control, menu and action IDs are what scripts see, so pick stable
 lowercase names (`save`, not `button3`).
 
+## Resources
+
+An app can take its menus, dialogs, alerts, strings and icons from a
+classic resource file, written as text and compiled with resfs's
+`rescomp` ([res.md](../docs/protocols/res.md), "Resource source"):
+
+```c
+uxinit("sample", "Sample");
+if(uxres(nil) < 0)			/* sample.rsrc next to the binary */
+	sysfatal("resources: %r");
+uxresmenu(128);				/* MENU 128: File */
+s = uxresstr(128, 2);			/* string 2 of STR# 128 */
+dlg = uxresdialog(128, dlgev, nil);	/* DLOG 128 and its DITL */
+uxresparam(0, "3");			/* ^0 in dialog text */
+uxresalert(129, dlgev, nil);		/* ALRT 129 */
+```
+
+- **Where.** `uxres(file)` takes a resource file (`.rsrc`, AppleSingle
+  or AppleDouble) or a directory resfs already serves. With nil it
+  tries `$uxres`, then `/mnt/res/NAME`, then `NAME.rsrc` and
+  `resources.rsrc` beside the binary (`argv0`). The system's resources
+  (`$uxsysres`, default `/lib/ux/system.rsrc`, made from
+  `assets/gen/system.res`) are searched after the app's, so a DITL can
+  use the system alert icons 0, 1 and 2.
+- **How.** libux starts `resfs` (`$resfs`, default `/bin/resfs`) in a
+  proc with its own namespace and mounts it there, so the mount is
+  nobody else's and goes away with the app. Files are opened by that
+  proc and read by whoever asked.
+- **IDs.** Scripts see menus, items and controls by ID, which come from
+  titles: lowercase letters and digits, other runs as `-` (`Save As…`
+  is `save-as`). A title that gives no ID, or one already used, falls
+  back to `menuN`, `MENUID-N` (the item's number, which separators get
+  too) or `itemN` (the DITL item number). Command keys are lowercased.
+- **Menus.** Titles, keys, separators, disabled items and marks (shown
+  as checked) are used; a disabled menu disables its items. Submenus,
+  item icons, styles and `MDEF`s aren't yet.
+- **Dialogs.** Buttons, check boxes, radio buttons (as check boxes),
+  static text (as labels, with `^0`-`^3` replaced) and edit text (as text
+  fields, labelled by the static text before them) become controls;
+  `icon` items are drawn from the icon resources; other item types are
+  skipped. Item 1 is the default button (for an alert, item 2 when its
+  first stage asks for it). `fn` gets the window's events and every
+  control's; `uxresitem(ctl)` gives the item number an event came
+  from, and `uxresctl(win, n)` the control for item `n`. A DITL item's
+  disabled bit is ignored. An alert's title is the app's.
+- **Icons.** An icon-view item's icon names an icon family (the name
+  on its `ICN#`) or gives its resource ID; libux draws `icon/ID/image`
+  (the deepest of `icl8`, `icl4`, `ICN#`), darkened through its mask
+  when selected. A name with no resource is drawn as a gray square.
+
 ## How it works
 
 | Proc | Does | Waits on |
@@ -111,19 +161,25 @@ tree from rc: state files, ctl commands and errors, the `value` file
 write, two readers seeing the same events, a stalled reader getting
 `lost` while the UI keeps answering, flush of a blocked read, a dialog
 window coming and going, quit, and menu registration, clicks and
-shortcuts against `test/fakes/fakedevux`.
+shortcuts against `test/fakes/fakedevux`, and the menus, strings and
+an alert coming from the sample's resources.
+[test/libux/res_test.zig](../test/libux/res_test.zig) (the GUI harness,
+`scripts/test.sh gui`) checks what the resources draw against golden
+images: `icl8` icons from the app's and the system's resources, a
+selected icon, and an alert with a DITL icon.
 
 ## Status
 
 Done: the app model, all eleven control types of ux.md (`Window`,
 `Dialog`, `Menu`, `Button`, `TextField`, `Checkbox`, `Label`, `Group`,
 `List`, `ScrollView`, `IconView`, `FileChooser`), uxd registration,
-menu bar registration, and the sample app.
+menu bar registration, the sample app, and menus, dialogs, alerts,
+strings and icons from resources (S10).
 
 Not yet:
 
 - The look is a placeholder (black on white) until S8's style guide
-  lands; icons are gray squares until resources (S10).
+  lands; icons with no resource are gray squares.
 - Drawing has been checked by hand under `h9 --gfx` with rio, not by the
   GUI harness yet; the input paths (clicks, typing, Tab, Enter, Esc)
   have no automated test until S0's harness can inject input.
