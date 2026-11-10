@@ -16,9 +16,10 @@ artwork, and 9/UX ships no Apple resources; people can import their own
 1. **Macintosh structure, Plan 9 colour.** The shapes follow the classic
    desktop (a global menu bar, framed windows with a title bar, a close
    and a zoom box, push buttons, icons with labels). The colours are rio's
-   and acme's own (cream text, butter selection, the sea and teal of rio's
-   window borders), so 9/UX windows and legacy rio windows sit together on
-   one screen without either looking foreign.
+   and acme's own: butter title bars (rio's selection yellow, with acme's
+   cream and olive), a teal desktop (rio's greygreen), cream text fields
+   and butter text selection, so 9/UX windows and legacy rio windows sit
+   together on one screen without either looking foreign.
 2. **Black outlines, light fills.** Everything reads in 1 bit. Each colour
    has a defined 1-bit rendering, so the same source gives the colour icon
    and the `ICN#`-style one.
@@ -42,19 +43,24 @@ is the value to pass to `allocimage`.
 | ink | `K` | `000000` | black | outlines, text, frames |
 | paper | `W` | `FFFFFF` | white | menus, document windows, label plates |
 | cream | `Y` | `FFFFEA` | white | text field and text view background (acme's) |
-| butter | `y` | `EEEE9E` | white | text selection (rio's); folder fill |
-| olive | `o` | `99994C` | black | folder shading, embossed marks (rio's yellowgreen) |
-| mist | `c` | `EAFFFF` | white | highlight line on active title bars (acme's tag) |
-| sea | `C` | `9EEEEE` | white | active title bar, inactive rio border (rio's palegreygreen) |
-| teal | `T` | `55AAAA` | black | title rules, focus ring, dialog band, accents (rio's greygreen) |
+| butter | `y` | `EEEE9E` | white | active title bar; text selection (rio's); folder fill |
+| olive | `o` | `99994C` | black | title bar rules, folder shading, embossed marks (rio's yellowgreen) |
+| mist | `c` | `EAFFFF` | white | icon highlights (acme's tag) |
+| sea | `C` | `9EEEEE` | white | desktop dots, inactive rio border, icon accents (rio's palegreygreen) |
+| teal | `T` | `55AAAA` | black | the desktop, focus ring, dialog band, accents (rio's greygreen) |
 | deep | `D` | `226666` | black | dark accent in icons |
 | navy | `B` | `000099` | black | selection of objects: menu items, list rows, icon labels, pressed buttons |
 | red | `R` | `CC3333` | black | stop alerts, destructive emphasis |
 | grey1 | `1` | `EEEEEE` | white | dialog and control-panel face, inactive title bar |
 | grey2 | `2` | `CCCCCC` | white | scroll track, pressed check box |
 | grey3 | `3` | `AAAAAA` | white | disabled text and outlines, separators |
-| grey4 | `4` | `777777` | 50% | the desktop (rio's background), shadows, secondary marks |
+| grey4 | `4` | `777777` | 50% | shadows, secondary marks (rio's background) |
 | grey5 | `5` | `444444` | black | secondary text, grow box ridges |
+
+`palette.ndb` also names **roles** (`titlebar`, `desktop`, `select`,
+`focus`, ...), which `gen/uxstyle.h` has as `UXtitlebar` and so on.
+rio and libux should draw with the roles, so a theme change is an edit
+to `palette.ndb`.
 
 Two selection colours, on purpose: **butter** selects *text* (as in rio
 and acme), **navy** selects *objects* (menu items, list rows, icons).
@@ -132,9 +138,9 @@ All in [`metrics.ndb`](metrics.ndb); `gen/uxstyle.h` has them as
 ![Window chrome and Finder](mockups/desktop@2x.png)
 
 - **Frame:** 1 px ink, with a 1 px ink shadow offset right and down.
-- **Active title bar:** sea, with a mist line along its top and a 1 px
-  ink rule under it. The title is centred in the system font. Either side
-  of it, from the close box to the zoom box, run teal rules every 3 px,
+- **Active title bar:** butter, with a cream line along its top and a
+  1 px ink rule under it. The title is centred in the system font. Either
+  side of it, from the close box to the zoom box, run olive rules every 3 px,
   leaving 8 px clear around the title. The close box is at the left and
   the zoom box at the right: 11 px paper squares with an ink outline; the
   zoom box has a small square in its top left. Pressing the close box
@@ -233,17 +239,15 @@ bar, the Finder and the palette, and changes only chrome and controls.
 
 | Theme | What changes |
 |---|---|
-| `nine` | the guide as written above (sea title bar) |
-| `nine-butter` | title bar in rio's butter with olive rules |
-| `butter-teal` | butter title bars on a teal desktop with Nine grey's dot hatching in sea |
-| `butter-deep` | the same with darker (deep) dots |
+| `nine` | the guide as written above: butter title bars, Nine teal desktop (the chosen default) |
+| `nine-sea` | the first draft: sea title bars with teal rules, Nine grey desktop |
+| `butter-deep` | the default with darker (deep) desktop dots |
 | `nine-grey` | neutral grey1 title bar with grey3 rules |
 | `seven` | closer to System 7: paper title bars with dense ink rules, ink selection, rounder buttons, white dialogs with an ink band, dithered scroll tracks, a 50% grey desktop, rounded screen corners |
 | `win` | closer to Windows 3.1: solid navy title bar with paper title, a control box and shrink/grow buttons, a grey sizing border, bevelled grey buttons and scroll bars, grey dialogs, a teal desktop |
 
-The themes are defined at the top of `tools/mockup.py`; once one is
-chosen, its values move into `metrics.ndb` and `palette.ndb` and this
-guide.
+The themes are defined at the top of `tools/mockup.py`. `nine` matches
+the roles in `palette.ndb`; change both together.
 
 ## Cursors
 
@@ -270,8 +274,9 @@ Legacy rio windows keep their own cursors.
 ![Patterns](mockups/patterns@2x.png)
 
 8x8 tiles in [`patterns/patterns.txt`](patterns/patterns.txt). The
-first, **Nine grey**, is the default: rio's own background grey with a
-faint grey3 dot, so the desktop looks like rio's but reads as a surface.
+first, **Nine teal**, is the default: rio's greygreen with a sparse
+sea dot, so the desktop reads as a surface behind butter title bars.
+**Nine grey** is the same dot on rio's own background grey.
 
 ## Chrome glyphs
 

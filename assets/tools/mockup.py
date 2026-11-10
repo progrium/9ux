@@ -24,10 +24,10 @@ import iconsheet
 # Themes. "nine" is the style guide; the others are explorations of
 # where the look could go. Every colour is still a palette name.
 BASE = dict(
-    desktop="ninegrey",
+    desktop="nineteal",
     sel="navy",              # object selection: menus, lists, icon labels
     title="rules",           # 'rules' (lines either side) or 'solid'
-    tbg="sea", thl="mist", trule="teal", rulestep=3, tfg="ink",
+    tbg="butter", thl="cream", trule="olive", rulestep=3, tfg="ink",
     tbg_off="grey1", tfg_off="grey4",
     boxes="mac",             # 'mac' (close left, zoom right) or 'win'
     frame=0,                 # width of a sizing border, 0 for none
@@ -40,11 +40,8 @@ BASE = dict(
 )
 THEMES = {
     "nine": dict(),
-    "nine-butter": dict(tbg="butter", thl="cream", trule="olive"),
-    "butter-teal": dict(tbg="butter", thl="cream", trule="olive",
-                        desktop="nineteal"),
-    "butter-deep": dict(tbg="butter", thl="cream", trule="olive",
-                        desktop="ninedeep"),
+    "nine-sea": dict(tbg="sea", thl="mist", trule="teal", desktop="ninegrey"),
+    "butter-deep": dict(desktop="ninedeep"),
     "nine-grey": dict(tbg="grey1", thl="paper", trule="grey3", tbg_off="paper"),
     "seven": dict(desktop="fifty", sel="ink", tbg="paper", thl=None,
                   trule="ink", rulestep=2, tbg_off="paper", tfg_off="grey3",
@@ -279,10 +276,10 @@ class UX:
                 cv.hline(tx + tw + p, yy, r1 - (tx + tw + p), self.c(t["trule"]))
         if active and t["boxes"] == "mac":
             by = y + (th - bs) // 2
-            cv.rect(x + bi, by, bs, bs, self.c(t["tbg"]))
+            cv.rect(x + bi, by, bs, bs, self.c("paper"))
             cv.frame(x + bi, by, bs, bs, ink)
             zx = x + w - bi - bs
-            cv.rect(zx, by, bs, bs, self.c(t["tbg"]))
+            cv.rect(zx, by, bs, bs, self.c("paper"))
             cv.frame(zx, by, bs, bs, ink)
             cv.frame(zx, by, 6, 6, ink)
         if t["boxes"] == "win":

@@ -126,6 +126,12 @@ def build(out):
         r, g, b = c.rgb
         h.append("\tUX%s\t= 0x%02X%02X%02XFF," % (c.name, r, g, b))
     h.append("};\n")
+    h.append("/* roles: what each part of the chrome is drawn in */")
+    h.append("enum {")
+    for e in read_ndb(os.path.join(ASSETS, "palette.ndb")):
+        if "role" in e:
+            h.append("\tUX%s\t= UX%s," % (cname(e["role"]), e["color"]))
+    h.append("};\n")
     h.append("/* metrics in pixels at 1x: see assets/metrics.ndb */")
     h.append("enum {")
     for k, v in load_metrics().items():

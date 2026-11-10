@@ -67,7 +67,7 @@ def load_palette(path=None):
     path = path or os.path.join(ASSETS, "palette.ndb")
     byname, bychar = {}, {}
     for e in read_ndb(path):
-        if "color" not in e:
+        if "color" not in e or "char" not in e:
             continue
         c = Color(e["color"], e["char"], hexrgb(e["rgb"]), e.get("bit", "0"))
         byname[c.name] = c

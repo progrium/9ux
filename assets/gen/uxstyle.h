@@ -20,6 +20,25 @@ enum {
 	UXgrey5	= 0x444444FF,
 };
 
+/* roles: what each part of the chrome is drawn in */
+enum {
+	UXdesktop	= UXteal,
+	UXtitlebar	= UXbutter,
+	UXtitlelight	= UXcream,
+	UXtitlerule	= UXolive,
+	UXtitleoff	= UXgrey1,
+	UXtitletextoff	= UXgrey4,
+	UXselect	= UXnavy,
+	UXselecttext	= UXpaper,
+	UXtextselect	= UXbutter,
+	UXfield	= UXcream,
+	UXfocus	= UXteal,
+	UXface	= UXgrey1,
+	UXdialogband	= UXteal,
+	UXdisabled	= UXgrey3,
+	UXtrack	= UXgrey2,
+};
+
 /* metrics in pixels at 1x: see assets/metrics.ndb */
 enum {
 	UXmenubarheight	= 20,

@@ -29,3 +29,22 @@ color=grey2   char=2 rgb=CCCCCC bit=1
 color=grey3   char=3 rgb=AAAAAA bit=1
 color=grey4   char=4 rgb=777777 bit=50 from=rio-background
 color=grey5   char=5 rgb=444444 bit=0
+
+# Roles: what each part of the chrome is drawn in. gen/uxstyle.h has
+# these as UXtitlebar and so on, so rio and libux name the role, not
+# the colour, and a theme change is a change here.
+role=desktop       color=teal      # with sea dots: the Nine teal pattern
+role=titlebar      color=butter
+role=titlelight    color=cream     # 1 px line along the bar's top
+role=titlerule     color=olive
+role=titleoff      color=grey1     # inactive title bar
+role=titletextoff  color=grey4
+role=select        color=navy      # selected objects
+role=selecttext    color=paper
+role=textselect    color=butter    # selected text
+role=field         color=cream
+role=focus         color=teal
+role=face          color=grey1     # dialog and settings body
+role=dialogband    color=teal
+role=disabled      color=grey3
+role=track         color=grey2
