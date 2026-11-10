@@ -364,6 +364,26 @@ expect $t/out <<'EOF'
 ext=.r open=one
 EOF
 
+test=plumbing
+# the generated rules load into a real plumber, and -P reloads it
+stop
+echo include $t/user/plumbing > $home/lib/plumbing
+plumber -p $home/lib/plumbing
+start -P
+c 'set ext .yy open=yyport'
+if(test -e /mnt/plumb/yyport) pass
+if not fail plumber did not get the new rules
+cat /mnt/plumb/yyport > $t/got &
+rd=$apid
+sleep 0.2
+echo hi > $t/f.yy
+plumb -s test $t/f.yy
+sleep 0.2
+echo kill > /proc/$rd/note
+has $t/got '^yyport$' '^/tmp/.*/f\.yy$'
+kill plumber | rc
+unmount /mnt/plumb
+
 stop
 rm -rf $t
 echo run: $npass passed, $nfail failed
