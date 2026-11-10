@@ -746,6 +746,8 @@ void
 uxiconselect(Uxctl *c, char **ids, int n)
 {
 	int i, j;
+	char *s, *sep;
+	Fmt f;
 
 	qlock(&uxlk);
 	for(i = 0; i < c->nicons; i++){
@@ -754,7 +756,18 @@ uxiconselect(Uxctl *c, char **ids, int n)
 			if(strcmp(c->icons[i].id, ids[j]) == 0)
 				c->icons[i].sel = 1;
 	}
-	_iconsel(c, UXui);
+	/* like uxsetvalue: the event for scripts, no handler call */
+	fmtstrinit(&f);
+	sep = "";
+	for(i = 0; i < c->nicons; i++)
+		if(c->icons[i].sel){
+			fmtprint(&f, "%s%s", sep, c->icons[i].id);
+			sep = ",";
+		}
+	s = fmtstrflush(&f);
+	_event(c, "select", "sel", s, nil);
+	free(s);
+	c->w->dirty = 1;
 	qunlock(&uxlk);
 	kick();
 }
