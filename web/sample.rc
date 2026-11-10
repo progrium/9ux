@@ -1,0 +1,5 @@
+#!/bin/rc
+# The libux sample app, which shows every control.
+cd /9ux/apps/sample
+resfs=/9ux/resfs/8.resfs uxsysres=/9ux/assets/gen/system.rsrc \
+	exec ./8.out >[2]/tmp/9ux/sample.err

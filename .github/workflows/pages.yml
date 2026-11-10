@@ -1,6 +1,11 @@
 # Publishes the project page (site/) to GitHub Pages, with screenshots
-# from docs/images/ and the design mockups from assets/mockups/.
-# Runs only when one of those changes on main, or by hand.
+# from docs/images/, the design mockups from assets/mockups/, and the
+# live demo in demo/: 9/UX built from this commit for 386 and run in the
+# page by h9's browser host (scripts/web.sh, site/demo/). The demo's
+# browser test (test/web/demo.mjs) gates the deploy.
+#
+# Runs when the page, the demo, or anything the demo builds from
+# changes on main, or by hand.
 name: pages
 
 on:
@@ -9,7 +14,22 @@ on:
     paths:
       - site/**
       - docs/images/**
-      - assets/mockups/**
+      - assets/**
+      - web/**
+      - rio/**
+      - libux/**
+      - uxd/**
+      - uxmeta/**
+      - resfs/**
+      - clipd/**
+      - finder/**
+      - apps/**
+      - mkfile
+      - scripts/web.sh
+      - scripts/h9.sh
+      - scripts/zig.sh
+      - scripts/pins.sh
+      - test/web/**
       - .github/workflows/pages.yml
   workflow_dispatch:
 
@@ -25,15 +45,71 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+
+      # The native h9 and its amd64 root, which build 9/UX: the caches
+      # ci.yml saves from main, restored only.
+      - name: Restore the 9front root
+        uses: actions/cache/restore@v4
+        with:
+          path: .local/hyper9/.local/9front
+          key: root-amd64-iso-11952-v1
+      - name: Restore Zig and h9
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .local/zig
+            .local/hyper9
+            !.local/hyper9/.zig-cache
+            !.local/hyper9/.local/9front
+          key: h9-${{ runner.os }}-${{ hashFiles('scripts/pins.sh', 'scripts/h9.sh', 'scripts/zig.sh') }}
+
+      # h9's browser host at H9_WEB_REV: the 386 ISO and v86.wasm, which
+      # change only with the pin.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .local/web/hyper9/.local/9front/*.386.iso
+            .local/web/hyper9/.local/v86
+            .local/web/hyper9/.local/cache/zig
+          key: pages-web-${{ hashFiles('scripts/pins.sh') }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Set up h9 and the root
+        timeout-minutes: 25
+        run: scripts/h9.sh --setup
+
+      - name: Build the demo
+        run: scripts/web.sh .local/web/demo
+
+      - name: The demo in Chromium
+        run: |
+          npm install --no-save --no-package-lock playwright@1.63.0
+          npx playwright install --with-deps chromium
+          node test/web/demo.mjs .local/web/demo .local/web/demo-test.png
+
+      - name: Upload the demo's screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-screenshot
+          path: .local/web/demo-test.png
+          if-no-files-found: ignore
+
       - name: Assemble the site
         run: |
           mkdir -p _site/images
           cp -r site/. _site/
           cp -r docs/images _site/images/docs
           cp -r assets/mockups _site/images/mockups
+          rm -rf _site/demo
+          cp -r .local/web/demo _site/demo
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

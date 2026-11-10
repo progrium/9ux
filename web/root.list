@@ -1,0 +1,18 @@
+# The demo's root archive (scripts/web.sh): paths in the 386 root that it
+# adds to h9's own demo archive (hyper9's src/web/root.list), which
+# already has rc, rio, acme, window, the vga font and the common
+# commands. The 9/UX tree itself goes in at /9ux.
+
+# Mount points for the session's services.
+mnt/plumb/
+mnt/ux/
+mnt/meta/
+mnt/res/
+mnt/clip/
+
+# The plumber, and what the scripts use.
+386/bin/plumber
+386/bin/plumb
+
+# The fonts libux and the rio fork open (assets/fonts.ndb).
+lib/font/bit/lucidasans
