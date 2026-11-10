@@ -151,6 +151,8 @@ struct Uxwin {
 	char	*kind;
 	char	*title;
 	Rectangle	r;	/* screen coordinates, whole window */
+	Image	*named;	/* a dialog's rio window image; img is our window inside it */
+	Screen	*scr;
 	int	state;
 	Uxctl	**ctl;
 	int	nctl;

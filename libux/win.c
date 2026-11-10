@@ -91,6 +91,37 @@ mainwin(Uxwin *w)
 	return 1;
 }
 
+/*
+ * A further window's image, made the way getwindow makes screen: our
+ * own window on a Screen over rio's named image, inset by the border.
+ * Drawing straight into rio's image breaks replclipr (devdraw won't
+ * set the clip of an image another client owns), and the whole batch
+ * of drawing with it.
+ */
+static Image*
+winimage(Uxwin *w, char *name)
+{
+	if(w->img != nil && w->img != w->named)
+		freeimage(w->img);
+	if(w->scr != nil)
+		freescreen(w->scr);
+	if(w->named != nil)
+		freeimage(w->named);
+	w->img = nil;
+	w->scr = nil;
+	w->named = namedimage(w->d, name);
+	if(w->named == nil)
+		return nil;
+	w->scr = allocscreen(w->named, w->d->white, 0);
+	if(w->scr == nil)
+		return nil;
+	w->d->screenimage = w->named;	/* _allocwindow takes the chan from it */
+	w->img = _allocwindow(nil, w->scr, insetrect(w->named->r, Borderwidth), Refnone, DWhite);
+	if(w->img != nil)
+		w->d->screenimage = w->img;
+	return w->img;
+}
+
 typedef struct Dlg Dlg;
 struct Dlg {
 	Uxwin	*w;
@@ -143,8 +174,7 @@ dlgproc(void *v)
 		goto Out;
 	}
 	buf[n] = 0;
-	w->img = namedimage(w->d, buf);
-	if(w->img == nil){
+	if(winimage(w, buf) == nil){
 		g->err = "can't get window image";
 		goto Out;
 	}
@@ -449,9 +479,7 @@ _winresize(Uxwin *w)
 		if(n <= 0)
 			return;
 		buf[n] = 0;
-		freeimage(w->img);
-		w->img = namedimage(w->d, buf);
-		if(w->img == nil){
+		if(winimage(w, buf) == nil){
 			_delwin(w);
 			return;
 		}
