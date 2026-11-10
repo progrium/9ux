@@ -18,7 +18,8 @@ working unchanged.
 > Plan 9 file.
 
 **Status:** design stage. Nothing here runs yet beyond stock rio. See the
-[design](docs/design.md) and the [development plan](docs/plan.md).
+[design](docs/design.md) and the [development plan](docs/plan.md), split into parallel
+workstreams in [docs/workplan.md](docs/workplan.md).
 
 ## Components
 
@@ -74,11 +75,16 @@ docs/
     design.md          the 9/UX design (v0.1 draft)
     plan.md            phased development plan
     development.md     environment, build, and test setup with h9
+    workplan.md        the plan split into parallel workstreams
 rio/                   rio fork (stock 9front rio at 11952 to start)
 libux/                 Toolbox library
 uxd/                   UI registry and event broker
 uxmeta/                ndb-backed metadata service
 resfs/                 resource-fork file server
 finder/                Finder
+scripts/               pinned versions, and h9.sh to run the pinned h9
 mkfile                 builds every component that has a mkfile
 ```
+
+9/UX is MIT licensed (see [LICENSE](LICENSE)); `rio/` keeps 9front's MIT
+license and notice.

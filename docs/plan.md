@@ -170,11 +170,7 @@ VM, confirm all eight acceptance criteria, then tag.
 | 7 | A remote 9P directory works as a Finder volume | 3 |
 | 8 | Unprivileged clients can't mutate another app's controls | 2 |
 
-## First steps
+## Running it in parallel
 
-The first pull requests after this one, in order:
-
-1. Build `rio/` under h9 and add `test/` with one headless test that
-   starts the fork and opens a window.
-2. CI running that test.
-3. The rest of the Phase 0 regression suite and `docs/protocols/rio.md`.
+[workplan.md](workplan.md) splits these phases into workstreams with
+owners, dependencies, and briefs that separate threads can run at once.
