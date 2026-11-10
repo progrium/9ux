@@ -24,7 +24,7 @@ What that gives 9/UX:
 | Run rio with a display | `h9 --gfx` opens a host window and serves `/dev/draw`, `/dev/mouse`, `/dev/kbd`, `/dev/cursor`, with `/dev/snarf` mapped to the host clipboard. Stock rio and acme already run this way. |
 | Automated GUI tests | The `headless` gfx backend is a screen in memory with hooks to inject keys and mouse events, read the clipboard, and read pixels (`h9.gfx.headless` in `src/gfx.zig`). h9's own tests already start rio, type into a window, and run acme inside it. |
 | Drive the 9P interfaces from tests | Machines are embeddable from Zig (`docs/embedding.md`), and `h9 --serve` exports a machine's namespace over 9P, so `/dev/ux` and `/mnt/ux` can be read and written from the test harness or from host tools. |
-| Remote volumes for Finder | A second h9 with `--serve` is a remote 9P file server; `--root 'tcp!host!564'` and `mount` let the session reach it. Good for acceptance criterion 7. |
+| Remote volumes for Desktop | A second h9 with `--serve` is a remote 9P file server; `--root 'tcp!host!564'` and `mount` let the session reach it. Good for acceptance criterion 7. |
 | Isolation | Copy-on-write root by default, `--write=ephemeral`, and `--net=disable`, so `mk install` and test runs never damage the root tree. |
 | CI | On x86_64 Linux without KVM, `--backend native` runs amd64 binaries at native speed, and an amd64 root can be unpacked from the release ISO. |
 | Later: a browser demo | h9 has a browser host, and graphics there is an accepted proposal (`browser-gfx`), which would make a live 9/UX demo page possible. |

@@ -1,4 +1,4 @@
-//! Drag and drop end to end (workplan S9's "done when"): Finder's files
+//! Drag and drop end to end (workplan S9's "done when"): Desktop's files
 //! dragged between its own folder windows (a move within a volume, a
 //! copy onto another volume), and onto another app, the libux sample,
 //! whose Notes field takes a dropped file's contents through rio's
@@ -34,7 +34,7 @@ fn slowDrag(s: *Session, from: harness.Point, to: harness.Point) void {
     s.release(.left);
 }
 
-/// Makes a Finder window current with a click in its status line (as
+/// Makes a Desktop window current with a click in its status line (as
 /// in stock rio, the click that makes a window current goes no further).
 fn activate(s: *Session, win: []const u8) !void {
     const r = try c.two(s, "cat /tmp/f/windows/{s}/rect", .{win});
@@ -42,7 +42,7 @@ fn activate(s: *Session, win: []const u8) !void {
     c.waitRcf(s, 5_000, "grep -s current /tmp/f/windows/{s}/state", .{win}) catch |e| {
         const d = s.rc("cat /dev/ux/drag/state /dev/ux/windows; cat /tmp/f/windows/*/state") catch null;
         if (d) |x| {
-            std.debug.print("rio and Finder:\n{s}\n", .{x});
+            std.debug.print("rio and Desktop:\n{s}\n", .{x});
             gpa.free(x);
         }
         return e;
@@ -68,11 +68,11 @@ fn waitHost(s: *Session, rel: []const u8, want: bool) !void {
     }
 }
 
-test "e2e: dragging files between Finder windows and onto an app" {
+test "e2e: dragging files between Desktop windows and onto an app" {
     var s = try Session.start(.{ .name = "e2e-drag", .rio_args = &.{"-u"} });
     defer s.stop();
 
-    // Where Finder puts the two folder windows, in its uxmeta layout.
+    // Where Desktop puts the two folder windows, in its uxmeta layout.
     gpa.free(try s.rc(
         \\t=$work/demo
         \\mkdir -p $t/user/workspace
@@ -82,12 +82,12 @@ test "e2e: dragging files between Finder windows and onto an app" {
     gpa.free(try s.rc("rc /mnt/term/cwd/test/e2e/services.rc"));
     gpa.free(try s.rc("echo 'a third file' >$work/demo/home/third.txt"));
 
-    try s.openWindow(rect(100, 100, 600, 400), "rc /mnt/term/cwd/test/e2e/finder.rc");
-    try s.waitRc("ls -p /mnt/ux/apps | grep -s '^finder-'", 20_000);
-    gpa.free(try s.rc("mkdir -p /tmp/f && bind /mnt/ux/apps/`{ls -p /mnt/ux/apps | grep '^finder-' | sed 1q} /tmp/f"));
+    try s.openWindow(rect(100, 100, 600, 400), "rc /mnt/term/cwd/test/e2e/desktop.rc");
+    try s.waitRc("ls -p /mnt/ux/apps | grep -s '^desktop-'", 20_000);
+    gpa.free(try s.rc("mkdir -p /tmp/f && bind /mnt/ux/apps/`{ls -p /mnt/ux/apps | grep '^desktop-' | sed 1q} /tmp/f"));
     try s.waitRc("! grep -s '^win=0 ' /dev/ux/desktop/state", 10_000);
     var db: [32]u8 = undefined;
-    const desk = try c.finderWin(s, "grep -s '^desktop$' $w/kind", &db);
+    const desk = try c.desktopWin(s, "grep -s '^desktop$' $w/kind", &db);
     try c.waitItems(s, desk, "label=home icon=disk");
     try c.waitItems(s, desk, "label=other icon=disk");
     try s.settle();
@@ -95,13 +95,13 @@ test "e2e: dragging files between Finder windows and onto an app" {
     // home, then docs from it: two windows side by side
     c.doubleClick(s, try c.itemAt(s, desk, "home"));
     var hb: [32]u8 = undefined;
-    const home = try c.finderWin(s, "grep -s '^home$' $w/title", &hb);
+    const home = try c.desktopWin(s, "grep -s '^home$' $w/title", &hb);
     try c.waitItems(s, home, "label=docs ");
     try c.waitItems(s, home, "label=notes.txt ");
     try s.settle();
     c.doubleClick(s, try c.itemAt(s, home, "docs"));
     var fb: [32]u8 = undefined;
-    const docs = try c.finderWin(s, "grep -s '^docs$' $w/title", &fb);
+    const docs = try c.desktopWin(s, "grep -s '^docs$' $w/title", &fb);
     try c.waitItems(s, docs, "label=readme.txt ");
     try s.settle();
     s.saveScreen("e2e-drag-start");

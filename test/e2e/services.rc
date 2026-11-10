@@ -4,7 +4,7 @@
 # Starts the session's services the way a 9/UX profile would: the
 # plumber (text files to the edit port), uxd on /mnt/ux, and uxmeta on
 # /mnt/meta with two local volumes (home and other) and, given ADDR, a
-# remote one (remote, the 9P server at ADDR, which Finder attaches when
+# remote one (remote, the 9P server at ADDR, which Desktop attaches when
 # it's opened).
 addr=$1
 cd /mnt/term/cwd

@@ -49,11 +49,11 @@ flowchart LR
       S2[S2 rio extensions]
       S3[S3 libux]
       S4[S4 uxd]
-      S7a[S7a Finder core]
+      S7a[S7a Desktop core]
       S8[S8 Visual design]
     end
     subgraph W3[Wave 3]
-      S7b[S7b Finder UI]
+      S7b[S7b Desktop UI]
       S9[S9 Drag, clipboard, Trash]
       S10[S10 Resources in libux]
     end
@@ -96,7 +96,7 @@ in wave 2.
 | S4 uxd | `uxd/` |
 | S5 uxmeta | `uxmeta/`, `docs/protocols/meta.md` |
 | S6 resfs | `resfs/`, `docs/protocols/res.md` |
-| S7 Finder | `finder/` |
+| S7 Desktop | `desktop/` |
 | S8 Visual design | `assets/` |
 | S9 Drag, clipboard, Trash | `clipd/`, plus drag code in `rio/` and `libux/` with S2 and S3 reviewing |
 | S10 Resources in libux | `libux/res*.c`, with S3 reviewing |
@@ -191,7 +191,7 @@ writes out.
 5. Tests: precedence, concurrent writers, an external edit mid-session,
    restart persistence (acceptance criterion 5).
 
-**Done when:** Finder's needs in plan.md Phase 3 can be met through the
+**Done when:** Desktop's needs in plan.md Phase 3 can be met through the
 9P interface alone, with tests.
 
 **First commit:** `meta.md` plus the layered reader with tests.
@@ -258,7 +258,7 @@ S2 lands.
 then `Window`, `Button`, `TextField`, `Menu` (registered with the menu
 bar through `/dev/ux`), `Dialog`, and a sample app in `apps/sample/`.
 After that: `Checkbox`, `List`, `ScrollView`, `IconView`, `FileChooser`,
-which Finder needs.
+which Desktop needs.
 
 **Done when:** from rc, a test reads a text field's value, activates a
 button through `ctl`, and two independent `events` readers see it; a
@@ -284,9 +284,9 @@ controls, an authorized one can, and restarting `uxd` loses no app state
 
 **First commit:** registration and the aggregated read-only tree.
 
-### S7a: Finder core
+### S7a: Desktop core
 
-**Goal:** everything in Finder that isn't drawing, as a tested library.
+**Goal:** everything in Desktop that isn't drawing, as a tested library.
 
 **Depends on:** S1 (conventions). Uses S5's `meta.md` once it lands.
 
@@ -297,7 +297,7 @@ delete where rename isn't supported); Get Info data; launching through
 the plumber. Tested headless, including a remote volume from a second h9
 with `--serve`, and what happens when it disappears.
 
-**Done when:** a test-driven rc or C client can do every Phase 3 Finder
+**Done when:** a test-driven rc or C client can do every Phase 3 Desktop
 operation on a local and a remote volume through the library
 (acceptance criterion 7, without the UI).
 
@@ -318,7 +318,7 @@ font plan using fonts 9front can ship. Package as `.rsrc` once S6's
 compiler exists. Mockups first so S2, S3 and S7b draw toward the same
 target.
 
-**Done when:** Finder and libux use only these assets, and the style
+**Done when:** Desktop and libux use only these assets, and the style
 guide matches what they draw.
 
 **First commit:** style guide and mockups.
@@ -327,12 +327,12 @@ guide matches what they draw.
 
 ## Wave 3
 
-### S7b: Finder UI
+### S7b: Desktop UI
 
 **Depends on:** S2 (desktop layer, menu bar), S3 (controls including
 `IconView`), S5 (`uxmeta`), S7a.
 
-**Work:** the Finder app on libux: desktop icons, folder windows (icon
+**Work:** the Desktop app on libux: desktop icons, folder windows (icon
 and list views), selection, open, rename in place, Get Info windows,
 menus, and layout saved in `uxmeta`.
 
@@ -341,14 +341,14 @@ survives restarts and external edits (acceptance criteria 2, 5, 7).
 
 ### S9: Drag, clipboard, Trash
 
-**Depends on:** S2, S3; S7b for Finder drags.
+**Depends on:** S2, S3; S7b for Desktop drags.
 
 **Work:** `/dev/ux/drag` in rio, drag sources and targets in libux,
 typed offers with brokered payloads (never bare paths across
 namespaces), snarf interop, the optional typed clipboard service, and
 Trash per file system with its limits shown.
 
-**Done when:** a file dragged from Finder onto an app and between Finder
+**Done when:** a file dragged from Desktop onto an app and between Desktop
 windows works, and cross-namespace drops go through the broker.
 
 ### S10: Resources in libux

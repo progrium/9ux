@@ -1,3 +1,3 @@
 #!/bin/rc
-# An rc shell, in the window Finder opens for it.
+# An rc shell, in the window Desktop opens for it.
 exec rc -i

@@ -1,0 +1,6 @@
+% ls /mnt/ux/apps
+desktop-1  sketch-42
+% cat /mnt/ux/apps/sketch-42/name
+Sketch
+% echo activate > .../controls/save/ctl
+% 

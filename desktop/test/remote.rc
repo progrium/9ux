@@ -1,0 +1,39 @@
+#!/bin/rc
+# The client half of remote_test.sh, run inside h9 from the repository's top:
+# rc desktop/test/remote.rc ADDR SYNCDIR
+# Attaches the remote volume at ADDR, works on it, then waits for
+# remote_test.sh to stop the server and checks the volume goes offline.
+rfork ne
+O=`{sed -n 's/^O=//p' /$objtype/mkfile}
+dcore=`{pwd}^/desktop/$O.dcore
+addr=$1
+sync=$2
+mkdir -p /tmp/rvol
+F=($dcore -M -v 'remote=/tmp/rvol@'^$addr)
+$F <<'!'
+attach remote
+ls remote:docs
+info remote:docs/a.txt
+probe remote
+rename remote:docs/a.txt b.txt
+dup remote:docs/b.txt
+copy remote:docs/b.txt remote:
+mkdir remote:
+move remote:b.txt remote:docs
+move remote:b.txt 'remote:untitled folder'
+move -c remote:b.txt 'remote:untitled folder'
+rm remote:docs
+check remote
+!
+echo '> server stop'
+touch $sync/ready
+for(i in `{seq 1 100}){
+	if(! test -e $sync/stopped)
+		sleep 0.1
+}
+$F <<'!'
+check remote
+ls remote:docs
+!
+# Desktop's attach must be redone once the server is back; until then it stays offline
+echo done > $sync/done

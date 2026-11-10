@@ -2,14 +2,14 @@
 
 The look of 9/UX: palette, fonts, metrics, window chrome, the menu bar,
 controls, icons, cursors and desktop patterns. rio (S2), libux (S3) and
-Finder (S7b) draw toward the mockups here, and everything they draw
+Desktop (S7b) draw toward the mockups here, and everything they draw
 comes from the sources in this directory.
 
 Every graphic here is original to 9/UX. None is derived from Apple
 artwork, and 9/UX ships no Apple resources; people can import their own
 `.rsrc` files through resfs. The fonts are ones 9front already ships.
 
-![The Finder desktop](mockups/desktop@2x.png)
+![The Desktop app on the desktop](mockups/desktop@2x.png)
 
 ## Principles
 
@@ -136,7 +136,7 @@ All in [`metrics.ndb`](metrics.ndb); `gen/uxstyle.h` has them as
 
 ## Windows (rio draws the frame, libux the inside)
 
-![Window chrome and Finder](mockups/desktop@2x.png)
+![Window chrome and Desktop](mockups/desktop@2x.png)
 
 - **Frame:** 1 px ink, with a 1 px ink shadow offset right and down.
 - **Active title bar:** butter, with a cream line along its top and a
@@ -149,7 +149,7 @@ All in [`metrics.ndb`](metrics.ndb); `gen/uxstyle.h` has them as
 - **Inactive title bar:** grey1, title in grey4, no rules and no boxes.
   Its scroll bars go blank (paper, no arrows or thumb), as in the mockup's
   `sources` window, so the active window is obvious.
-- **Body:** paper for documents and Finder windows; grey1 for dialogs,
+- **Body:** paper for documents and Desktop windows; grey1 for dialogs,
   settings and control panels.
 - **Dialogs** have no title bar: a 1 px ink frame, a 2 px teal band, and
   a 1 px ink frame inside it. Alerts put their icon at the top left
@@ -189,7 +189,7 @@ All in [`metrics.ndb`](metrics.ndb); `gen/uxstyle.h` has them as
 - **Labels** for fields use the system font; explanatory text uses the
   body font in grey5.
 
-## Finder (icon views and the desktop)
+## Desktop (icon views and the desktop)
 
 - Icons are 32 px in icon view, 16 px in list view.
 - A label sits 3 px under its icon, centred, in the body font. On the
@@ -242,7 +242,7 @@ Drawing new icons:
 `tools/mockup.py` can draw the same scenes in other themes, to try
 directions before changing the guide. They are in
 [`mockups/themes/`](mockups/themes/); every theme keeps the global menu
-bar, the Finder and the palette, and changes only chrome and controls.
+bar, the Desktop and the palette, and changes only chrome and controls.
 
 ![Title bars in each theme](mockups/themes/titlebars@2x.png)
 
@@ -360,5 +360,5 @@ through it.
 - An original 9/UX bitmap system font, if Lucida Sans Bold doesn't hold
   up.
 - Check the app and alert mockups against the real thing as the
-  desktop one is (`test/finder/mockup_test.zig` draws the desktop
-  mockup's scene; its golden is `test/finder/golden/desktop.png`).
+  desktop one is (`test/desktop/mockup_test.zig` draws the desktop
+  mockup's scene; its golden is `test/desktop/golden/desktop.png`).

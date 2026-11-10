@@ -1,4 +1,4 @@
-//! Shared by the end-to-end tests: the remote volume, Finder's tree
+//! Shared by the end-to-end tests: the remote volume, Desktop's tree
 //! through uxd, and finding things on the screen.
 const std = @import("std");
 const builtin = @import("builtin");
@@ -32,7 +32,7 @@ pub const Remote = struct {
         errdefer gpa.destroy(r);
         r.* = .{ .child = undefined, .dir = try cwd.realPathFileAlloc(io, base, gpa) };
         errdefer gpa.free(r.dir);
-        // The served tree is the server's cwd, as in finder/test/remote_test.sh.
+        // The served tree is the server's cwd, as in desktop/test/remote_test.sh.
         const sh = try std.fmt.allocPrint(gpa, "cd {s}/share && exec ../../../../scripts/h9.sh --serve 'tcp!127.0.0.1!0' --serve-root /mnt/term/cwd >../serve.log 2>&1", .{r.dir});
         defer gpa.free(sh);
         r.child = try std.process.spawn(io, .{ .argv = &.{ "/bin/sh", "-c", sh }, .stdin = .ignore, .stdout = .ignore, .stderr = .ignore });
@@ -71,7 +71,7 @@ pub const Remote = struct {
     }
 };
 
-// ---- Finder's tree, through uxd (bound at /tmp/f) ----
+// ---- Desktop's tree, through uxd (bound at /tmp/f) ----
 
 pub fn rcf(s: *Session, comptime fmt: []const u8, args: anytype) ![]u8 {
     const cmd = try std.fmt.allocPrint(gpa, fmt, args);
@@ -98,8 +98,8 @@ pub fn two(s: *Session, comptime fmt: []const u8, args: anytype) !harness.Point 
     return pt(x, y);
 }
 
-/// The Finder window whose title is `title` (or of kind desktop).
-pub fn finderWin(s: *Session, sel: []const u8, buf: []u8) ![]const u8 {
+/// The Desktop window whose title is `title` (or of kind desktop).
+pub fn desktopWin(s: *Session, sel: []const u8, buf: []u8) ![]const u8 {
     const cmd = try std.fmt.allocPrint(gpa, "for(w in /tmp/f/windows/*) if({s}) basename $w", .{sel});
     defer gpa.free(cmd);
     try waitRcf(s, 15_000, "~ `{{{s}}} [0-9]*", .{cmd});
@@ -110,7 +110,7 @@ pub fn finderWin(s: *Session, sel: []const u8, buf: []u8) ![]const u8 {
     return buf[0..w.len];
 }
 
-/// Where an item's icon is on the screen (as test/finder does it).
+/// Where an item's icon is on the screen (as test/desktop does it).
 pub fn itemAt(s: *Session, win: []const u8, label: []const u8) !harness.Point {
     const r = try two(s, "cat /tmp/f/windows/{s}/rect", .{win});
     const rmax = try two(s, "awk '{{print $3, $4}}' /tmp/f/windows/{s}/rect", .{win});

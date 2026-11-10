@@ -1,7 +1,7 @@
 # uxmeta: metadata service
 
 Owns 9/UX's persistent metadata: file associations, application
-declarations, the volume registry, icon choices, and Finder layout. The
+declarations, the volume registry, icon choices, and Desktop layout. The
 data lives in human-editable ndb files; `uxmeta` is the single serialized
 writer, replaces files atomically, publishes a generation number and a
 change stream, and generates plumbing rules so the plumber stays the
@@ -72,4 +72,4 @@ read-modify-write with `ifgen`), the single-writer lock, restart
 persistence, and recovery from an interrupted replace.
 
 Design: [§6 Metadata](../docs/design.md#6-metadata-ndb--uxmeta).
-Plan: [Phase 3](../docs/plan.md#phase-3-finder-mvp).
+Plan: [Phase 3](../docs/plan.md#phase-3-desktop-mvp).

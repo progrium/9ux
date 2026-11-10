@@ -5,7 +5,7 @@
 
 ## 1. Summary
 
-9/UX is a new native graphical platform for 9front. Its interaction model is inspired by the classic Macintosh and A/UX: a spatial Finder desktop, global menu bar, consistent controls and dialogs, iconic applications, and resource-driven presentation. Its implementation is Plan 9-native: rio and libdraw provide display and windows; 9P exposes GUI state and control; namespaces represent the working environment; the plumber handles document dispatch; ndb provides human-editable metadata and associations.
+9/UX is a new native graphical platform for 9front. Its interaction model is inspired by the classic Macintosh and A/UX: a spatial desktop, global menu bar, consistent controls and dialogs, iconic applications, and resource-driven presentation. Its implementation is Plan 9-native: rio and libdraw provide display and windows; 9P exposes GUI state and control; namespaces represent the working environment; the plumber handles document dispatch; ndb provides human-editable metadata and associations.
 
 **9/UX is not an emulator, a Macintosh ABI, or an A/UX reimplementation.** Native 9front applications remain first-class citizens, and existing rio applications must continue working.
 
@@ -14,7 +14,7 @@
 1. Recreate the *experience* of a classic Macintosh desktop, not binary compatibility.
 2. Extend rio instead of replacing it.
 3. Expose applications' widget trees, state, commands, and events over 9P by design.
-4. Make Finder a graphical view and editor of a chosen Plan 9 namespace.
+4. Make Desktop a graphical view and editor of a chosen Plan 9 namespace.
 5. Preserve classic Mac resource formats where useful, especially icons and declarative UI resources.
 6. Make the system inspectable and scriptable using ordinary Plan 9 tools.
 7. Work with local and remote 9P filesystems without hiding their semantics.
@@ -23,7 +23,7 @@
 
 - Running 68k Mac applications or cloning the Macintosh Toolbox ABI.
 - Introducing a new graphics kernel, compositor, or binary package format in v1.
-- Guaranteeing that all mounted filesystems support Finder operations such as move, trash, custom metadata, or change notifications.
+- Guaranteeing that all mounted filesystems support Desktop operations such as move, trash, custom metadata, or change notifications.
 - Turning every legacy 9front application into an accessible 9/UX application automatically.
 
 ## 2. Architecture
@@ -31,7 +31,7 @@
 ```mermaid
 flowchart TD
     U[User] --> R[Extended rio]
-    R --> F[Finder]
+    R --> F[Desktop]
     R --> A[Native 9/UX applications]
     L[Legacy rio applications] --> R
     F --> T[libux / Toolbox]
@@ -46,14 +46,14 @@ flowchart TD
     B --> N
 ```
 
-**Ownership:** rio manages display-wide interactions; Finder manages the desktop metaphor and filesystem operations; libux implements per-application controls; each application remains authoritative for its own widget state; `uxd` publishes and routes 9P-visible UI; `uxmeta` owns metadata mutations; `resfs` interprets resources. Components communicate through deliberately small file protocols rather than a monolithic desktop daemon.
+**Ownership:** rio manages display-wide interactions; Desktop manages the desktop metaphor and filesystem operations; libux implements per-application controls; each application remains authoritative for its own widget state; `uxd` publishes and routes 9P-visible UI; `uxmeta` owns metadata mutations; `resfs` interprets resources. Components communicate through deliberately small file protocols rather than a monolithic desktop daemon.
 
 ## 3. Extended rio
 
 ### Responsibilities
 
 - Preserve existing `/dev/wctl`, `/dev/mouse`, `/dev/kbd`, `/dev/snarf`, `/mnt/wsys`, window creation, drawing, and nested rio behavior.
-- Provide a reserved **desktop layer** behind normal windows. Finder draws on this layer and receives pointer events only when the desktop is hit.
+- Provide a reserved **desktop layer** behind normal windows. Desktop draws on this layer and receives pointer events only when the desktop is hit.
 - Provide a global **menu bar** that tracks the foreground 9/UX application and dispatches commands without transferring focus to a menu-window workaround.
 - Track window-to-application ownership and focus transitions.
 - Offer opt-in Macintosh-style window chrome, leaving legacy rio windows fully usable.
@@ -85,11 +85,11 @@ Window-specific registration can use the existing immutable `/dev/winid` as its 
 
 ### Input and desktop behavior
 
-Rio owns hit-testing and routes events in order: global menu bar → active drag → window chrome → topmost window → Finder desktop. Menus are per *application*, with window-specific overrides if needed. Keyboard shortcut handling must define explicit precedence and never silently intercept established shortcuts of legacy applications.
+Rio owns hit-testing and routes events in order: global menu bar → active drag → window chrome → topmost window → the desktop (Desktop). Menus are per *application*, with window-specific overrides if needed. Keyboard shortcut handling must define explicit precedence and never silently intercept established shortcuts of legacy applications.
 
-## 4. Finder
+## 4. Desktop
 
-Finder is a native 9front application composed of the desktop client, folder windows, file operations, metadata integration, and launch logic.
+Desktop is a native 9front application composed of the desktop client, folder windows, file operations, metadata integration, and launch logic.
 
 ### User experience
 
@@ -102,19 +102,19 @@ Finder is a native 9front application composed of the desktop client, folder win
 
 ### Plan 9 filesystem model
 
-A folder is a directory and a document is a file. A volume is **not inferred from every path**: it is a named mount or namespace root declared in a workspace/session volume registry. Finder operates in a session namespace assembled at login. Child applications inherit or explicitly mount that namespace, with normal Plan 9 behavior preserved.
+A folder is a directory and a document is a file. A volume is **not inferred from every path**: it is a named mount or namespace root declared in a workspace/session volume registry. Desktop operates in a session namespace assembled at login. Child applications inherit or explicitly mount that namespace, with normal Plan 9 behavior preserved.
 
-Different processes may hold different namespaces; Finder must **not** pretend that a path in its namespace necessarily refers to the same object in another process. Launch records carry a workspace/namespace context; a path-like drop outside that context needs a mediated file-transfer service instead of blind path reuse.
+Different processes may hold different namespaces; Desktop must **not** pretend that a path in its namespace necessarily refers to the same object in another process. Launch records carry a workspace/namespace context; a path-like drop outside that context needs a mediated file-transfer service instead of blind path reuse.
 
-File operations are capability-driven. Where a server lacks rename or other required operations, Finder reports the limitation or offers explicit copy-and-delete semantics. A Trash folder is best-effort and filesystem-specific, not a universal atomic operation.
+File operations are capability-driven. Where a server lacks rename or other required operations, Desktop reports the limitation or offers explicit copy-and-delete semantics. A Trash folder is best-effort and filesystem-specific, not a universal atomic operation.
 
 ### Launching and associations
 
-Finder resolves document types using the 9/UX metadata registry but delegates ordinary opening to the existing **plumber**. Configuration should generate or complement plumbing rules rather than create an incompatible second launcher. Explicit user association overrides may be applied through the 9/UX launcher before a plumb message is sent.
+Desktop resolves document types using the 9/UX metadata registry but delegates ordinary opening to the existing **plumber**. Configuration should generate or complement plumbing rules rather than create an incompatible second launcher. Explicit user association overrides may be applied through the 9/UX launcher before a plumb message is sent.
 
 ### Persistence
 
-Finder state is keyed primarily by workspace, directory path, and entry name; optional filesystem/Qid information helps detect changes but is **not assumed durable across remounts or server restarts**. Renames performed through Finder update its metadata; out-of-band moves may require reconciliation. Finder can periodically rescan directories; native change notifications are an optional optimization.
+Desktop state is keyed primarily by workspace, directory path, and entry name; optional filesystem/Qid information helps detect changes but is **not assumed durable across remounts or server restarts**. Renames performed through Desktop update its metadata; out-of-band moves may require reconciliation. Desktop can periodically rescan directories; native change notifications are an optional optimization.
 
 ## 5. Toolbox (`libux`): native, 9P-visible UI
 
@@ -174,7 +174,7 @@ Text clipboard operations interoperate with existing rio `snarf`. Additional typ
 
 ## 6. Metadata: ndb + `uxmeta`
 
-Use ndb's human-readable tuple format for defaults, associations, application declarations, volume registry, icon selection, and Finder layout. **Do not use ndb itself as a concurrent transactional database**: `uxmeta` owns updates, serializes writes, performs atomic file replacement where supported, and publishes a generation number or change stream.
+Use ndb's human-readable tuple format for defaults, associations, application declarations, volume registry, icon selection, and Desktop layout. **Do not use ndb itself as a concurrent transactional database**: `uxmeta` owns updates, serializes writes, performs atomic file replacement where supported, and publishes a generation number or change stream.
 
 Possible configuration:
 
@@ -193,7 +193,7 @@ folder=/usr/glenda/doc view=icons sort=name
 
 Layer precedence: system defaults → installed-application metadata → user preferences → workspace overrides. Unknown keys are preserved where possible. Untrusted external filesystems cannot edit the system registry merely by presenting an ndb file. Metadata derived from file contents is lower-trust than user/system configuration.
 
-File association entries inform Finder and the generated plumbing configuration; the plumber remains the main dispatch path.
+File association entries inform Desktop and the generated plumbing configuration; the plumber remains the main dispatch path.
 
 ## 7. Resources and application packaging
 
@@ -239,7 +239,7 @@ Distribute original 9/UX graphics and fonts. Do not bundle copyrighted Macintosh
 | Component | Owns | Public interface |
 |---|---|---|
 | Extended `rio` | Windows, menu surface, desktop layer, input routing | Existing rio 9P + `/dev/ux` |
-| `finder` | Spatial desktop, folders, file operations, launch UI | Standard libux widgets + its own UI tree |
+| `desktop` | Spatial desktop, folders, file operations, launch UI | Standard libux widgets + its own UI tree |
 | `libux` | Widgets, dialog/layout engine, event model | C API; per-app 9P server |
 | `uxd` | Application registration, UI-tree aggregation, policy, event routing | `/mnt/ux/apps/...` 9P |
 | `uxmeta` | Registry and persistent preferences | 9P queries/updates; ndb files on disk |
@@ -253,9 +253,9 @@ The name `uxd` is a convenience, **not a mandate for one giant daemon**: rio's e
 - **Per-user sessions:** Publish UI services locally to the session by default. Remote mounting or exporting is explicit and authenticated; session identity is not inferred solely from a process ID or path.
 - **Default-deny control:** Introspection, activation, changing text, clipboard access, injecting keyboard events, and reading sensitive widgets have separate grants.
 - **Secrets:** Password controls expose type/visibility but never plaintext values or input events to external readers.
-- **Filesystem boundaries:** Finder respects directory permissions and server operation support. No automatic access to another application's namespace.
+- **Filesystem boundaries:** Desktop respects directory permissions and server operation support. No automatic access to another application's namespace.
 - **Resource files:** Treat as untrusted; cap sizes and counts, verify offsets, and fuzz decoders.
-- **Failure isolation:** Finder, resource and metadata services can die without tearing down rio. Applications fall back to their own UI where possible; legacy apps keep working.
+- **Failure isolation:** Desktop, resource and metadata services can die without tearing down rio. Applications fall back to their own UI where possible; legacy apps keep working.
 - **Stalled clients:** No application can indefinitely block rio's input loop or the libux event loop via a 9P read/write.
 
 ## 10. Incremental implementation
@@ -274,7 +274,7 @@ The name `uxd` is a convenience, **not a mandate for one giant daemon**: rio's e
 - Publish controls via per-app 9P servers; add `uxd` registry, per-open event subscriptions, and permission checks.
 - Demonstrate shell-based read/update/activation of a running UI.
 
-**Phase 3 — Finder MVP**
+**Phase 3 — Desktop MVP**
 - Desktop volumes, folder icon view, select/open/rename, Get Info, window and icon persistence.
 - Implement `uxmeta` with ndb-backed configuration and one serialized writer.
 - Integrate plumbing; explicitly support local and mounted remote directories.
@@ -286,17 +286,17 @@ The name `uxd` is a convenience, **not a mandate for one giant daemon**: rio's e
 
 ### First end-to-end demo
 
-Boot 9front into extended rio. A Finder desktop shows a named local volume and a remote 9P-mounted volume. Open a folder, double-click a text file (plumbed to an editor), launch a native libux sample, use its global menu, then from an `rc` window inspect `/mnt/ux/apps/...` and activate a button by writing to its `ctl` file. Existing `acme` and ordinary rio windows continue behaving normally.
+Boot 9front into extended rio. The desktop shows a named local volume and a remote 9P-mounted volume. Open a folder, double-click a text file (plumbed to an editor), launch a native libux sample, use its global menu, then from an `rc` window inspect `/mnt/ux/apps/...` and activate a button by writing to its `ctl` file. Existing `acme` and ordinary rio windows continue behaving normally.
 
 ### Acceptance criteria for v0.1
 
 1. No regressions to stock rio's documented file interfaces.
-2. Finder draws desktop icons, opens directories, and launches documents via plumbing.
+2. Desktop draws desktop icons, opens directories, and launches documents via plumbing.
 3. Menu bar follows a multi-window 9/UX application with correct focus behavior.
 4. At least three native controls expose read state, write commands, and independent event subscriptions over 9P.
 5. ndb persistence survives session restarts and handles external edits safely.
 6. Imported `ICN#` and `icl8` resources render correctly on actual 9front display formats.
-7. A mounted remote 9P directory works as a Finder volume with honest operation/error reporting.
+7. A mounted remote 9P directory works as a Desktop volume with honest operation/error reporting.
 8. Unprivileged 9P clients cannot mutate another app's controls without authorization.
 
 ## 11. Open design questions

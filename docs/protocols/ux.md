@@ -183,7 +183,7 @@ No verbs.
 
 | File | Content |
 |---|---|
-| `items` | One line per item, the item's text. The first line is item 0. A list with columns (a Finder list window) separates them with tabs |
+| `items` | One line per item, the item's text. The first line is item 0. A list with columns (a Desktop list window) separates them with tabs |
 | `selection` | The selected item numbers, separated by spaces, then `\n` |
 
 | Verb | Right | Meaning |

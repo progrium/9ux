@@ -5,7 +5,7 @@
 with the matching change to `uxmeta/` and its tests.
 
 `uxmeta` keeps 9/UX's persistent metadata: application declarations,
-file associations, icons, the volume registry, and Finder layout. The
+file associations, icons, the volume registry, and Desktop layout. The
 data lives in human-editable [ndb(6)](https://9p.io/magic/man2html/6/ndb)
 files. `uxmeta` is the only program that writes them on 9/UX's behalf: it
 reads several files as ordered layers, answers queries about the merged
@@ -52,7 +52,7 @@ item=/usr/glenda/doc/notes.txt x=32 y=48
 | `ext` | file name suffix with its dot, e.g. `.txt` | `type`, `open`, `icon`, `plumb` | Maps a file name suffix to a type and how to open it |
 | `icon` | icon name | `image` (image(6) file), or `rsrc` with `res` (`TYPE ID`) | Where an icon's pixels come from |
 | `volume` | volume name | `path` (mount point in the session namespace), `addr` (dial string of a 9P server to mount there) or `srv` (a `/srv` file to mount there), `spec` (attach name), `icon`, `desktop` (`yes`/`no`), `x`, `y` | A registered volume (design §4: volumes are declared, never inferred). With neither `addr` nor `srv`, `path` is already in the namespace. |
-| `folder` | absolute directory path | `view` (`icons`/`list`), `sort` (`name`/`kind`/`date`/`size`), `x`, `y`, `width`, `height`, `scrollx`, `scrolly`, `icon`, `open` (`yes`/`no`: open when Finder last ran) | A folder window's layout |
+| `folder` | absolute directory path | `view` (`icons`/`list`), `sort` (`name`/`kind`/`date`/`size`), `x`, `y`, `width`, `height`, `scrollx`, `scrolly`, `icon`, `open` (`yes`/`no`: open when Desktop last ran) | A folder window's layout |
 | `item` | absolute path of a file or directory | `x`, `y` (position in its parent's icon view), `icon` (custom icon), `label` | One entry's layout and per-item choices |
 
 Paths in `folder` and `item` keys are paths **in the workspace's
@@ -194,7 +194,7 @@ explain KIND KEY              each layer's own record for KIND KEY, lowest
                               first, each preceded by "# layer NAME"
 ```
 
-`resolve` answers Finder's main question in one read. Its result is one
+`resolve` answers Desktop's main question in one read. Its result is one
 record:
 
 ```text
@@ -224,7 +224,7 @@ remove KIND KEY                hide KIND KEY: delete it from the target
                                write removed=yes
 delete KIND KEY                delete the target layer's record only
 rename OLDPATH NEWPATH         move folder and item records keyed by
-                               OLDPATH or anything below it (what Finder
+                               OLDPATH or anything below it (what Desktop
                                does after it renames or moves a file)
 reload                         re-read every layer now
 ```
@@ -315,7 +315,7 @@ outside `$home/lib/ux` is touched.
   everything; `layout` for queries plus updates that touch only `folder`
   and `item` records or the attributes `x`, `y`, `width`, `height`,
   `view`, `sort`, `scrollx`, `scrolly`, `desktop` on any record (enough
-  for Finder's layout); `ro` for reads only. Writes outside a
+  for Desktop's layout); `ro` for reads only. Writes outside a
   connection's rights fail with `permission denied`. Any other attach
   name fails with `bad value`.
 - `system` and `apps` layers can't be written through `uxmeta` at all.

@@ -1,6 +1,0 @@
-#!/bin/rc
-# Finder, in the window session.rc opens for it: it takes the desktop.
-cd /9ux
-resfs=/9ux/resfs/8.resfs uxsysres=/9ux/assets/gen/system.rsrc \
-	uxpattern=/9ux/assets/gen/patterns/nineteal.img \
-	exec finder/8.finder -m /mnt/meta -w demo -i 1000 >[2]/tmp/9ux/finder.err

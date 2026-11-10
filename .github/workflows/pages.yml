@@ -22,7 +22,7 @@ on:
       - uxmeta/**
       - resfs/**
       - clipd/**
-      - finder/**
+      - desktop/**
       - apps/**
       - mkfile
       - scripts/web.sh

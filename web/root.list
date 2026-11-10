@@ -19,7 +19,7 @@ lib/font/bit/lucidasans
 # Their subfonts above Latin-1: 9front's lucidasans .font files take
 # U+0100 and up from ../fixed, and a missing subfont draws as the PJW
 # face. The UI's own strings need U+2000 (the … in "Empty Trash…" and in
-# Finder's truncated labels, the ‑ in names); the rest of U+0100-U+28FF
+# Desktop's truncated labels, the ‑ in names); the rest of U+0100-U+28FF
 # (Latin Extended, Greek, Cyrillic, punctuation, arrows, math, ⌘, box
 # drawing) is about 70 KB, for file names and documents. unicode.7.font
 # and boldunicode.7.font use 7x14, unicode.6.font uses 6x12.

@@ -161,7 +161,7 @@ A snapshot of every window, one line each, from the bottom of the stack
 to the top:
 
 ```text
-window win=3 rect=0,-4,1024,768 label=finder app=finder-1 state=desktop
+window win=3 rect=0,-4,1024,768 label=desktop app=desktop-1 state=desktop
 window win=7 rect=120,100,520,400 label=rc state=
 window win=9 rect=200,150,700,500 'label=Read Me' app=sketch-1 state=current
 ```
@@ -171,7 +171,7 @@ claimed desktop window), `chrome` (classic chrome is on). `app` is absent for wi
 
 ## Desktop
 
-The desktop is the layer behind all windows. Finder (or any desktop
+The desktop is the layer behind all windows. Desktop (or any desktop
 client) provides it by claiming the desktop role for one of its own
 windows.
 
@@ -491,7 +491,7 @@ One line for each drag rio holds, oldest first; empty when there are
 none:
 
 ```text
-drag id=4 win=9 app=finder-1 types=file,text ops=move,copy state=over target=12 type=file op=move
+drag id=4 win=9 app=desktop-1 types=file,text ops=move,copy state=over target=12 type=file op=move
 drag id=3 win=7 types=text ops=copy state=dropped target=9 type=text op=copy
 ```
 
@@ -529,7 +529,7 @@ Example: a file dragged from window 9 onto window 12, which accepts it:
 
 ```text
 1 resync
-2 start id=4 win=9 app=finder-1 types=file,text ops=move,copy
+2 start id=4 win=9 app=desktop-1 types=file,text ops=move,copy
 3 enter id=4 win=9 pt=40,60 types=file,text ops=move,copy
 4 leave id=4 win=9
 5 enter id=4 win=12 pt=10,15 types=file,text ops=move,copy
@@ -581,7 +581,7 @@ agreed between programs, with an `x.` prefix for experiments:
 
 `name` in a `file` entry is a file name, never a path: the target
 decides where the file goes in its own namespace. A program that wants
-to do something smarter when it is both source and target (Finder
+to do something smarter when it is both source and target (Desktop
 moving a file between two of its own windows) can see that from the
 `start` event's `app` and use what it knows itself.
 

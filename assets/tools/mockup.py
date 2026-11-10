@@ -3,7 +3,7 @@
 
 This is a small software renderer of the 9/UX chrome and controls, driven
 by palette.ndb, metrics.ndb, fonts.ndb and glyphs.txt. rio, libux and
-Finder should draw the same pixels; when the two disagree, decide which
+Desktop should draw the same pixels; when the two disagree, decide which
 is right and fix the other (and the style guide).
 
 usage: mockup.py [-f fontdir] outdir
@@ -554,14 +554,14 @@ def scene_desktop(ux, W=800, H=600):
     # a legacy rio window, untouched
     ux.riowindow(24, 380, 400, 190, [
         "% ls /mnt/ux/apps",
-        "finder-1  sketch-42",
+        "desktop-1  sketch-42",
         "% cat /mnt/ux/apps/sketch-42/name",
         "Sketch",
         "% echo activate > .../controls/save/ctl",
         "% ",
     ])
 
-    # an inactive Finder window in list view
+    # an inactive Desktop window in list view
     x, y, w, h = 300, 60, 380, 200
     cx, cy, cw, ch = ux.window(x, y, w, h, "sources", active=False,
                                vscroll=0.0, hscroll=None)
@@ -572,7 +572,7 @@ def scene_desktop(ux, W=800, H=600):
                 icons=["folder", "folder", "folder", "doc-text", "doc", "doc-text"],
                 active=False)
 
-    # the active Finder window in icon view
+    # the active Desktop window in icon view
     x, y, w, h = 40, 110, 430, 250
     cx, cy, cw, ch = ux.window(x, y, w, h, "plan9", active=True,
                                vscroll=0.0, hscroll=0.0)
@@ -592,7 +592,7 @@ def scene_desktop(ux, W=800, H=600):
         ux.iconitem(cx + 44 + c * cw_, cy + 32 + r * chh, ic, lab,
                     selected=(lab == "README"))
 
-    ux.menubar(W, ["Finder", "File", "Edit", "View", "Special"])
+    ux.menubar(W, ["Desktop", "File", "Edit", "View", "Special"])
     return cv
 
 

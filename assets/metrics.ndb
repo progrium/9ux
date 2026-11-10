@@ -58,7 +58,7 @@ metric=dialog.margin        value=16
 metric=dialog.iconsize      value=32
 metric=dialog.textx         value=64   # alert text column
 
-# Finder (drawn by finder through libux IconView)
+# Desktop (drawn by desktop through libux IconView)
 metric=icon.large           value=32
 metric=icon.small           value=16
 metric=iconview.cellw       value=76

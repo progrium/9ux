@@ -10,10 +10,10 @@ the real server exists.
 | Document | Server | Clients | Mounted at |
 |---|---|---|---|
 | [rio.md](rio.md) | rio (stock files) | every rio program | `/dev`, `/mnt/wsys` |
-| [devux.md](devux.md) | rio (9/UX additions) | libux, uxd, Finder, desktop clients | `/dev/ux` |
+| [devux.md](devux.md) | rio (9/UX additions) | libux, uxd, Desktop, desktop clients | `/dev/ux` |
 | [ux.md](ux.md) | each libux app, aggregated by uxd | uxd, scripts, tests, other apps | `/mnt/ux` |
-| [meta.md](meta.md) | uxmeta | Finder, libux, launcher | `/mnt/meta` |
-| [res.md](res.md) | resfs | libux, Finder | `/mnt/res` |
+| [meta.md](meta.md) | uxmeta | Desktop, libux, launcher | `/mnt/meta` |
+| [res.md](res.md) | resfs | libux, Desktop | `/mnt/res` |
 | [clip.md](clip.md) | clipd | libux, any program | `/mnt/clip` |
 
 `rio.md`, `meta.md` and `res.md` are written by the streams that own those
@@ -79,7 +79,7 @@ quoted, not just the value: `'label=Save As…'`.
   a protocol says it repeats (such as `win=` in a registration).
 - Readers must ignore attributes they don't know. Writers must not send
   attributes the protocol doesn't define, except names beginning with
-  `x` followed by a dot (`x.finder.foo=1`), which are free for
+  `x` followed by a dot (`x.desktop.foo=1`), which are free for
   experiments and are ignored by everyone else.
 
 ### Value forms

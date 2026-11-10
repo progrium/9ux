@@ -8,19 +8,19 @@ stands, what checks it, and what is still to be done by hand before the
 
 Checked on 2026-11-10, `dev` at b5e87da (and the commit adding this file), Linux x86\_64 (no KVM), h9 at
 `H9_REV` b27cacd on the native backend. `scripts/test.sh` passed every
-layer: build, host (resfs), unit (clipd, finder, libux, resfs, rio, uxd,
-uxmeta, test/fakes), system (finder's remote volume) and gui (46 tests
+layer: build, host (resfs), unit (clipd, desktop, libux, resfs, rio, uxd,
+uxmeta, test/fakes), system (desktop's remote volume) and gui (46 tests
 in 13 binaries, including the two end-to-end tests below).
 
 | # | Criterion | Result | Checked by |
 |---|---|---|---|
 | 1 | No regressions to stock rio's documented file interfaces | **Pass** headless; CPU-server sessions still to do on the VM | `test/rio/` (24 tests on the fork: windows, wctl, devices, nested rio, acme, sam, golden images), and devux's mode-off test; `e2e-demo` checks acme and an rc window beside 9/UX apps |
-| 2 | Finder draws desktop icons, opens directories, launches documents via plumbing | **Pass** | `test/finder/`, `finder/test/ui.rc`, and `e2e-demo`: a double click on a text file plumbs it to acme, which opens it |
+| 2 | Desktop draws desktop icons, opens directories, launches documents via plumbing | **Pass** | `test/desktop/`, `desktop/test/ui.rc`, and `e2e-demo`: a double click on a text file plumbs it to acme, which opens it |
 | 3 | Menu bar follows a multi-window 9/UX app with correct focus | **Pass** | `test/devux/devux_test.zig` (bar follows focus between an app's two windows and back; actions by click, drag, Command key and ctl); `e2e-demo` clicks File > New in the bar for the libux sample |
 | 4 | Three native controls with read state, write commands, independent event subscriptions over 9P | **Pass** | `libux/test` (text field, button, checkbox, list, icon view; two `events` readers; a stalled reader doesn't stall the UI); `e2e-demo` sets a text field, reads it back, presses a button through `ctl` and sees it on a second reader, all through uxd's `/mnt/ux` |
-| 5 | ndb persistence survives restarts and handles external edits safely | **Pass** | `uxmeta/test` (precedence, concurrent writers, external edit, restart), `finder/test/ui.rc` (layout across a restart and an external edit), `test/finder` (a dragged icon's position saved) |
+| 5 | ndb persistence survives restarts and handles external edits safely | **Pass** | `uxmeta/test` (precedence, concurrent writers, external edit, restart), `desktop/test/ui.rc` (layout across a restart and an external edit), `test/desktop` (a dragged icon's position saved) |
 | 6 | Imported `ICN#` and `icl8` render correctly on actual 9front display formats | **Pass** at 32 bits on 9front's own kernel; 16- and 8-bit screens still to see on hardware | headless: `test/libux/res_test.zig` and resfs's golden images; on 9front's own kernel and VESA framebuffer: `test/e2e/vm-display.py`, below |
-| 7 | A mounted remote 9P directory works as a Finder volume with honest reporting | **Pass** | `finder/test/remote_test.sh` (a second h9 with `--serve`: operations, refusals, and `gone` when it stops); `e2e-demo` opens such a volume from the desktop |
+| 7 | A mounted remote 9P directory works as a Desktop volume with honest reporting | **Pass** | `desktop/test/remote_test.sh` (a second h9 with `--serve`: operations, refusals, and `gone` when it stops); `e2e-demo` opens such a volume from the desktop |
 | 8 | Unprivileged clients can't mutate another app's controls without authorization | **Pass** | `uxd/test` (policy, grants, redaction, restart keeps grants) |
 
 ## The end-to-end demo
@@ -32,7 +32,7 @@ first end-to-end demo as one headless run, in rio's 9/UX mode:
    ([`services.rc`](../test/e2e/services.rc)): the plumber, uxd on
    `/mnt/ux`, and uxmeta on `/mnt/meta` with a local volume and a remote
    one.
-2. Finder claims the desktop and shows both volumes. The remote one is
+2. Desktop claims the desktop and shows both volumes. The remote one is
    a second h9 on the host, `h9 --serve`, which the test starts.
 3. A double click on the remote volume attaches it and opens its window
    with the server's files.
@@ -40,7 +40,7 @@ first end-to-end demo as one headless run, in rio's 9/UX mode:
    text file plumbs it; acme, already running in a window, opens it.
 5. The libux sample launches and registers with uxd; the bar follows it,
    and a click on File, New in the bar reaches it.
-6. From rc: `ls /mnt/ux/apps` lists Finder and the sample; a text
+6. From rc: `ls /mnt/ux/apps` lists Desktop and the sample; a text
    field's value is set and read back; `echo activate` to the Save
    button's `ctl` presses it, and a second reader of the button's
    `events` sees the press.
@@ -48,7 +48,7 @@ first end-to-end demo as one headless run, in rio's 9/UX mode:
 
 [`test/e2e/drag_test.zig`](../test/e2e/drag_test.zig) does drag and
 drop the same way (workplan S9's "done when"): a file dragged between
-two Finder folder windows (moved, within one volume), onto another
+two Desktop folder windows (moved, within one volume), onto another
 volume's desktop icon (copied), and onto the libux sample's Notes field,
 whose contents then come through rio's drag broker, never as a path.
 
@@ -86,23 +86,23 @@ starting stock rio, on a throwaway overlay.
 
 ## Found and fixed while integrating
 
-- **Finder never attached a remote volume on open** (`finder/view.c`):
-  `fcvolcheck`'s result was compared with `< 0`, but it returns
-  `Vonline` or `Voffline`. A volume with `addr=` that Finder hadn't
+- **Desktop never attached a remote volume on open** (`desktop/view.c`):
+  `dcvolcheck`'s result was compared with `< 0`, but it returns
+  `Vonline` or `Voffline`. A volume with `addr=` that Desktop hadn't
   mounted yet failed to open with "not found", and an offline volume's
   alert never showed.
 - **libux didn't follow rio's focus** (`libux/win.c`, `menu.c`): rio
   takes the click that makes a window current, so libux kept the old
-  window current; Finder drew and reported the wrong window as active,
+  window current; Desktop drew and reported the wrong window as active,
   and the next drag from the newly current window was lost. libux now
   acts on `/dev/ux/events` focus events.
-- **Finder's folder windows had no title bars** (`libux/menu.c`): libux
+- **Desktop's folder windows had no title bars** (`libux/menu.c`): libux
   asked rio for chrome only on windows of kind `window`. Every kind but
   `dialog` and `alert` gets it now.
 - **uxd's tests all failed after one hung** (`uxd/test/setup.rc`): a
   leftover uxd kept `/srv/uxd.$user`; tests now clear it first.
 - The sample app's Notes field takes dropped files and text, so there
-  is a drop target outside Finder.
+  is a drop target outside Desktop.
 
 ## Open issues
 
@@ -112,11 +112,11 @@ starting stock rio, on a throwaway overlay.
   Logged in [h9-needs.md](h9-needs.md) as a likely h9 fault on fresh
   heap pages; a rerun passes.
 - **A remote volume shows "(offline)" until it's first opened.** That's
-  honest (Finder hasn't mounted it), but "not mounted" would read
-  better, or Finder could attach such volumes in the background at
+  honest (Desktop hasn't mounted it), but "not mounted" would read
+  better, or Desktop could attach such volumes in the background at
   start.
-- **Finder's own icons can't be dragged with a modifier**: mouse events
-  carry no modifiers, so there's no shift-click or option-drag (Finder
+- **Desktop's own icons can't be dragged with a modifier**: mouse events
+  carry no modifiers, so there's no shift-click or option-drag (Desktop
   README, Limits).
 
 ## Still to do by hand before the tag
