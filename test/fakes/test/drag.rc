@@ -184,6 +184,26 @@ want '^[0-9]+ start id=7 ' $out/e
 want '^[0-9]+ cancel id=7$' $out/e
 want '^[0-9]+ end id=7$' $out/e
 
+test=one-write
+{
+	fake press 7
+	echo start 'types=text' >[1=3]
+	fake move 9
+	echo accept 8 'win=9' >$dd/ctl
+	fake release
+	echo 'put 8 text
+all in one' >$dd/data
+	{
+		echo fetch 8 text >[1=5]
+		cat <[0=5] >$out/got
+	} <>[5]$dd/data
+	same $out/got 'all in one
+'
+	fails 'data after' echo 'fetch 8 text
+junk' >$dd/data
+	echo done 8 >$dd/ctl
+} >[3]$dd/ctl
+
 test=help
 cat $dd/ctl >$out/h
 want '^start -$' $out/h

@@ -498,7 +498,8 @@ Example: a file dragged from window 9 onto window 12, which accepts it:
 ### drag/data
 
 `data` moves payload bytes. Each open is used for one transfer, chosen
-by its first write, a line in the usual grammar:
+by the first line of its first write, in the usual grammar; whatever
+follows that line in the same write is already payload:
 
 | First write | Who | Then |
 |---|---|---|

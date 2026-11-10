@@ -1302,18 +1302,25 @@ datafirst(Dataopen *o, Fid *fid, char *line)
 static char*
 datawrite(Dataopen *o, Fid *fid, char *data, long n)
 {
-	char *line;
+	char *line, *e, *p;
 	Blob *b;
+	long k;
 
 	if(o->mode == Mnone){
-		line = emalloc9p(n+1);
-		memmove(line, data, n);
-		line[n] = 0;
-		if(n > 0 && line[n-1] == '\n')
-			line[n-1] = 0;
-		data = datafirst(o, fid, line);
+		/* the first line is the command; the rest of the write is payload */
+		p = memchr(data, '\n', n);
+		k = p != nil ? p-data : n;
+		line = emalloc9p(k+1);
+		memmove(line, data, k);
+		line[k] = 0;
+		e = datafirst(o, fid, line);
 		free(line);
-		return data;
+		if(e != nil || p == nil || k+1 == n)
+			return e;
+		if(o->mode != Mput && o->mode != Mreply)
+			return "bad syntax: data after the command";
+		data += k+1;
+		n -= k+1;
 	}
 	if(o->mode == Mfetch)
 		return "bad syntax: fetching";
