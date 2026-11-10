@@ -87,7 +87,7 @@ enum {
 	UXiconviewcellh	= 60,
 	UXiconviewlabelgap	= 3,
 	UXiconviewlabelpad	= 2,
-	UXiconviewlabelmax	= 72,
+	UXiconviewlabelmax	= 76,
 	UXdesktopmargin	= 12,
 	UXdesktopcellh	= 64,
 };
