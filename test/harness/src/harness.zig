@@ -422,6 +422,70 @@ pub const Session = struct {
         return s.rc(cmd);
     }
 
+    /// Runs `cmd` until its status is empty, or fails after `timeout_ms`.
+    pub fn waitRc(s: *Session, cmd: []const u8, timeout_ms: u64) !void {
+        var waited: u64 = 0;
+        while (true) : (waited += 50) {
+            const r = try s.exec(cmd, 30_000);
+            defer r.deinit(s.gpa);
+            if (r.ok()) return;
+            if (waited >= timeout_ms) {
+                std.debug.print("harness: still failing after {d} ms: {s}\nstatus: {s}\noutput:\n{s}\n", .{ timeout_ms, cmd, r.status, r.out });
+                return error.WaitTimeout;
+            }
+            sleepMs(50);
+        }
+    }
+
+    /// Opens a window at `r` running `cmd` with rc, through `window -m`:
+    /// a /mnt/wsys attach with a "new" spec, from a copy of the agent's
+    /// namespace and environment (so $work works), with the new window's
+    /// files bound over /dev. `cmd` may not contain single quotes.
+    pub fn openWindow(s: *Session, r: Rect, cmd: []const u8) !void {
+        std.debug.assert(std.mem.indexOfScalar(u8, cmd, '\'') == null);
+        const c = try std.fmt.allocPrint(s.gpa, "window -m -r {d} {d} {d} {d} rc -c '{s}'", .{ r.min.x, r.min.y, r.max.x, r.max.y, cmd });
+        defer s.gpa.free(c);
+        try s.rcQuiet(c);
+    }
+
+    /// The machine's path for `name` in the work directory. Caller frees.
+    pub fn workPath(s: *Session, name: []const u8) ![]u8 {
+        return std.fmt.allocPrint(s.gpa, "{s}/{s}", .{ s.work_guest, name });
+    }
+
+    /// Reads `name` from the work directory on the host, or null if it
+    /// isn't there. Caller frees.
+    pub fn readWork(s: *Session, name: []const u8) !?[]u8 {
+        var dir = try std.Io.Dir.cwd().openDir(s.io, s.work, .{});
+        defer dir.close(s.io);
+        return dir.readFileAlloc(s.io, name, s.gpa, .limited(64 << 20)) catch |e| switch (e) {
+            error.FileNotFound => null,
+            else => e,
+        };
+    }
+
+    /// Waits until `name` in the work directory exists and isn't empty,
+    /// and returns its contents. Caller frees.
+    pub fn waitWork(s: *Session, name: []const u8, timeout_ms: u64) ![]u8 {
+        var waited: u64 = 0;
+        while (true) : (waited += 50) {
+            if (try s.readWork(name)) |d| {
+                if (d.len > 0) return d;
+                s.gpa.free(d);
+            }
+            if (!s.running()) {
+                s.dump();
+                return error.MachineExited;
+            }
+            if (waited >= timeout_ms) {
+                std.debug.print("harness: no {s} after {d} ms\n", .{ name, timeout_ms });
+                s.saveScreen(name);
+                return error.WaitTimeout;
+            }
+            sleepMs(50);
+        }
+    }
+
     /// One read of up to 8 KB from `path`: for files such as a window's
     /// wctl, where a second read blocks until something changes.
     pub fn readOnce(s: *Session, path: []const u8) ![]u8 {
@@ -587,10 +651,9 @@ pub const Session = struct {
         s.release(b);
     }
 
-    /// The height of a menu item in the default font: font height
-    /// (14 in 9front's default, /lib/font/bit/vga/unicode.font... set
-    /// per session by `menuItemHeight`) plus menuhit's 2-pixel gap.
-    pub var item_height: i32 = 16;
+    /// The height of a menu item: the default font's height (16, for
+    /// /lib/font/bit/vga/unicode.font) plus menuhit's Vspacing of 2.
+    pub var item_height: i32 = 18;
 
     // ---- The screen ----
 

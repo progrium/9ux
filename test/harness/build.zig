@@ -4,9 +4,9 @@
 //!   zig build test -Dfilter=window     only tests whose names contain it
 //!   zig build test -Dupdate-golden     rewrite golden PNGs instead of comparing
 //!
-//! Test files are found, not listed: every `*.zig` file directly inside a
-//! directory of test/ other than harness/ and fakes/ (test/rio/*.zig, and
-//! later test/e2e/*.zig) is built as its own test binary with the
+//! Test files are found, not listed: every `*_test.zig` file directly inside a
+//! directory of test/ other than harness/ and fakes/ (test/rio/*_test.zig, and
+//! later test/e2e/*_test.zig) is built as its own test binary with the
 //! `harness` module imported. A test file's golden images live in a
 //! `golden/` directory beside it.
 const std = @import("std");
@@ -68,9 +68,9 @@ pub fn build(b: *std.Build) void {
         defer d.close(io);
         var fit = d.iterate();
         while (fit.next(io) catch null) |f| {
-            if (f.kind != .file or !std.mem.endsWith(u8, f.name, ".zig")) continue;
+            if (f.kind != .file or !std.mem.endsWith(u8, f.name, "_test.zig")) continue;
             const t = b.addTest(.{
-                .name = b.fmt("{s}-{s}", .{ e.name, f.name[0 .. f.name.len - 4] }),
+                .name = b.fmt("{s}-{s}", .{ e.name, f.name[0 .. f.name.len - 9] }),
                 .root_module = b.createModule(.{
                     .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ sub, f.name }) },
                     .target = target,
