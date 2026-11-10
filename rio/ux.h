@@ -137,3 +137,13 @@ int		uxbarhit(Point);
 void		uxbarmouse(void);
 void		uxbarontop(void);
 int		uxkbd(char*);
+
+/* uxstyle.c */
+#include "../assets/gen/uxstyle.h"
+extern Font	*uxsysfont;
+extern Image	*uxmark;
+void		uxstyleinit(void);
+Image*	uxcolor(ulong);
+void		uxglyph(Image*, Point, char*, Image*);
+int		uxglyphwidth(char*);
+int		uxglyphheight(char*);

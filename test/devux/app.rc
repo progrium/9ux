@@ -13,6 +13,12 @@ title=$2
 	echo menu edit 'title=Edit' >[1=3]
 	echo item edit undo 'label=Undo' 'key=z' 'enabled=off' >[1=3]
 	echo item edit copy 'label=Copy' 'key=c' >[1=3]
+	echo menu view 'title=View' >[1=3]
+	echo item view grid '''label=Show Grid''' 'check=on' 'key=shift+g' >[1=3]
+	echo item view s1 'sep=on' >[1=3]
+	echo menu zoom 'title=Zoom' 'top=off' >[1=3]
+	echo item zoom in '''label=Zoom In''' 'key=ctl+alt+=' >[1=3]
+	echo item view zoom 'label=Zoom' 'sub=zoom' >[1=3]
 	cat /dev/ux/menubar/events >$work/$id.events &
 	echo ready >$work/$id.ready
 	wait

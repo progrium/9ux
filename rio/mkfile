@@ -15,11 +15,14 @@ OFILES=\
 	uxbar.$O\
 	uxfs.$O\
 	uxmenu.$O\
+	uxstyle.$O\
+	uxglyphs.$O\
 	xfid.$O\
 
 HFILES=dat.h\
 	fns.h\
 	ux.h\
+	../assets/gen/uxstyle.h\
 
 </sys/src/cmd/mkone
 
@@ -28,3 +31,19 @@ $O.out:	/$objtype/lib/libdraw.a /$objtype/lib/libframe.a \
 syms:V:
 	$CC -a $CFLAGS rio.c	> syms
 	$CC -aa $CFLAGS *.c 	>>syms
+
+# 9/UX assets (assets/gen, made by S8's tools): glyphs and the bar's mark
+uxglyphs.$O:	../assets/gen/uxglyphs.c
+	$CC $CFLAGS -o $target ../assets/gen/uxglyphs.c
+
+uxstyle.$O:	uxmark.h
+
+uxmark.h:	../assets/gen/icons/mark.16.img
+	{
+		echo '/* made by mkfile from '$prereq'; do not edit */'
+		echo 'static uchar markimg[] = {'
+		xd -1x $prereq | awk 'NF > 1 { for(i = 2; i <= NF; i++) printf "0x%s,", $i; printf "\n" }'
+		echo '};'
+	} >$target
+
+CLEANFILES=uxmark.h

@@ -18,19 +18,15 @@
 int	uxbarh;
 
 static	Image	*bar;
-static	Image	*gray;
 static	Rectangle	barr;
 
 enum
 {
-	Hpad		= 8,	/* space around a title */
-	Vpad		= 2,
-	Itemh	= 0,	/* set from the font */
-	Sepht	= 7,
-	Checkw	= 16,
-	Keygap	= 24,
+	Tpad		= UXmenubartitlepad,	/* space either side of a title */
 	Maxlevel	= 8,
 };
+
+#define	F	uxsysfont
 
 /* a title in the bar: the rio menu, the app title, or an app menu */
 typedef struct Title Title;
@@ -78,15 +74,14 @@ int		uxmatchkey(Rune, int);
 static int
 itemh(void)
 {
-	return font->height+2*Vpad;
+	return UXmenuitemheight;
 }
 
 void
 uxbarinit(void)
 {
-	uxbarh = font->height+2*Vpad+1;
-	if(gray == nil)
-		gray = allocimage(display, Rect(0, 0, 1, 1), screen->chan, 1, 0x888888FF);
+	uxstyleinit();
+	uxbarh = UXmenubarheight;
 	barr = screen->r;
 	barr.max.y = barr.min.y+uxbarh;
 	bar = allocwindow(wscreen, barr, Refbackup, DNofill);
@@ -189,6 +184,26 @@ mkriomenu(void)
 }
 
 static void
+addtitle(int *x, char *text, Uxmenu *m, int rio)
+{
+	Title *t;
+
+	if(ntitles == nelem(titles))
+		return;
+	t = &titles[ntitles++];
+	t->text = text;
+	t->m = m;
+	t->rio = rio;
+	t->r = Rect(*x, barr.min.y, *x+Tpad+stringwidth(F, text)+Tpad, barr.max.y-1);
+	*x = t->r.max.x;
+}
+
+/*
+ * The mark (the rio menu), then the foreground app's name and its
+ * menus. A window with no app shows its label, which also opens the
+ * rio menu.
+ */
+static void
 layout(void)
 {
 	Uxapp *a;
@@ -205,40 +220,28 @@ layout(void)
 	win = uxforeground(&a);
 	shownapp = a;
 	shownwin = win;
-	x = barr.min.x+Hpad;
 
-	titles[ntitles].text = "rio";
-	titles[ntitles].m = nil;
-	titles[ntitles].rio = 1;
-	titles[ntitles].r = Rect(x-Hpad/2, barr.min.y, x+stringwidth(font, "rio")+Hpad/2, barr.max.y-1);
-	x += stringwidth(font, "rio")+2*Hpad;
-	ntitles++;
+	titles[0].text = "";
+	titles[0].m = nil;
+	titles[0].rio = 1;
+	titles[0].r = Rect(barr.min.x+UXmenubarmarkx-Tpad/2, barr.min.y,
+		barr.min.x+UXmenubarmarkx+16+Tpad/2, barr.max.y-1);
+	ntitles = 1;
 
-	t = nil;
+	x = barr.min.x+UXmenubarfirsttitle-Tpad;
 	if(a != nil){
 		t = a->title;
 		shownappid = estrdup(a->id);
-	}else if((w = uxwin(win)) != nil)
-		t = w->label;
-	if(t != nil){
-		titles[ntitles].text = t;
-		titles[ntitles].m = nil;
-		titles[ntitles].rio = 0;
-		titles[ntitles].r = Rect(x-Hpad/2, barr.min.y, x+stringwidth(font, t)+Hpad/2, barr.max.y-1);
-		x += stringwidth(font, t)+2*Hpad;
-		ntitles++;
+		addtitle(&x, t, nil, 0);
+	}else if((w = uxwin(win)) != nil && !uxisdesktop(w)){
+		t = w->label != nil ? w->label : "";
+		addtitle(&x, t, nil, 1);
 	}
 	if(a == nil)
 		return;
 	shown = uxbarmenus(a, win);
-	for(m=shown; m && ntitles<nelem(titles); m=m->next){
-		titles[ntitles].text = m->title;
-		titles[ntitles].m = m;
-		titles[ntitles].rio = 0;
-		titles[ntitles].r = Rect(x-Hpad/2, barr.min.y, x+stringwidth(font, m->title)+Hpad/2, barr.max.y-1);
-		x += stringwidth(font, m->title)+2*Hpad;
-		ntitles++;
-	}
+	for(m=shown; m; m=m->next)
+		addtitle(&x, m->title, m, 0);
 }
 
 static void
@@ -246,12 +249,23 @@ drawtitle(int k, int hi)
 {
 	Title *t;
 	Image *fg, *bg;
+	Point p;
 
 	t = &titles[k];
-	bg = hi ? display->black : display->white;
-	fg = hi ? display->white : display->black;
+	bg = uxcolor(hi ? UXcolselect : UXpaper);
+	fg = uxcolor(hi ? UXcolselecttext : UXink);
 	draw(bar, t->r, bg, nil, ZP);
-	string(bar, Pt(t->r.min.x+Hpad/2, t->r.min.y+Vpad), fg, ZP, font, t->text);
+	if(k == 0){
+		/* the mark */
+		p = Pt(barr.min.x+UXmenubarmarkx, barr.min.y+(Dy(barr)-1-16)/2);
+		if(uxmark != nil)
+			draw(bar, Rpt(p, addpt(p, Pt(16, 16))), uxmark, nil, uxmark->r.min);
+		else
+			string(bar, p, fg, ZP, F, "9");
+		return;
+	}
+	p = Pt(t->r.min.x+Tpad, t->r.min.y+(Dy(t->r)-F->height)/2);
+	string(bar, p, fg, ZP, F, t->text);
 }
 
 static int	openedtitle = -1;
@@ -269,63 +283,81 @@ uxbardraw(void)
 	if(a != nil && a->batch)
 		return;
 	layout();
-	draw(bar, barr, display->white, nil, ZP);
-	draw(bar, Rect(barr.min.x, barr.max.y-1, barr.max.x, barr.max.y), display->black, nil, ZP);
+	draw(bar, barr, uxcolor(UXpaper), nil, ZP);
+	draw(bar, Rect(barr.min.x, barr.max.y-1, barr.max.x, barr.max.y), uxcolor(UXink), nil, ZP);
 	for(k=0; k<ntitles; k++)
 		drawtitle(k, k == openedtitle);
-	/* the app title in bold, by overstrike */
-	if(ntitles > 1 && titles[1].m == nil && !titles[1].rio)
-		string(bar, Pt(titles[1].r.min.x+Hpad/2+1, titles[1].r.min.y+Vpad), display->black, ZP, font, titles[1].text);
 	flushimage(display, 1);
 }
 
 /*
  * Drop-down menus
  */
+/* a named key, written out; nil for a printable one */
 static char*
-keytext(Uxitem *i)
+keyname(Rune r)
 {
-	static char buf[64];
-	char *p, *e, k[16];
-	Rune r;
+	static char k[8];
 
-	if(i->key == nil)
-		return nil;
-	p = buf;
-	e = buf+sizeof buf;
-	if(i->kmods & Mctl)
-		p = seprint(p, e, "Ctl-");
-	if(i->kmods & Malt)
-		p = seprint(p, e, "Alt-");
-	if(i->kmods & Mshift)
-		p = seprint(p, e, "Shift-");
-	r = i->krune;
+	switch(r){
+	case Kup:	return "Up";
+	case Kdown:	return "Down";
+	case Kleft:	return "Left";
+	case Kright:	return "Right";
+	case Khome:	return "Home";
+	case Kend:	return "End";
+	case Kpgup:	return "PgUp";
+	case Kpgdown:	return "PgDn";
+	case Kins:	return "Ins";
+	case Kdel:	return "Del";
+	case '\b':	return "Bs";
+	case '\t':	return "Tab";
+	case Kesc:	return "Esc";
+	case '\n':	return "Enter";
+	case ' ':	return "Space";
+	}
+	if(r > KF && r <= (KF|12)){
+		snprint(k, sizeof k, "F%d", r-KF);
+		return k;
+	}
 	if(r >= 'a' && r <= 'z')
 		r += 'A'-'a';
-	switch(i->krune){
-	case Kup:	strcpy(k, "Up"); break;
-	case Kdown:	strcpy(k, "Down"); break;
-	case Kleft:	strcpy(k, "Left"); break;
-	case Kright:	strcpy(k, "Right"); break;
-	case Khome:	strcpy(k, "Home"); break;
-	case Kend:	strcpy(k, "End"); break;
-	case Kpgup:	strcpy(k, "PgUp"); break;
-	case Kpgdown:	strcpy(k, "PgDn"); break;
-	case Kins:	strcpy(k, "Ins"); break;
-	case Kdel:	strcpy(k, "Del"); break;
-	case '\b':	strcpy(k, "Bs"); break;
-	case '\t':	strcpy(k, "Tab"); break;
-	case Kesc:	strcpy(k, "Esc"); break;
-	case '\n':	strcpy(k, "Enter"); break;
-	case ' ':	strcpy(k, "Space"); break;
-	default:
-		if(i->krune > KF && i->krune <= (KF|12))
-			snprint(k, sizeof k, "F%d", i->krune-KF);
-		else
-			snprint(k, sizeof k, "%C", r);
+	snprint(k, sizeof k, "%C", r);
+	return k;
+}
+
+/*
+ * A shortcut, right-aligned at x (or measured, with dst nil): the
+ * modifier glyphs ctl, alt, shift, then the Command glyph, then the key.
+ */
+static int
+drawkey(Image *dst, int x, int y, Uxitem *i, Image *col)
+{
+	static char *mods[] = { "ctl", "alt", "shift", "mod" };
+	int bits[] = { Mctl, Malt, Mshift, -1 };
+	int k, w, h, gap;
+	char *kn;
+
+	if(i->key == nil)
+		return 0;
+	gap = 2;
+	kn = keyname(i->krune);
+	w = stringwidth(F, kn);
+	for(k=0; k<nelem(mods); k++)
+		if(bits[k] < 0 || (i->kmods & bits[k]))
+			w += uxglyphwidth(mods[k])+gap;
+	if(dst == nil)
+		return w;
+	x -= w;
+	for(k=0; k<nelem(mods); k++){
+		if(bits[k] >= 0 && !(i->kmods & bits[k]))
+			continue;
+		h = uxglyphheight(mods[k]);
+		uxglyph(dst, Pt(x, y+(itemh()-h)/2), mods[k], col);
+		x += uxglyphwidth(mods[k])+gap;
 	}
-	seprint(p, e, "Cmd-%s", k);
-	return buf;
+	string(dst, Pt(x, y+(itemh()-F->height)/2), col, ZP, F, kn);
+	return w;
 }
 
 static void
@@ -333,40 +365,37 @@ drawitem(Drop *d, int k, int hi)
 {
 	Uxitem *i;
 	Rectangle r;
-	Image *fg, *bg;
-	Point p;
-	char *kt;
-	int y;
+	Image *fg, *bg, *dot;
+	int x, y;
 
 	i = d->it[k];
 	r = d->ir[k];
+	draw(d->i, r, uxcolor(UXpaper), nil, ZP);
 	if(i->sep){
-		draw(d->i, r, display->white, nil, ZP);
+		/* a dotted line */
 		y = (r.min.y+r.max.y)/2;
-		draw(d->i, Rect(r.min.x, y, r.max.x, y+1), gray, nil, ZP);
+		dot = uxcolor(UXcoldisabled);
+		for(x=r.min.x+1; x<r.max.x-1; x+=2)
+			draw(d->i, Rect(x, y, x+1, y+1), dot, nil, ZP);
 		return;
 	}
 	hi = hi && i->enabled;
-	bg = hi ? display->black : display->white;
-	fg = hi ? display->white : (i->enabled ? display->black : gray);
+	bg = uxcolor(hi ? UXcolselect : UXpaper);
+	fg = uxcolor(hi ? UXcolselecttext : (i->enabled ? UXink : UXcoldisabled));
 	draw(d->i, r, bg, nil, ZP);
-	p = Pt(r.min.x+Checkw, r.min.y+Vpad);
-	string(d->i, p, fg, ZP, font, i->label != nil ? i->label : i->action);
-	if(i->check == Chkon){
-		y = r.min.y+Dy(r)/2;
-		line(d->i, Pt(r.min.x+4, y), Pt(r.min.x+7, y+3), Endsquare, Endsquare, 1, fg, ZP);
-		line(d->i, Pt(r.min.x+7, y+3), Pt(r.min.x+12, y-4), Endsquare, Endsquare, 1, fg, ZP);
-	}else if(i->check == Chkmixed){
-		y = r.min.y+Dy(r)/2;
-		draw(d->i, Rect(r.min.x+4, y-1, r.min.x+12, y+1), fg, nil, ZP);
-	}
-	if(i->sub != nil){
-		/* a small triangle */
-		y = r.min.y+Dy(r)/2;
-		for(k=0; k<4; k++)
-			draw(d->i, Rect(r.max.x-10+k, y-3+k, r.max.x-9+k, y+4-k), fg, nil, ZP);
-	}else if((kt = keytext(i)) != nil)
-		string(d->i, Pt(r.max.x-Hpad-stringwidth(font, kt), r.min.y+Vpad), fg, ZP, font, kt);
+	string(d->i, Pt(r.min.x+UXmenupadleft, r.min.y+(Dy(r)-F->height)/2), fg, ZP, F,
+		i->label != nil ? i->label : i->action);
+	if(i->check == Chkon)
+		uxglyph(d->i, Pt(r.min.x+(UXmenupadleft-uxglyphwidth("check"))/2,
+			r.min.y+(Dy(r)-uxglyphheight("check"))/2), "check", fg);
+	else if(i->check == Chkmixed)
+		uxglyph(d->i, Pt(r.min.x+(UXmenupadleft-uxglyphwidth("mixed"))/2,
+			r.min.y+(Dy(r)-uxglyphheight("mixed"))/2), "mixed", fg);
+	if(i->sub != nil)
+		uxglyph(d->i, Pt(r.max.x-UXmenupadright/2-uxglyphwidth("submenu"),
+			r.min.y+(Dy(r)-uxglyphheight("submenu"))/2), "submenu", fg);
+	else
+		drawkey(d->i, r.max.x-UXmenupadright, r.min.y, i, fg);
 }
 
 static void
@@ -403,8 +432,8 @@ opendrop(Uxmenu *m, Rectangle at, int beside)
 	Drop *d;
 	Uxitem *i;
 	int n, k, wid, kw, h, y;
-	char *kt;
-	Rectangle r;
+	Rectangle r, fr;
+	Image *under;
 
 	if(ndrops >= Maxlevel){
 		uxfreemenus(m);
@@ -417,19 +446,17 @@ opendrop(Uxmenu *m, Rectangle at, int beside)
 	for(i=m->items; i; i=i->next){
 		n++;
 		if(i->sep){
-			h += Sepht;
+			h += UXmenusepheight;
 			continue;
 		}
 		h += itemh();
-		k = stringwidth(font, i->label != nil ? i->label : i->action);
+		k = stringwidth(F, i->label != nil ? i->label : i->action);
 		if(k > wid)
 			wid = k;
 		if(i->sub != nil)
-			k = 12;
-		else if((kt = keytext(i)) != nil)
-			k = stringwidth(font, kt);
+			k = uxglyphwidth("submenu");
 		else
-			k = 0;
+			k = drawkey(nil, 0, 0, i, nil);
 		if(k > kw)
 			kw = k;
 	}
@@ -437,21 +464,28 @@ opendrop(Uxmenu *m, Rectangle at, int beside)
 		uxfreemenus(m);
 		return;
 	}
-	wid += Checkw+Hpad+(kw > 0 ? Keygap+kw : 0)+2;
+	/* frame, padding, and the shadow right and below */
+	wid += UXmenupadleft+UXmenupadright+(kw > 0 ? UXmenukeygap+kw : 0)+2;
 	if(beside)
 		r = Rect(at.max.x, at.min.y-1, at.max.x+wid, at.min.y-1+h+2);
 	else
 		r = Rect(at.min.x, at.max.y, at.min.x+wid, at.max.y+h+2);
+	r.max = addpt(r.max, Pt(UXmenushadow, UXmenushadow));
 	/* keep it on screen */
 	if(r.max.x > screen->r.max.x)
-		r = rectaddpt(r, Pt((beside ? at.min.x-wid-r.min.x : screen->r.max.x-r.max.x), 0));
+		r = rectaddpt(r, Pt((beside ? at.min.x-Dx(r)-r.min.x : screen->r.max.x-r.max.x), 0));
 	if(r.max.y > screen->r.max.y)
 		r = rectaddpt(r, Pt(0, screen->r.max.y-r.max.y));
 	if(r.min.x < screen->r.min.x)
 		r = rectaddpt(r, Pt(screen->r.min.x-r.min.x, 0));
 	d = &drops[ndrops];
+	/* what's under the shadow's corners, copied before the menu covers it */
+	under = allocimage(display, r, screen->chan, 0, DNofill);
+	if(under != nil)
+		draw(under, r, screen, nil, r.min);
 	d->i = allocwindow(wscreen, r, Refbackup, DNofill);
 	if(d->i == nil){
+		freeimage(under);
 		uxfreemenus(m);
 		return;
 	}
@@ -462,12 +496,22 @@ opendrop(Uxmenu *m, Rectangle at, int beside)
 	d->sel = -1;
 	d->ir = emalloc(n*sizeof(Rectangle));
 	d->it = emalloc(n*sizeof(Uxitem*));
-	draw(d->i, r, display->white, nil, ZP);
-	border(d->i, r, 1, display->black, ZP);
+	/* the menu: a paper box in an ink frame, its shadow, and what's behind
+	 * the shadow's corners (the screen there) */
+	fr = r;
+	fr.max = subpt(fr.max, Pt(UXmenushadow, UXmenushadow));
+	if(under != nil){
+		draw(d->i, r, under, nil, r.min);
+		freeimage(under);
+	}
+	draw(d->i, rectaddpt(fr, Pt(UXmenushadow, UXmenushadow)), uxcolor(UXink), nil, ZP);
+	draw(d->i, fr, uxcolor(UXpaper), nil, ZP);
+	border(d->i, fr, 1, uxcolor(UXink), ZP);
+	r = fr;
 	y = r.min.y+1;
 	k = 0;
 	for(i=m->items; i; i=i->next){
-		h = i->sep ? Sepht : itemh();
+		h = i->sep ? UXmenusepheight : itemh();
 		d->ir[k] = Rect(r.min.x+1, y, r.max.x-1, y+h);
 		d->it[k] = i;
 		drawitem(d, k, 0);

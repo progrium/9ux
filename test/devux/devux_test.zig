@@ -14,16 +14,47 @@ const Session = harness.Session;
 /// rio's Command key (Kmod4 in keyboard.h).
 const Kmod4: u21 = 0xF868;
 
-/// The bar with the default font (vga, 8x16): 16 + 2*2 + 1 pixels.
-const bar_h = 21;
-/// Title positions for the app "Hello" with menus File and Edit:
-/// rio at 8, then each title 2*8 pixels after the one before.
-const hello_title = pt(68, 10);
-const file_title = pt(118, 10);
-const edit_title = pt(166, 10);
-/// Items in a drop-down are 20 pixels high, from y 22.
-fn item(title: harness.Point, n: i32) harness.Point {
-    return pt(title.x + 10, bar_h + 1 + 20 * n + 10);
+/// The menu bar: 20 pixels with its rule (assets/README.md).
+const bar_h = 20;
+
+/// The x centres of the titles after the mark, found on the screen:
+/// runs of ink in the bar, apart by more than a letter gap.
+fn barTitles(s: *Session) ![8]i32 {
+    const img = try s.screenshot();
+    defer img.deinit(gpa);
+    var out = [_]i32{0} ** 8;
+    var n: usize = 0;
+    var first: i32 = -1;
+    var last: i32 = -100;
+    var x: i32 = 32;
+    while (x < 1024) : (x += 1) {
+        var ink = false;
+        var y: i32 = 2;
+        while (y < bar_h - 2) : (y += 1) {
+            if (img.at(x, y) == 0x000000) ink = true;
+        }
+        if (!ink) continue;
+        if (x - last > 8) {
+            if (first >= 0 and n < out.len) {
+                out[n] = @divTrunc(first + last, 2);
+                n += 1;
+            }
+            first = x;
+        }
+        last = x;
+    }
+    if (first >= 0 and n < out.len) out[n] = @divTrunc(first + last, 2);
+    return out;
+}
+
+/// Titles for the app "Hello": [0] Hello, [1] File, [2] Edit.
+fn title(t: [8]i32, k: usize) harness.Point {
+    return pt(t[k], 10);
+}
+
+/// Item n of the menu under a title: 18 pixels each, from y 20.
+fn item(t: harness.Point, n: i32) harness.Point {
+    return pt(t.x + 6, bar_h + 9 + 18 * n);
 }
 
 fn start(name: []const u8) !*Session {
@@ -122,10 +153,9 @@ test "focus events and the menu bar follow the focused window" {
     gpa.free(want);
     try s.settle();
     {
-        const img = try s.screenshot();
-        defer img.deinit(gpa);
-        try std.testing.expect(blackIn(img, rect(100, 2, 136, 19)) > 0); // File
-        try std.testing.expect(blackIn(img, rect(148, 2, 184, 19)) > 0); // Edit
+        // Hello, File, Edit and View.
+        const t = try barTitles(s);
+        try std.testing.expect(t[3] > 0);
     }
 
     s.click(pt(750, 250), .left);
@@ -134,9 +164,9 @@ test "focus events and the menu bar follow the focused window" {
     gpa.free(want);
     try s.settle();
     {
-        const img = try s.screenshot();
-        defer img.deinit(gpa);
-        try std.testing.expectEqual(0, blackIn(img, rect(100, 2, 200, 19)));
+        // The mark and the label "b", nothing more.
+        const t = try barTitles(s);
+        try std.testing.expect(t[0] > 0 and t[1] == 0);
     }
     want = try std.fmt.allocPrint(gpa, "focus app=hello-1 win={d}", .{a});
     try waitFor(s, "hello-1.events", want);
@@ -152,6 +182,9 @@ test "menu commands arrive by click, by drag, by Command key and by ctl" {
     var fbuf: [64]u8 = undefined;
     try waitFocus(s, try std.fmt.bufPrint(&fbuf, "focus app=hello-1 win={d}", .{w[0]}));
 
+    const t = try barTitles(s);
+    const file_title = title(t, 1);
+    const edit_title = title(t, 2);
     // Click File, then click Quit.
     s.click(file_title, .left);
     harness.sleepMs(100);
