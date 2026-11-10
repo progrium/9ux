@@ -602,10 +602,8 @@ _redraw(Uxwin *w)
 	r = w->img->r;
 	fill(w, r, winbg(w));
 	if(strcmp(w->kind, "dialog") == 0 || strcmp(w->kind, "alert") == 0){
-		/* rio draws the outer frame; libux the teal band and the inner frame */
+		/* rio's border is the teal band; libux draws the ink frame inside it */
 		frame(w, r, 1, UXink);
-		frame(w, insetrect(r, 1), 2, UXcoldialogband);
-		frame(w, insetrect(r, 3), 1, UXink);
 	}
 	for(i = 0; i < w->nctl; i++)
 		_drawctl(w->ctl[i]);

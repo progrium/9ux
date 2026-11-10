@@ -2,6 +2,7 @@
 
 TARG=sample
 OFILES=sample.$O
+HFILES=../../libux/ux.h
 BIN=/$objtype/bin
 LIB=../../libux/libux.a$O
 CFLAGS=$CFLAGS -I../../libux
