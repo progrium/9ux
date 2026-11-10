@@ -39,6 +39,8 @@ enum {
 	UXquit,		/* app quit asked for */
 	UXresize,	/* window moved or resized (Uxev.win); see uxwinrect */
 	UXfront,	/* window became the app's current window */
+	UXdrop,		/* dropped on a drop target (Uxev.text type, .action op, .pt, .drag) */
+	UXdragend,	/* our drag ended: Uxev.text the op the target did, nil if cancelled */
 };
 
 /* how an event came about; Uxev.via */
@@ -57,8 +59,9 @@ struct Uxev {
 	char	*action;	/* UXaction */
 	char	*item;		/* icon item id */
 	int	n;		/* list item number */
-	char	*text;		/* new name, chosen path */
+	char	*text;		/* new name, chosen path; drop type */
 	Point	pt;
+	int	drag;		/* UXdrop, UXdragend: the drag's id in /dev/ux/drag */
 };
 
 typedef void Uxfn(Uxev*, void*);
@@ -155,3 +158,35 @@ Uxwin*	uxresalert(int id, Uxfn*, void*);	/* ALRT id and its DITL */
 void	uxresparam(int n, char *s);	/* ^n in dialog text, n 0 to 3 */
 int	uxresitem(Uxctl*);	/* the DITL item number a control came from, or 0 */
 Uxctl*	uxresctl(Uxwin*, int n);	/* the control made from DITL item n, or nil */
+
+/*
+ * drag and drop, through rio's /dev/ux/drag (drag.c). A source builds a
+ * Uxdrag and starts it while a mouse button is down; the control then
+ * gets UXdragend. A drop target gets UXdrop, and fetches the payload
+ * from its handler; libux tells rio the drop is done when the handler
+ * returns. Payloads always travel through rio, never as paths.
+ */
+typedef struct Uxdrag Uxdrag;
+typedef struct Uxdropfile Uxdropfile;
+#pragma incomplete Uxdrag
+
+struct Uxdropfile {
+	char	*name;		/* a name, never a path */
+	vlong	size;		/* -1 if unknown */
+	int	dir;
+	ulong	mode;		/* permission bits */
+};
+
+Uxdrag*	uxdragnew(char *ops, char *label);	/* ops: "copy,move"; nil: copy */
+void	uxdragdata(Uxdrag*, char *type, void *data, long n);
+void	uxdragfile(Uxdrag*, char *path);	/* offered as type "file" */
+int	uxdragstart(Uxdrag*, Uxctl *src);	/* -1 and errstr on failure; frees the Uxdrag either way */
+
+void	uxdroptypes(Uxctl*, char *types, char *ops);	/* "file,text", "copy"; nil types: no longer a target */
+char*	uxdropdata(Uxev*, char *type, int item, long *n);	/* malloc'd, NUL-terminated; item -1: the whole type */
+int	uxdropfiles(Uxev*, Uxdropfile**);	/* the "file" list; returns how many */
+void	uxdropfilesfree(Uxdropfile*, int);
+int	uxdropsave(Uxev*, int item, char *path, ulong mode);	/* file item into a new file */
+void	uxdropresult(Uxev*, char *op, char *err);	/* what the drop did, if not the op offered */
+int	uxdragfromself(Uxev*);	/* the drop came from this app */
+char**	uxdragpaths(Uxev*, int *n);	/* and if so, its files' paths (malloc'd) */

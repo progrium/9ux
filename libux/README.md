@@ -148,6 +148,20 @@ Menus are kept under `menus/` and registered with rio's bar through
 `/dev/ux/menubar/ctl` when `/dev/ux` exists, under the uxd app ID (or
 `name-pid` without uxd).
 
+## Drag and drop
+
+[drag.c](drag.c) speaks rio's `/dev/ux/drag` ([devux.md](../docs/protocols/devux.md#drag-and-drop)).
+A source builds a `Uxdrag` (`uxdragnew`, then `uxdragdata` for bytes
+put up front and `uxdragfile` for files) and calls `uxdragstart` while
+the button is down; its control later gets `UXdragend` with the op the
+target did, or nil if nobody took it. `uxdroptypes` makes a control a
+drop target: libux accepts for it while the pointer is over it, and its
+handler gets `UXdrop` and fetches with `uxdropdata`, `uxdropfiles` and
+`uxdropsave`. Files are read by the source app in its own namespace and
+travel through rio, so a target never gets a path; only when the drop
+came from the same app (`uxdragfromself`) does `uxdragpaths` give the
+source's paths, for moves within one program.
+
 ## Building and testing
 
 ```sh
@@ -187,6 +201,7 @@ Not yet:
   have no automated test until S0's harness can inject input.
 - Window `close` from rio's own close (deleting the window) isn't
   reported for dialogs yet; the dialog just goes away.
-- Icon views have no drag yet (S9), and text fields no snarf.
+- Icon views don't start drags by themselves yet: Finder (S7b) calls
+  `_dragstart` from its icon tracking. Text fields have no snarf yet.
 - The uxd registration path is written to ux.md but untested until uxd
   (S4) or a fake uxd exists.

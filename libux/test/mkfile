@@ -1,7 +1,13 @@
 </$objtype/mkfile
 
 # Run from libux with `mk test`.
-test:V:
+test:V: $O.dragapp
 	@{cd ../../resfs && mk $O.resfs}
 	@{cd ../../apps/sample && mk}
 	cd .. && O=$O rc test/run.rc
+
+$O.dragapp: dragapp.$O ../libux.a$O
+	$LD $LDFLAGS -o $target dragapp.$O ../libux.a$O
+
+dragapp.$O: dragapp.c ../ux.h
+	$CC $CFLAGS -I.. dragapp.c

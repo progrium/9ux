@@ -6,6 +6,7 @@ OFILES=\
 	cmd.$O\
 	ctl.$O\
 	draw.$O\
+	drag.$O\
 	ev.$O\
 	menu.$O\
 	obj.$O\

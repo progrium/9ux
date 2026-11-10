@@ -2,7 +2,7 @@
 # Run every libux test: cd libux; mk test
 rfork e
 st=()
-for(t in test/sample.rc test/stall.rc test/menubar.rc){
+for(t in test/sample.rc test/stall.rc test/menubar.rc test/drag.rc){
 	rc $t
 	if(! ~ $status '')
 		st=($st $t)

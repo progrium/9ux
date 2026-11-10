@@ -348,6 +348,9 @@ Image*	_resicon(Uxwin*, char*, int);
 void	_resdraw(Uxwin*);
 void	_resfreewin(Uxwin*);
 
+/* drag.c */
+int	_dragstart(Uxdrag*, Uxctl*);
+
 /* reg.c */
 void	_register(void);
 void	_regwin(int, int);

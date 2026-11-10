@@ -1,0 +1,111 @@
+#!/bin/rc
+# libux drag sources and drop targets (drag.c) against fakedevux's
+# /dev/ux/drag. Run from libux: rc test/drag.rc
+rfork ne
+suite=drag
+. test/lib.rc
+fakes=../test/fakes
+@{cd $fakes && mk all >/dev/null >[2=1]}
+$fakes/$O.fakedevux -s fakedevux.$pid
+mount -a /srv/fakedevux.$pid /dev 1
+fn fake { echo $* >/dev/fake/ctl }
+fake new 1 'label=dragapp'
+
+fn waitfile { for(i in `{seq 50}) if(! test -s $1) sleep 0.1 }
+
+dragout=$out/d
+mkdir -p $dragout
+dragfile=$out/Read' 'Me.txt
+echo 'the contents of the file' >$dragfile
+chmod 640 $dragfile
+srvname=ux.$user.dragapp
+rm -f /srv/$srvname
+dragout=$dragout dragfile=$dragfile uxheadless=1 uxpublic=1 test/$O.dragapp &
+for(i in `{seq 50}) if(! test -e /srv/$srvname) sleep 0.1
+app=$out/app
+mkdir -p $app
+mount -c /srv/$srvname $app
+ctl=$app/windows/1/controls
+
+test=start-needs-button
+echo activate >$ctl/src/ctl
+waitfile $dragout/starterr
+want 'no button down' $dragout/starterr
+rm -f $dragout/starterr
+
+test=drop-file
+{
+	fake press 1 'pt=10,10'
+	echo activate >$ctl/src/ctl
+	for(i in `{seq 50}) if(! grep -s 'state=over' /dev/ux/drag/state) sleep 0.1
+	cat /dev/ux/drag/state >$out/s
+	want '^drag id=1 win=1 app=dragapp-[0-9]+ types=file,text ops=copy,move ''label=a file'' state=over target=1$' $out/s
+	fake move 1 'pt=20,10'		# over the button: not a target
+	fake move 1 'pt=150,150'	# over dst
+	for(i in `{seq 50}) if(! grep -s 'type=file' /dev/ux/drag/state) sleep 0.1
+	fake release
+	waitfile $dragout/drop
+	waitfile $dragout/end
+	drain 4 $out/e
+} <[4]/dev/ux/drag/events
+want '^[0-9]+ accept id=1 win=1 type=file op=copy$' $out/e
+want '^[0-9]+ fetch id=1 type=file req=' $out/e
+want '^[0-9]+ fetch id=1 type=file item=0 req=' $out/e
+want '^[0-9]+ done id=1 win=1 op=copy$' $out/e
+want '^[0-9]+ end id=1$' $out/e
+dontwant 'fetch id=1 type=text' $out/e
+same $dragout/drop 'drop file copy 150,150 self=1
+'
+same $dragout/list 'Read Me.txt 25 file 640
+'
+same $dragout/saved 'the contents of the file
+'
+same $dragout/paths $dragfile'
+'
+same $dragout/end 'end copy
+'
+
+test=refused
+rm -f $dragout/end
+{
+	fake press 1 'pt=10,10'
+	echo activate >$ctl/src/ctl
+	for(i in `{seq 50}) if(! grep -s 'state=over' /dev/ux/drag/state) sleep 0.1
+	fake move 1 'pt=150,150'
+	for(i in `{seq 50}) if(! grep -s 'type=file' /dev/ux/drag/state) sleep 0.1
+	fake move 1 'pt=250,250'	# off the target again
+	for(i in `{seq 50}) if(grep -s 'type=file' /dev/ux/drag/state) sleep 0.1
+	fake release
+	waitfile $dragout/end
+	drain 4 $out/e
+} <[4]/dev/ux/drag/events
+want '^[0-9]+ refuse id=2 win=1$' $out/e
+want '^[0-9]+ cancel id=2$' $out/e
+same $dragout/end 'end cancel
+'
+
+test=text-from-elsewhere
+# A drag from another program (this script) offering only text: the
+# label takes it, and libux fetches it through rio.
+fake new 5 'label=elsewhere'
+rm -f $dragout/drop
+{
+	fake press 5
+	echo start 'win=5' 'types=text' >[1=3]
+	echo 'put 3 text
+dropped in from rc' >/dev/ux/drag/data
+	fake move 1 'pt=110,190'
+	for(i in `{seq 50}) if(! grep -s 'type=text' /dev/ux/drag/state) sleep 0.1
+	fake release
+	waitfile $dragout/drop
+	for(i in `{seq 50}) if(grep -s . /dev/ux/drag/state) sleep 0.1
+	drain 4 $out/e
+} >[3]/dev/ux/drag/ctl <[4]/dev/ux/drag/events
+same $dragout/drop 'drop text copy 110,190 self=0
+'
+same $dragout/text 'dropped in from rc
+'
+want '^[0-9]+ done id=3 win=1 op=copy$' $out/e
+
+echo quit >$app/ctl >[2]/dev/null
+done
