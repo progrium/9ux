@@ -1,0 +1,12 @@
+Stock 9front rio, vendored unchanged as the base of the 9/UX fork.
+
+source:   https://github.com/9front/9front  sys/src/cmd/rio
+revision: 602faae9a52f342a40b086d10b23c71c82dd52d7
+release:  9front 11952 (the release h9 pins in scripts/pins.sh)
+license:  MIT, see LICENSE and NOTICE (copied from 9front /lib/legal)
+
+The first commit that touches this directory is the pristine import, so
+`git diff <that commit> -- rio/` is always the whole 9/UX patch set.
+To move to a newer 9front, re-import onto a branch at that commit and
+rebase the 9/UX changes over it. Keep 9/UX code in new files (ux*.c,
+ux.h) where possible so the diff to upstream files stays small.
