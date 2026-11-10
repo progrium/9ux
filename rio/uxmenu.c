@@ -425,27 +425,25 @@ cmdmenu(Uxapp *a, char **f, int nf)
 		if(am == nil)
 			return Enotfound;
 	}
+	if(title == nil)
+		return "bad syntax: menu needs title";
 	m = uxfindmenu(a, id, win);
+	if(m == am)
+		am = nil;
 	if(m != nil){
-		/* replace its attributes; its items stay */
-		free(m->title);
-		m->title = estrdup(title != nil ? title : id);
-		m->top = top;
-		if(am == nil || am == m)
-			return nil;
-		/* unlink, to move it */
+		/* replace: a new definition, re-added like a new one */
 		for(l=&a->menus; *l; l=&(*l)->next)
 			if(*l == m){
 				*l = m->next;
 				break;
 			}
-	}else{
-		m = emalloc(sizeof(Uxmenu));
-		m->id = estrdup(id);
-		m->title = estrdup(title != nil ? title : id);
-		m->win = win;
-		m->top = top;
+		freemenu(m);
 	}
+	m = emalloc(sizeof(Uxmenu));
+	m->id = estrdup(id);
+	m->title = estrdup(title);
+	m->win = win;
+	m->top = top;
 	if(am != nil){
 		m->next = am->next;
 		am->next = m;
@@ -532,17 +530,23 @@ cmditem(Uxapp *a, char **f, int nf)
 	Uxmenu *m;
 	Uxitem tmp, *it, *old, **l, *am;
 	char *after, *err;
+	int win, k;
 
 	if(nf < 3)
 		return Ebadsyntax;
 	if(!validid(f[2]))
 		return Ebadvalue;
-	/* an item goes into the app-wide menu, or the only override with that id */
-	m = uxfindmenu(a, f[1], 0);
-	if(m == nil)
-		for(m=a->menus; m; m=m->next)
-			if(strcmp(m->id, f[1]) == 0)
-				break;
+	/* win= picks a window override's menu; take it out before the rest */
+	win = 0;
+	for(k=3; k<nf; k++)
+		if(strncmp(f[k], "win=", 4) == 0){
+			if((win = parsewin(f[k]+4)) < 0)
+				return Ebadvalue;
+			memmove(f+k, f+k+1, (nf-k-1)*sizeof(char*));
+			nf--;
+			break;
+		}
+	m = uxfindmenu(a, f[1], win);
 	if(m == nil)
 		return Enotfound;
 	old = finditem(m, f[2]);
@@ -568,17 +572,14 @@ cmditem(Uxapp *a, char **f, int nf)
 	*it = tmp;
 	it->action = estrdup(f[2]);
 	if(old != nil){
-		/* replace in place, or move after am */
+		/* replace: a new definition, re-added like a new one */
+		if(am == old)
+			am = nil;
 		for(l=&m->items; *l; l=&(*l)->next)
-			if(*l == old)
+			if(*l == old){
+				*l = old->next;
 				break;
-		if(am == nil || am == old){
-			it->next = old->next;
-			*l = it;
-			freeitem(old);
-			return nil;
-		}
-		*l = old->next;
+			}
 		freeitem(old);
 	}
 	if(am != nil){
@@ -920,6 +921,29 @@ fmtitem(Fmt *f, char *menu, Uxitem *i)
 	fmtprint(f, "\n");
 }
 
+static int
+stacking(int id)
+{
+	Window *w;
+
+	w = uxwin(id);
+	if(w == nil)
+		return 0;
+	if(uxisdesktop(w))
+		return -0x7FFFFFFF;
+	return w->topped;
+}
+
+static int
+stackcmp(void *a, void *b)
+{
+	int x, y;
+
+	x = stacking(*(int*)a);
+	y = stacking(*(int*)b);
+	return x < y ? -1 : x > y;
+}
+
 char*
 uxmenusnap(int *np)
 {
@@ -927,7 +951,7 @@ uxmenusnap(int *np)
 	Uxapp *a, **as;
 	Uxmenu *m;
 	Uxitem *i;
-	int k, n, win;
+	int k, n, win, *ws;
 	char *s;
 
 	fmtstrinit(&f);
@@ -949,8 +973,13 @@ uxmenusnap(int *np)
 		fmtprint(&f, "app %s", a->id);
 		fmtattr(&f, "title", a->title);
 		fmtprint(&f, "\n");
+		/* windows in stacking order, bottom first */
+		ws = emalloc((a->nwins+1)*sizeof(int));
+		memmove(ws, a->wins, a->nwins*sizeof(int));
+		qsort(ws, a->nwins, sizeof(int), stackcmp);
 		for(win=0; win<a->nwins; win++)
-			fmtprint(&f, "window %d\n", a->wins[win]);
+			fmtprint(&f, "window %d\n", ws[win]);
+		free(ws);
 		for(m=a->menus; m; m=m->next){
 			fmtprint(&f, "menu %s", m->id);
 			fmtattr(&f, "title", m->title);
