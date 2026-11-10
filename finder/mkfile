@@ -1,0 +1,40 @@
+</$objtype/mkfile
+
+# libfcore: Finder's core as a library, and fcore, its shell front end.
+LIB=fcore.$O.a
+OFILES=\
+	meta.$O\
+	caps.$O\
+	vol.$O\
+	folder.$O\
+	ops.$O\
+	info.$O\
+	launch.$O\
+
+HFILES=fcore.h
+BIN=/$objtype/bin
+
+all:V: $O.fcore
+
+$LIB: $OFILES
+	ar vu $LIB $OFILES
+
+$O.fcore: fcore.$O $LIB
+	$LD $LDFLAGS -o $target $prereq
+
+%.$O: $HFILES
+
+%.$O: %.c
+	$CC $CFLAGS $stem.c
+
+install:V: $O.fcore
+	cp $O.fcore $BIN/fcore
+
+test:V: all
+	cd test && mk test
+
+clean:V:
+	rm -f *.[$OS] [$OS].* *.[$OS].a
+	cd test && mk clean
+
+nuke:V: clean

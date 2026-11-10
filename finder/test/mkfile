@@ -1,0 +1,26 @@
+</$objtype/mkfile
+
+# Finder core tests: unit tests in C, then rc interface tests through
+# fcore. Run from ../ as mk test. remote.sh (on the host) adds the
+# remote-volume test, which needs two h9 machines.
+
+TARG=unit nowstatfs
+LIB=../fcore.$O.a
+
+all:V: $O.unit $O.nowstatfs
+
+$O.unit: unit.$O $LIB
+	$LD -o $target $prereq
+
+$O.nowstatfs: nowstatfs.$O
+	$LD -o $target $prereq
+
+%.$O: %.c ../fcore.h
+	$CC $CFLAGS $stem.c
+
+test:V: all
+	./$O.unit
+	rc ./run ../$O.fcore
+
+clean:V:
+	rm -f *.[$OS] [$OS].*
