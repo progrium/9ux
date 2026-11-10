@@ -40,7 +40,7 @@ readfile(char *path, int *len)
 	if(d->length > Maxfile){
 		free(d);
 		close(fd);
-		werrstr("file too large");
+		werrstr("too large");
 		return nil;
 	}
 	n = d->length;

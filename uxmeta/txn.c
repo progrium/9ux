@@ -59,7 +59,7 @@ static char*
 cleanpath(char *p)
 {
 	if(p[0] != '/'){
-		werrstr("not an absolute path: %s", p);
+		werrstr("bad value: not an absolute path: %s", p);
 		return nil;
 	}
 	return cleanname(p);
@@ -75,7 +75,7 @@ parseop(Meta *m, Op *o, int rights)
 
 	o->nf = tokenize(o->line, o->f, nelem(o->f));
 	if(o->nf == nelem(o->f)){
-		werrstr("too many fields");
+		werrstr("too large: too many fields");
 		return -1;
 	}
 	i = 0;
@@ -89,7 +89,7 @@ parseop(Meta *m, Op *o, int rights)
 			break;
 	}
 	if(i >= o->nf){
-		werrstr("missing command");
+		werrstr("bad syntax: missing command");
 		return -1;
 	}
 	o->verb = o->f[i];
@@ -102,11 +102,11 @@ parseop(Meta *m, Op *o, int rights)
 	}
 	if(o->layer != nil){
 		if((l = metalayer(m, o->layer)) == nil){
-			werrstr("no layer %s", o->layer);
+			werrstr("not found: layer %s", o->layer);
 			return -1;
 		}
 		if(!l->writable){
-			werrstr("layer %s is read-only", o->layer);
+			werrstr("permission denied: layer %s is read-only", o->layer);
 			return -1;
 		}
 	}
@@ -121,24 +121,24 @@ parseop(Meta *m, Op *o, int rights)
 		if(cleanpath(o->arg[0]) == nil || cleanpath(o->arg[1]) == nil)
 			return -1;
 		if(strcmp(o->arg[0], "/") == 0){
-			werrstr("can't rename /");
+			werrstr("bad value: can't rename /");
 			return -1;
 		}
 		i = strlen(o->arg[0]);
 		if(strncmp(o->arg[1], o->arg[0], i) == 0 && o->arg[1][i] == '/'){
-			werrstr("can't move %s inside itself", o->arg[0]);
+			werrstr("bad value: can't move %s inside itself", o->arg[0]);
 			return -1;
 		}
 		i = strlen(o->arg[1]);
 		if(strncmp(o->arg[0], o->arg[1], i) == 0 && (o->arg[0][i] == '/' || strcmp(o->arg[1], "/") == 0)){
-			werrstr("can't move %s over its parent", o->arg[0]);
+			werrstr("bad value: can't move %s over its parent", o->arg[0]);
 			return -1;
 		}
 		return 0;
 	}
 	if(strcmp(o->verb, "set") != 0 && strcmp(o->verb, "unset") != 0
 	&& strcmp(o->verb, "remove") != 0 && strcmp(o->verb, "delete") != 0){
-		werrstr("unknown command %s", o->verb);
+		werrstr("unknown command: %s", o->verb);
 		return -1;
 	}
 	if(o->narg < 2)
@@ -154,13 +154,13 @@ parseop(Meta *m, Op *o, int rights)
 	for(i = 2; i < o->narg; i++){
 		a = attrname(o->arg[i], buf, sizeof buf);
 		if(strcmp(o->verb, "set") == 0 && strchr(o->arg[i], '=') == nil){
-			werrstr("set needs attr=value, not %s", o->arg[i]);
+			werrstr("bad syntax: set needs attr=value, not %s", o->arg[i]);
 			return -1;
 		}
 		if(!validattr(a))
 			return -1;
 		if(strcmp(a, o->arg[0]) == 0){
-			werrstr("can't change a record's key");
+			werrstr("bad value: can't change a record's key");
 			return -1;
 		}
 		if(strchr(o->arg[i], '=') && !validval(strchr(o->arg[i], '=')+1))
@@ -177,7 +177,7 @@ parseop(Meta *m, Op *o, int rights)
 	}
 	return 0;
 Usage:
-	werrstr("usage: %s", o->verb);
+	werrstr("bad syntax: %s", o->verb);
 	return -1;
 }
 
@@ -188,7 +188,7 @@ target(Meta *m, Op *o, char *kind)
 
 	l = o->layer ? metalayer(m, o->layer) : metadefault(m, kind);
 	if(l == nil)
-		werrstr("no writable layer for %s", kind);
+		werrstr("not found: no writable layer for %s", kind);
 	return l;
 }
 
@@ -417,7 +417,7 @@ metactl(Meta *m, char *text, int rights)
 		nops++;
 	}
 	if(nops == 0){
-		werrstr("no command");
+		werrstr("bad syntax: no command");
 		goto Err;
 	}
 	for(i = 0; i < nops; i++)
@@ -435,7 +435,7 @@ metactl(Meta *m, char *text, int rights)
 	metacommit(m);
 	for(i = 0; i < nops; i++)
 		if(ops[i].ifgen && ops[i].gen != m->gen){
-			werrstr("generation mismatch");
+			werrstr("busy: generation mismatch");
 			goto Err;
 		}
 

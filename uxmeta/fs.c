@@ -42,7 +42,23 @@ static struct {
 	[Qplumbing]	"plumbing",	0444,
 };
 
-static char Version[] = "uxmeta 1 query resolve explain changes rename ifgen plumbing\n";
+static char Version[] =
+	"uxmeta 1.0\n"
+	"feature query\n"
+	"feature resolve\n"
+	"feature explain\n"
+	"feature changes\n"
+	"feature rename\n"
+	"feature ifgen\n"
+	"feature plumbing\n";
+
+static char Ctlhelp[] =
+	"set layout\n"
+	"unset layout\n"
+	"remove layout\n"
+	"delete layout\n"
+	"rename layout\n"
+	"reload rw\n";
 
 typedef struct Reader Reader;
 struct Reader {
@@ -66,6 +82,7 @@ static Meta meta;
 static Reader *readers;
 static char *owner;
 static int pollms = 1000;
+static uvlong seq;	/* event sequence, shared by every changes file */
 
 static void
 qidof(int q, Qid *qid)
@@ -116,7 +133,7 @@ fsattach(Req *r)
 	else if(strcmp(s, "ro") == 0)
 		rights = Rro;
 	else{
-		respond(r, "unknown attach name");
+		respond(r, "bad value: unknown attach name");
 		return;
 	}
 	a = emalloc9p(sizeof *a);
@@ -167,17 +184,18 @@ fsstat(Req *r)
 	respond(r, nil);
 }
 
-/* queue a line; a full queue becomes one "lost" line */
+/* queue a message; one that doesn't fit replaces the queue with "lost" */
 static void
-pushline(Reader *rd, char *line)
+pushline(Reader *rd, uvlong sq, char *line)
 {
-	int i;
+	int i, n;
 
 	if(rd->n >= Qmax){
+		n = rd->n + 1;
 		for(i = 0; i < rd->n; i++)
 			free(rd->q[i]);
 		rd->n = 0;
-		rd->q[rd->n++] = smprint("%llud lost\n", meta.gen);
+		rd->q[rd->n++] = smprint("%llud lost n=%d\n", sq, n);
 		free(line);
 		return;
 	}
@@ -185,8 +203,8 @@ pushline(Reader *rd, char *line)
 }
 
 /*
- * Answer waiting reads with whole lines when they fit; a read too small
- * for the next line gets its first part, and the rest stays queued.
+ * Answer waiting reads with whole messages; a read too small for the
+ * next one fails with "short read" (see protocols/README.md).
  */
 static void
 deliver(Reader *rd)
@@ -194,7 +212,6 @@ deliver(Reader *rd)
 	Req *r;
 	long n, l, max;
 	int i;
-	char *rest;
 
 	while(rd->nwait > 0 && rd->n > 0){
 		r = rd->wait[0];
@@ -209,12 +226,9 @@ deliver(Reader *rd)
 			memmove(r->ofcall.data+n, rd->q[i], l);
 			n += l;
 		}
-		if(i == 0 && max > 0){
-			memmove(r->ofcall.data, rd->q[0], max);
-			n = max;
-			rest = estrdup9p(rd->q[0]+max);
-			free(rd->q[0]);
-			rd->q[0] = rest;
+		if(i == 0){
+			respond(r, "short read");
+			continue;
 		}
 		r->ofcall.count = n;
 		while(i-- > 0){
@@ -231,13 +245,16 @@ fsnotify(Meta *m, Change *ch, int n)
 {
 	Reader *rd;
 	int i;
+	uvlong sq;
 
-	for(rd = readers; rd; rd = rd->next){
-		for(i = 0; i < n; i++)
-			pushline(rd, smprint("%llud %s %q %q\n", m->gen,
-				ch[i].op == Cset ? "set" : "del", ch[i].kind, ch[i].key));
-		deliver(rd);
+	for(i = 0; i < n; i++){
+		sq = ++seq;
+		for(rd = readers; rd; rd = rd->next)
+			pushline(rd, sq, smprint("%llud %s %q %q gen=%llud\n", sq,
+				ch[i].op == Cset ? "set" : "del", ch[i].kind, ch[i].key, m->gen));
 	}
+	for(rd = readers; rd; rd = rd->next)
+		deliver(rd);
 }
 
 static void
@@ -274,7 +291,8 @@ fsopen(Req *r)
 		a->rd = emalloc9p(sizeof *a->rd);
 		a->rd->next = readers;
 		readers = a->rd;
-		pushline(a->rd, smprint("%llud sync\n", meta.gen));
+		++seq;
+		pushline(a->rd, seq, smprint("%llud resync gen=%llud\n", seq, meta.gen));
 		break;
 	}
 	qunlock(&lk);
@@ -306,7 +324,12 @@ fsread(Req *r)
 		qunlock(&lk);
 		return;
 	}
-	if(r->fid->qid.path == Qquery || r->fid->qid.path == Qctl){
+	if(r->fid->qid.path == Qctl){
+		readstr(r, Ctlhelp);
+		respond(r, nil);
+		return;
+	}
+	if(r->fid->qid.path == Qquery){
 		/* results read from their start after each write, whatever the offset */
 		r->ifcall.offset = a->pos;
 		readstr(r, a->buf ? a->buf : "");
@@ -333,8 +356,7 @@ fswrite(Req *r)
 	case Qctl:
 		free(a->buf);
 		a->buf = nil;
-		if((err = metactl(&meta, s, a->rights)) == nil)
-			a->buf = smprint("gen %llud\n", meta.gen);
+		err = metactl(&meta, s, a->rights);
 		break;
 	case Qquery:
 		free(a->buf);

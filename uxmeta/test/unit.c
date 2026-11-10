@@ -385,11 +385,11 @@ testupdates(void)
 	/* errors */
 	ctl(m, "layer=system/10-base set ext .x open=y", "read-only", 0);
 	ctl(m, "set ext .x 'open=a \"b'", "can't be written", 0);
-	ctl(m, "layer=nope set ext .x open=y", "no layer", 0);
+	ctl(m, "layer=nope set ext .x open=y", "not found", 0);
 	ctl(m, "rename /a/b /a", "parent", 0);
 	ctl(m, "set ext .x ext=.y", "key", 0);
 	ctl(m, "set folder relative x=1", "absolute", 0);
-	ctl(m, "set ext .x", "usage", 0);
+	ctl(m, "set ext .x", "bad syntax", 0);
 	ctl(m, "rename /a /a/b", "inside itself", 0);
 	/* explicit layer */
 	ctl(m, "layer=user set folder /usr/glenda view=list", nil, 0);

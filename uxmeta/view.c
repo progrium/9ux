@@ -389,7 +389,7 @@ metaquery(Meta *m, char *q)
 	nf = tokenize(s, f, nelem(f));
 	if(nf == 0){
 		free(s);
-		werrstr("empty query");
+		werrstr("bad syntax: empty query");
 		return nil;
 	}
 	fmtstrinit(&fmt);
@@ -452,7 +452,7 @@ metaquery(Meta *m, char *q)
 Usage:
 	free(s);
 	free(fmtstrflush(&fmt));
-	werrstr("bad query: %s", q);
+	werrstr("bad syntax: %s", q);
 	return nil;
 }
 

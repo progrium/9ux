@@ -147,9 +147,9 @@ whoever imports them.
 
 ```text
 /mnt/meta/
-	version     # read: "uxmeta 1" and a feature list
+	version     # read: "uxmeta 1.0" and feature lines
 	gen         # read: current generation number
-	ctl         # write: update commands; read: result of the last write on this fid
+	ctl         # write: update commands; read: the verbs it takes
 	query       # write: one query; read: its result
 	db          # read: the whole merged view, as ndb text
 	changes     # read: per-open change stream
@@ -157,9 +157,13 @@ whoever imports them.
 	plumbing    # read: the generated plumbing rules
 ```
 
-Conventions follow the rest of 9/UX: UTF-8 text, one command or event per
-line, fields split with `tokenize(2)` rules and written with `%q`
-quoting (`quote(2)`), errors as 9P error strings.
+Everything follows the shared conventions in [README.md](README.md):
+text, quoting with `tokenize(2)`/`quote(2)` rules, attributes, error
+phrases, stream files and versions. Where this document tightens a rule
+it says so. `db`, `gen`, `layers` and `plumbing` are state files (a
+snapshot made at open). Error phrases used: `unknown command`, `bad
+syntax`, `bad value`, `not found`, `permission denied`, `busy` (for a
+generation mismatch), `too large`, `short read`.
 
 ### Generation
 
@@ -171,7 +175,8 @@ client that sees a lower `gen` than before must resync.
 
 ### Queries: `query`
 
-Open `query`, write one query, and read the result on the same fid.
+Open `query`, write one query (a line of tokens), and read the result on
+the same fid.
 Each write replaces the fid's result, and reads after a write start at
 the beginning of the result whatever their offset, so `rc` can use one
 `<>` file descriptor for both. The result starts with a
@@ -203,10 +208,11 @@ just `file=PATH`.
 ### Updates: `ctl`
 
 Write one or more commands, one per line. **All commands in one write are
-one transaction**: they all apply, the files are written, and `gen`
+one transaction** (this tightens the shared ctl rule, which lets earlier
+commands stand): they all apply, the files are written, and `gen`
 increases once, or none apply and the write fails with the first error.
-After a successful write, reading the same fid (from the start, as with
-`query`) returns `gen N`.
+Reading `ctl` gives the shared help format, `verb class`, where `class`
+is the least attach right (§6) that may use the verb.
 
 ```text
 set KIND KEY ATTR=VALUE ...    set attributes on KIND KEY (creating the
@@ -227,31 +233,34 @@ Modifiers that may come first on any line:
 
 - `layer=NAME` writes to that layer (`user` or `workspace`) instead of
   the default.
-- `ifgen=N` fails the whole write with `generation mismatch` unless `gen`
-  is still `N`. Clients use it for read-modify-write.
+- `ifgen=N` fails the whole write with `busy: generation mismatch`
+  unless `gen` is still `N`. Clients use it for read-modify-write: query
+  (the result carries `# gen N`), compute, write with `ifgen=N`, and on
+  `busy` start over.
 
 `rename` applies to the target layer; with no `layer=` it applies to
 both `user` and `workspace`.
 
 ### Changes: `changes`
 
-Each open of `changes` gets its own cursor starting at the current
-generation, and the first line it reads is `GEN sync`. After that, reads
-block until something changes and return whole lines:
+`changes` is a stream file with the shared rules: per-open queues of at
+most 256 messages, blocking reads, whole messages only (`short read` if
+the count is too small), offsets ignored, `Tflush` answered at once.
+Messages:
 
 ```text
-GEN set KIND KEY       the merged record KIND KEY was created or changed
-GEN del KIND KEY       the merged record KIND KEY is gone
-GEN lost               this reader fell behind; read again from a snapshot
+SEQ resync gen=GEN         first message of every open
+SEQ set KIND KEY gen=GEN   the merged record KIND KEY was created or changed
+SEQ del KIND KEY gen=GEN   the merged record KIND KEY is gone
+SEQ lost n=N               N messages were dropped; read a snapshot again
 ```
 
-`GEN` is the generation after the change; one transaction may produce
-several lines with the same `GEN`. A reader takes a snapshot (`db` or a
-query, which carry `# gen N`), then skips lines with `GEN` at or below
-it. Each open holds at most 256 lines; when a slow reader would lose
-lines, they are replaced by one `lost` line and the queue restarts from
-there, and other readers and writers are never held up. A flush of a
-blocked read returns `interrupted`.
+`SEQ` is the shared per-server sequence number (one per message, the
+same in every reader's queue). `GEN` is the generation after the change;
+one transaction gives several messages with the same `GEN`. To follow
+the metadata: open `changes`, read the `resync`, take a snapshot (`db`
+or a query, which carry `# gen N`), then apply messages whose `gen` is
+above the snapshot's. A slow reader only loses its own messages.
 
 ### Layers: `layers`
 
@@ -307,12 +316,14 @@ outside `$home/lib/ux` is touched.
   and `item` records or the attributes `x`, `y`, `width`, `height`,
   `view`, `sort`, `scrollx`, `scrolly`, `desktop` on any record (enough
   for Finder's layout); `ro` for reads only. Writes outside a
-  connection's rights fail with `permission denied`.
+  connection's rights fail with `permission denied`. Any other attach
+  name fails with `bad value`.
 - `system` and `apps` layers can't be written through `uxmeta` at all.
 
 ## 7. Versioning
 
-`version` reads `uxmeta 1` followed by feature words, currently
-`query resolve explain changes rename ifgen plumbing`. New commands,
-query forms, kinds and attributes are additive and announced as feature
-words; anything incompatible bumps the number.
+`version` reads `uxmeta 1.0` and then one `feature NAME` line for each
+of `query`, `resolve`, `explain`, `changes`, `rename`, `ifgen` and
+`plumbing`, as the shared rules describe. New commands, query forms,
+kinds and attributes are additive and get a minor version or a feature
+line; anything incompatible bumps the major number.

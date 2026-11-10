@@ -188,12 +188,12 @@ validattr(char *a)
 	char *p;
 
 	if(*a == 0 || strlen(a) > Attrmax){
-		werrstr("bad attribute name %q", a);
+		werrstr("bad value: attribute name %q", a);
 		return 0;
 	}
 	for(p = a; *p; p++)
 		if(*p == '=' || *p == '"' || *p == '#' || *p == '\n' || ISWHITE(*p)){
-			werrstr("bad attribute name %q", a);
+			werrstr("bad value: attribute name %q", a);
 			return 0;
 		}
 	return 1;
@@ -218,7 +218,7 @@ validval(char *v)
 	if(v == nil)
 		return 1;
 	if(strchr(v, '\n') != nil || (needquote(v) && strchr(v, '"') != nil)){
-		werrstr("value can't be written in ndb: %q", v);
+		werrstr("bad value: can't be written in ndb: %q", v);
 		return 0;
 	}
 	return 1;

@@ -125,7 +125,7 @@ mkdir -p /n/meta /n/ro /n/lay
 test=basics
 setup
 start
-has /n/meta/version '^uxmeta 1 ' resolve changes ifgen
+has /n/meta/version '^uxmeta 1\.0$' '^feature resolve$' '^feature changes$' '^feature ifgen$'
 q volume > $t/out
 expect $t/out <<'EOF'
 volume=root path=/ icon=disk desktop=yes x=20 y=40
@@ -161,12 +161,10 @@ folder=/usr/glenda/doc view=icons x=100 y=90 width=550 height=400
 EOF
 has $t/user/workspace/default.ndb '^folder=/usr/glenda/doc '
 has $t/user/meta.ndb '^ext=.md open=edit icon=text$'
-# ctl reads back the generation of the fid's last write
-{
-	echo 'set item /usr/glenda/doc/a.txt x=4 y=5' >[1=3]
-	cat <[0=3] > $t/out
-} <>[3]/n/meta/ctl
-echo gen `{gen} | expect $t/out
+c 'set item /usr/glenda/doc/a.txt x=4 y=5'
+# reading ctl gives the verbs it takes
+cat /n/meta/ctl > $t/out
+has $t/out '^set layout$' '^rename layout$' '^reload rw$'
 # several lines are one transaction
 g=`{gen}
 echo 'set ext .c open=acme
@@ -208,21 +206,41 @@ unmount /n/lay
 
 test=changes
 g=`{gen}
-read -n 4 /n/meta/changes > $t/ch &
+cat /n/meta/changes > $t/ch &
 rd=$apid
 sleep 0.2
 echo 'set ext .log open=edit
 set item /x x=1' > /n/meta/ctl
 c 'set ext .log icon=text'
-wait $rd
+sleep 0.2
+echo kill > /proc/$rd/note
 g1=`{echo $g + 1 | hoc}
 g2=`{echo $g + 2 | hoc}
-expect $t/ch <<EOF
-$g sync
-$g1 set ext .log
-$g1 set item /x
-$g2 set ext .log
+awk '{$1 = ""; print}' $t/ch > $t/out
+expect $t/out <<EOF
+ resync gen=$g
+ set ext .log gen=$g1
+ set item /x gen=$g1
+ set ext .log gen=$g2
 EOF
+# sequence numbers increase by one per message
+awk 'NR > 1 && $1 != last + 1 { bad = 1 } { last = $1 } END { exit bad }' $t/ch
+if(~ $status '') pass
+if not fail sequence numbers $t/ch
+# a read too small for a whole message fails
+if(dd -bs 4 -count 1 -if /n/meta/changes >[2]$t/err >/dev/null) fail short read succeeded
+if not has $t/err 'short read'
+# a reader that falls behind gets "lost", and holds nobody up
+{ sleep 1; dd -bs 8192 -count 1 >[2]/dev/null } <[0]/n/meta/changes > $t/lost &
+seq 1 300 | awk '{print "set item /l/f" $1 " x=1"}' > $t/batch
+g=`{gen}
+cat $t/batch > /n/meta/ctl
+if(test `{gen} -gt $g) pass
+if not fail batch did not commit
+wait
+sed 1q $t/lost > $t/out
+has $t/out '^[0-9]+ lost n=257$'
+has $t/lost ' set item /l/f99 '
 # a reader that is killed while blocked doesn't wedge the server
 cat /n/meta/changes > /dev/null &
 rd=$apid
@@ -234,14 +252,15 @@ has $t/out '^ext=.after open=edit$'
 
 test=external
 g=`{gen}
-read -n 2 /n/meta/changes > $t/ch &
+cat /n/meta/changes > $t/ch &
 rd=$apid
 sleep 0.1
 # edit the user layer by hand, behind uxmeta's back
 echo 'volume=home path=/usr/glenda desktop=yes # added by hand' >> $t/user/meta.ndb
 waitgen $g
-wait $rd
-has $t/ch ' sync$' ' set volume home$'
+sleep 0.1
+echo kill > /proc/$rd/note
+has $t/ch ' resync gen=' ' set volume home gen='
 q volume home > $t/out
 expect $t/out <<'EOF'
 volume=home path=/usr/glenda desktop=yes
