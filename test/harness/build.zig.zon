@@ -1,0 +1,13 @@
+.{
+    .name = .ux_harness,
+    .version = "0.0.0",
+    .fingerprint = 0x948f4897d84f93b7,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        // h9 at H9_REV (scripts/pins.sh), checked out by scripts/h9.sh.
+        // A path dependency: h9's package paths leave out third_party/,
+        // so a fetched one doesn't build yet (h9's docs/embedding.md).
+        .h9 = .{ .path = "../../.local/hyper9" },
+    },
+    .paths = .{ "build.zig", "build.zig.zon", "src" },
+}

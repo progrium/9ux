@@ -1,0 +1,25 @@
+#!/bin/rc
+# The harness's agent: rio runs it as its -i command, so it lives in rio's
+# namespace (with /mnt/wsys and $wsys). It runs the commands the harness
+# drops into DIR, one at a time, in order:
+#
+#   DIR/N.rc       written by the harness (atomically, by rename)
+#   DIR/N.out      the command's stdout and stderr
+#   DIR/N.status   its exit status, written last (by rename)
+#
+# DIR/ready says the agent is up. Commands run with DIR as $work.
+rfork e
+work=$1
+n=0
+echo $pid >$work/ready
+while(){
+	if(test -e $work/$n.rc){
+		rc $work/$n.rc >$work/$n.out >[2=1] </dev/null
+		st=$status
+		echo -n $st >$work/$n.st
+		mv $work/$n.st $work/$n.status
+		n=`{echo $n + 1 | hoc}
+	}
+	if not
+		sleep 0.02
+}
