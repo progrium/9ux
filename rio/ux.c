@@ -460,7 +460,7 @@ uxctlread(int *np)
 {
 	char *s;
 
-	s = smprint("mode %s\ncmdkey %s\n", uxmode ? "on" : "off", keyname(uxcmdkey));
+	s = smprint("mode %s\ncmdkey %s\nclock %q\n", uxmode ? "on" : "off", keyname(uxcmdkey), uxclockstate());
 	*np = strlen(s);
 	return s;
 }
@@ -486,7 +486,7 @@ uxsetmode(int on)
 char*
 uxctlwrite(Window *own, char *line)
 {
-	char *f[4];
+	char *f[8];
 	int nf;
 
 	nf = tokenize(line, f, nelem(f));
@@ -494,6 +494,8 @@ uxctlwrite(Window *own, char *line)
 		return nil;
 	if(strcmp(f[0], "chrome") == 0)
 		return uxchromectl(own, f, nf);
+	if(strcmp(f[0], "clock") == 0)
+		return uxclockctl(f, nf);
 	if(strcmp(f[0], "mode") == 0){
 		if(nf != 2)
 			return "bad syntax";

@@ -608,6 +608,10 @@ mousethread(void*)
 					goto Sending;
 
 				inside = ptinrect(mouse->xy, insetrect(winput->screenr, Selborder));
+				/* 9/UX: with chrome edge, the app has the border rows below the title */
+				if(uxchromeedge(winput))
+					inside = ptinrect(mouse->xy, Rect(winput->screenr.min.x, winput->screenr.min.y+Selborder,
+						winput->screenr.max.x, winput->screenr.max.y));
 				/* 9/UX: the desktop only gets what no other window covers */
 				if(inside && uxisdesktop(winput) && wpointto(mouse->xy) != winput)
 					inside = FALSE;
@@ -618,7 +622,7 @@ mousethread(void*)
 				else
 					scrolling = mouse->buttons && ptinrect(xy, winput->scrollr);
 				/* topped will be zero or less if window has been bottomed */
-				if(sending == FALSE && !scrolling && inborder(winput->screenr, mouse->xy) && winput->topped>0)
+				if(sending == FALSE && !scrolling && inborder(winput->screenr, mouse->xy) && !uxchromeedge(winput) && winput->topped>0)
 					moving = TRUE;
 				else if(inside && (scrolling || winput->mouseopen || (mouse->buttons&1)))
 					sending = TRUE;
@@ -650,7 +654,7 @@ mousethread(void*)
 				continue;
 			}
 			w = wpointto(mouse->xy);
-			if(w!=nil && inborder(w->screenr, mouse->xy))
+			if(w!=nil && inborder(w->screenr, mouse->xy) && !uxchromeedge(w))
 				riosetcursor(corners[whichcorner(w->screenr, mouse->xy)]);
 			else
 				wsetcursor(w, FALSE);
@@ -671,7 +675,7 @@ mousethread(void*)
 				}else{
 					/* if button 1 event in the window, top the window and wait for button up. */
 					/* otherwise, top the window and pass the event on */
-					if(wtop(mouse->xy) && (mouse->buttons!=1 || inborder(w->screenr, mouse->xy) || uxisdesktop(w)))
+					if(wtop(mouse->xy) && (mouse->buttons!=1 || (inborder(w->screenr, mouse->xy) && !uxchromeedge(w)) || uxisdesktop(w)))
 						goto Again;
 					goto Drain;
 				}

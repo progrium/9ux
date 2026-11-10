@@ -207,10 +207,13 @@ void		uxchromebottom(Window*);
 void		uxchromedel(int);
 void		uxchromeall(void);
 char*	uxchromectl(Window*, char**, int);
+char*	uxclockctl(char**, int);
+char*	uxclockstate(void);
 Window*	uxchromeat(Point);
 void		uxchromemouse(Window*);
 int		uxhaschrome(int);
 int		uxchromed(Window*);
+int		uxchromeedge(Window*);
 
 /* uxstyle.c */
 #include "../assets/gen/uxstyle.h"

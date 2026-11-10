@@ -27,6 +27,7 @@ struct Chrome
 	Rectangle	fr;		/* the frame image's rectangle */
 	int		zoomed;
 	Rectangle	unzoomed;	/* the window's rectangle before zoom */
+	int		edge;	/* the app draws its border rows: chrome edge */
 	Chrome	*next;
 };
 
@@ -63,6 +64,18 @@ uxchromed(Window *w)
 	return active(w);
 }
 
+/* w's app draws its border rows, and has the pointer there: chrome edge, in 9/UX mode */
+int
+uxchromeedge(Window *w)
+{
+	Chrome *c;
+
+	if(w == nil || !active(w))
+		return 0;
+	c = findchrome(w->id);
+	return c != nil && c->edge;
+}
+
 /* the outer box: frame ink around the title bar and the window's image */
 static Rectangle
 outer(Window *w)
@@ -73,18 +86,21 @@ outer(Window *w)
 	r.min.x--;
 	r.max.x++;
 	r.max.y++;
-	r.min.y = r.min.y+Borderwidth-T-1;
+	r.min.y = r.min.y+Borderwidth-T;
 	return r;
 }
 
-/* the title bar, inside the frame, with its bottom rule */
+/*
+ * the title bar, inside the frame, with its bottom rule: T rows with
+ * the frame's top line, as the mockups draw it
+ */
 static Rectangle
 titlerect(Window *w)
 {
 	Rectangle o;
 
 	o = insetrect(outer(w), 1);
-	o.max.y = o.min.y+T;
+	o.max.y = o.min.y+T-1;
 	return o;
 }
 
@@ -94,8 +110,8 @@ closebox(Window *w)
 	Rectangle t;
 	Point p;
 
-	t = titlerect(w);
-	p = Pt(t.min.x+Boxin, t.min.y+(T-1-Box)/2);
+	t = outer(w);
+	p = Pt(t.min.x+Boxin, t.min.y+(T-Box)/2);
 	return Rpt(p, addpt(p, Pt(Box, Box)));
 }
 
@@ -105,8 +121,8 @@ zoombox(Window *w)
 	Rectangle t;
 	Point p;
 
-	t = titlerect(w);
-	p = Pt(t.max.x-Boxin-Box, t.min.y+(T-1-Box)/2);
+	t = outer(w);
+	p = Pt(t.max.x-Boxin-Box, t.min.y+(T-Box)/2);
 	return Rpt(p, addpt(p, Pt(Box, Box)));
 }
 
@@ -133,12 +149,12 @@ drawtitle(Image *dst, Window *w, int pressed)
 		wid = Dx(t)-2*(Boxin+Box+UXwindowtitlepad);
 	if(wid < 0)
 		wid = 0;
-	p = Pt(t.min.x+(Dx(t)-wid)/2, t.min.y+(T-1-uxsysfont->height)/2);
+	p = Pt(outer(w).min.x+(Dx(outer(w))-wid)/2, t.min.y+(Dy(t)-1-uxsysfont->height)/2);
 	tr = Rect(p.x, t.min.y, p.x+wid, t.max.y-1);
 	if(on){
 		/* olive rules every 3 px between the boxes, clear around the title */
-		x0 = closebox(w).max.x+UXwindowtitlepad/2;
-		x1 = zoombox(w).min.x-UXwindowtitlepad/2;
+		x0 = closebox(w).max.x+UXwindowtitlepad-1;
+		x1 = zoombox(w).min.x-UXwindowtitlepad+1;
 		for(y=t.min.y+4; y<t.max.y-4; y+=3){
 			if(tr.min.x-UXwindowtitlepad > x0)
 				draw(dst, Rect(x0, y, tr.min.x-UXwindowtitlepad, y+1), uxcolor(UXcoltitlerule), nil, ZP);
@@ -205,10 +221,12 @@ uxchromeborder(Window *w)
 	r = w->i->r;
 	in = insetrect(r, Borderwidth);
 	paper = uxcolor(UXpaper);
-	/* left, right and bottom: ink at the very edge is the frame's */
-	draw(w->i, Rect(r.min.x, in.min.y, in.min.x, r.max.y), paper, nil, ZP);
-	draw(w->i, Rect(in.max.x, in.min.y, r.max.x, r.max.y), paper, nil, ZP);
-	draw(w->i, Rect(in.min.x, in.max.y, in.max.x, r.max.y), paper, nil, ZP);
+	/* left, right and bottom: ink at the very edge is the frame's; with edge, the app's */
+	if(c == nil || !c->edge){
+		draw(w->i, Rect(r.min.x, in.min.y, in.min.x, r.max.y), paper, nil, ZP);
+		draw(w->i, Rect(in.max.x, in.min.y, r.max.x, r.max.y), paper, nil, ZP);
+		draw(w->i, Rect(in.min.x, in.max.y, in.max.x, r.max.y), paper, nil, ZP);
+	}
 	/* the top rows are the bottom of the title bar */
 	drawtitle(w->i, w, 0);
 	drawframe(c, w, 0);
@@ -315,7 +333,7 @@ uxchromectl(Window *own, char **f, int nf)
 {
 	Window *w;
 	Chrome *c;
-	int on;
+	int on, edge;
 
 	if(nf == 2)
 		w = own;
@@ -327,8 +345,11 @@ uxchromectl(Window *own, char **f, int nf)
 		return "bad syntax: no window";
 	if(w == nil || w->deleted || w->i == nil)
 		return "not found";
+	edge = 0;
 	if(strcmp(f[nf-1], "on") == 0)
 		on = 1;
+	else if(strcmp(f[nf-1], "edge") == 0)
+		on = edge = 1;
 	else if(strcmp(f[nf-1], "off") == 0)
 		on = 0;
 	else
@@ -336,9 +357,13 @@ uxchromectl(Window *own, char **f, int nf)
 	if(on && uxisdesktop(w))
 		return "bad value: desktop window";
 	c = findchrome(w->id);
-	if(on && c == nil){
+	if(on && c != nil && c->edge != edge){
+		c->edge = edge;
+		repaint(w);
+	}else if(on && c == nil){
 		c = emalloc(sizeof(Chrome));
 		c->win = w->id;
+		c->edge = edge;
 		c->next = chromes;
 		chromes = c;
 		uxchromefit(w);
@@ -410,7 +435,7 @@ zoom(Window *w, Chrome *c)
 		/* the outer box fills the desktop, with room for the shadow */
 		d = uxdeskrect();
 		d.max = subpt(d.max, Pt(UXwindowshadow, UXwindowshadow));
-		r = Rect(d.min.x+1, d.min.y+T+1-Borderwidth, d.max.x-1, d.max.y-1);
+		r = Rect(d.min.x+1, d.min.y+T-Borderwidth, d.max.x-1, d.max.y-1);
 		c->zoomed = 1;
 	}
 	i = allocwindow(wscreen, r, Refbackup, DNofill);
