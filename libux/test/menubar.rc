@@ -1,0 +1,62 @@
+#!/bin/rc
+# libux registers its menus with rio's bar (devux.md), against fakedevux.
+# Run from libux: rc test/menubar.rc
+rfork ne
+suite=menubar
+. test/lib.rc
+fakes=../test/fakes
+@{cd $fakes && mk all >/dev/null >[2=1]}
+$fakes/$O.fakedevux -s fakedevux.$pid
+mount -a /srv/fakedevux.$pid /dev 1
+fn fake { echo $* >/dev/fake/ctl }
+fake new 1 'label=sample'
+fake new 2 'label=dialog'
+startsample
+for(i in `{seq 50}) if(! grep -s '^app sample-' /dev/ux/menubar/menus) sleep 0.1
+
+test=registered
+cat /dev/ux/menubar/menus >$out/m
+want '^app sample-[0-9]+ title=Sample$' $out/m
+want '^window 1$' $out/m
+want '^menu file title=File$' $out/m
+want '^item file new label=New key=n$' $out/m
+want '^item file s1 sep=on$' $out/m
+want '^item edit undo label=Undo key=z enabled=off$' $out/m
+
+test=click
+fake focus 1
+{
+	fake click new
+	sleep 0.2
+	drain 4 $out/e
+} <[4]$app/events
+want 'action menu=file id=new win=1 via=menu' $out/e
+same $app/windows/1/controls/status/value 'new
+'
+
+test=shortcut
+{
+	fake key k
+	sleep 0.3
+	drain 4 $out/e
+} <[4]$app/events
+want 'action menu=file id=confirm win=1 via=key' $out/e
+want 'new win=2 kind=dialog' $out/e
+echo cancel >$app/windows/2/ctl
+sleep 0.2
+same $app/windows/1/controls/status/value 'cancelled
+'
+
+test=enable
+fake key z
+grep 'key z' /dev/fake/log >$out/l
+want swallowed $out/l
+
+test=quit
+fake key q
+sleep 0.3
+if(grep -s '^app sample-' /dev/ux/menubar/menus){
+	echo 'FAIL '^$test^': registration outlived the app'
+	failed=1
+}
+done

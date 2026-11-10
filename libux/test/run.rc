@@ -1,0 +1,14 @@
+#!/bin/rc
+# Run every libux test: cd libux; mk test
+rfork e
+st=()
+for(t in test/sample.rc test/stall.rc test/menubar.rc){
+	rc $t
+	if(! ~ $status '')
+		st=($st $t)
+}
+if(! ~ $#st 0){
+	echo failed: $st
+	exit fail
+}
+echo all passed

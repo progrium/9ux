@@ -1,0 +1,199 @@
+#!/bin/rc
+# libux against docs/protocols/ux.md, through the sample app.
+# Run from libux: rc test/sample.rc
+rfork ne
+suite=sample
+. test/lib.rc
+startsample
+w=$app/windows/1
+c=$w/controls
+
+test=root
+cat $app/version >$out/v
+want '^ux 1\.0$' $out/v
+want '^feature menus$' $out/v
+same $app/name 'sample
+'
+same $app/title 'Sample
+'
+ls $app >$out/ls
+for(f in version name id title ctl events menus windows) want '/'^$f^'$' $out/ls
+
+test=window
+same $w/kind 'window
+'
+same $w/title 'Sample
+'
+cat $w/ctl >$out/h
+want '^front activate$' $out/h
+want '^focus activate$' $out/h
+
+test=controls
+same $c/save/type 'button
+'
+same $c/save/label 'Save
+'
+same $c/save/state 'enabled visible default
+'
+same $c/name/state 'enabled visible focused
+'
+same $c/name/rect '80 14 300 36
+'
+same $c/icons/parent 'files
+'
+same $c/save/ctl 'activate activate
+'
+ls $c/name >$out/ls
+want '/value$' $out/ls
+want '/selection$' $out/ls
+dontwant '/items$' $out/ls
+
+test=text-field
+echo 'set hello' >$c/name/ctl
+same $c/name/value 'hello
+'
+same $c/name/selection '5 5
+'
+echo 'select 0 2' >$c/name/ctl
+echo 'insert ''J, ''' >$c/name/ctl
+same $c/name/value 'J, llo
+'
+fails 'bad value' echo 'select 3 99' >$c/name/ctl
+fails 'unknown command' echo 'frob' >$c/name/ctl
+fails 'bad syntax' echo 'set' >$c/name/ctl
+# long values go through the value file
+echo -n 'line one
+line two' >$c/notes/value
+same $c/notes/value 'line one
+line two'
+same $c/notes/state 'enabled visible multiline
+'
+
+test=secret
+echo 'set hunter2' >$c/password/ctl
+same $c/password/value '
+'
+want secret $c/password/state
+
+test=button-activate
+{
+	{
+		echo activate >$c/save/ctl
+		drain 4 $out/a
+		drain 5 $out/b
+	} <[4]$c/save/events <[5]$app/events
+}
+want '^[0-9]+ resync$' $out/a
+want '^[0-9]+ activate ctl=windows/1/controls/save via=ctl$' $out/a
+want '^[0-9]+ activate ctl=windows/1/controls/save via=ctl$' $out/b
+grep activate $out/a >$out/a2
+grep activate $out/b >$out/b2
+if(! cmp -s $out/a2 $out/b2){
+	echo 'FAIL '^$test^': seq differs between the app and control streams'
+	failed=1
+}
+sleep 0.1
+same $c/status/value 'saved J, llo (1)
+'
+
+test=two-readers
+{
+	echo 'set two' >$c/name/ctl
+	drain 4 $out/a
+	drain 5 $out/b
+} <[4]$c/name/events <[5]$c/name/events
+want '^[0-9]+ value ctl=windows/1/controls/name value=two$' $out/a
+want '^[0-9]+ value ctl=windows/1/controls/name value=two$' $out/b
+
+test=disabled
+echo 'set off' >$c/agree/ctl
+same $c/agree/value 'off
+'
+echo toggle >$c/agree/ctl
+same $c/agree/value 'on
+'
+
+test=list
+cat $c/colors/items >$out/l
+want '^Red$' $out/l
+echo 'select 1 3' >$c/colors/ctl
+same $c/colors/selection '1 3
+'
+{
+	echo 'open 2' >$c/colors/ctl
+	sleep 0.1
+	drain 4 $out/e
+} <[4]$c/colors/events
+want 'open ctl=windows/1/controls/colors item=2 via=ctl' $out/e
+same $c/status/value 'opened item 2
+'
+fails 'bad value' echo 'select 9' >$c/colors/ctl
+
+test=icon-view
+echo 'rename tmp Temp' >$c/icons/ctl
+want 'item tmp label=Temp icon=folder pos=140,40' $c/icons/items
+echo 'move tmp 200,80' >$c/icons/ctl
+want 'item tmp label=Temp icon=folder pos=200,80' $c/icons/items
+echo 'select readme' >$c/icons/ctl
+same $c/icons/selection 'readme
+'
+fails 'not found' echo 'open nosuch' >$c/icons/ctl
+
+test=scroll-view
+echo 'scroll 0,40' >$c/files/ctl
+same $c/files/origin '0 40
+'
+same $c/files/extent '0 0 440 400
+'
+
+test=menus
+ls $app/menus >$out/m
+want '/file$' $out/m
+want '/edit$' $out/m
+want '^item new label=New key=n$' $app/menus/file/items
+want '^item s1 sep=on$' $app/menus/file/items
+want '^item undo label=Undo key=z enabled=off$' $app/menus/edit/items
+fails disabled echo invoke undo >$app/menus/edit/ctl
+fails 'not found' echo invoke nosuch >$app/menus/file/ctl
+{
+	echo invoke new >$app/menus/file/ctl
+	sleep 0.1
+	drain 4 $out/e
+} <[4]$app/menus/file/events
+want '^[0-9]+ action menu=file id=new win=0 via=ctl$' $out/e
+same $c/name/value '
+'
+
+test=dialog
+echo invoke confirm >$app/menus/file/ctl
+sleep 0.2
+ls $app/windows >$out/w
+want '/2$' $out/w
+same $app/windows/2/kind 'dialog
+'
+want modal $app/windows/2/state
+{
+	echo default >$app/windows/2/ctl
+	sleep 0.2
+	drain 4 $out/e
+} <[4]$app/windows/2/events
+want 'activate ctl=windows/2/controls/ok via=ctl' $out/e
+want '^[0-9]+ gone$' $out/e
+same $c/status/value 'confirmed
+'
+if(test -e $app/windows/2){
+	echo 'FAIL '^$test^': dialog still there'
+	failed=1
+}
+
+test=gone
+fails 'gone|does not exist' cat $app/windows/2/kind
+
+test=quit
+echo quit >$app/ctl
+sleep 0.2
+if(test -e /srv/$srvname){
+	echo 'FAIL '^$test^': app still serving'
+	failed=1
+}
+done

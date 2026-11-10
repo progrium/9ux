@@ -1,0 +1,6 @@
+</$objtype/mkfile
+
+# Run from libux with `mk test`.
+test:V:
+	@{cd ../../apps/sample && mk}
+	cd .. && O=$O rc test/run.rc

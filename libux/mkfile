@@ -1,0 +1,32 @@
+</$objtype/mkfile
+
+LIB=libux.a$O
+OFILES=\
+	app.$O\
+	cmd.$O\
+	ctl.$O\
+	draw.$O\
+	ev.$O\
+	menu.$O\
+	obj.$O\
+	reg.$O\
+	srv.$O\
+	win.$O\
+
+HFILES=ux.h impl.h
+
+all:V: $LIB
+
+$LIB: $OFILES
+	ar vu $LIB $OFILES
+
+%.$O: %.c $HFILES
+	$CC $CFLAGS $stem.c
+
+test:V: all
+	cd test && mk test
+
+clean:V:
+	rm -f *.[$OS] libux.a[$OS]
+
+nuke:V: clean
