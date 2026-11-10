@@ -24,14 +24,11 @@
   .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1em; }
   .pair figure { margin: 0; }
   @media (max-width: 36em) { .pair { grid-template-columns: 1fr; } }
-  /* The live demo (demo/, built by scripts/web.sh): the poster is the
-     screenshot, and the button swaps in an iframe of the same size. */
+  /* The live demo (demo/, built by scripts/web.sh): it starts as the
+     page loads, in an iframe that replaces the screenshot, which stays
+     for browsers that can't run it. */
   .live { position: relative; aspect-ratio: 4 / 3; border: 1px solid #888; background: #5f8f8f; }
   .live img, .live iframe { display: block; width: 100%; height: 100%; border: 0; }
-  .live button { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    font: bold 1.1em sans-serif; padding: 0.6em 1.2em; background: #fff; color: #000;
-    border: 2px solid #000; border-radius: 6px; box-shadow: 3px 3px 0 #000; cursor: pointer; }
-  .live button:hover { background: #ffd; }
 </style>
 </head>
 <body>
@@ -55,27 +52,27 @@
 <div class="live" id="live">
 <img src="images/docs/desktop.png" width="1024" height="768"
   alt="The 9/UX desktop: Finder's menu bar and volume icons, two spatial folder windows, and the libux sample app with a file just dropped onto its Notes field">
-<button id="run" type="button">&#9654; Run 9/UX live in this page</button>
 </div>
 <figcaption>
-Press the button to run the real thing in your browser:
+This is the real thing, running live in your browser:
 the rio fork in 9/UX mode, Finder, and the libux sample app,
 compiled for 386 and run by <a href="https://progrium.github.io/hyper9/">h9</a>
 on the v86 emulator inside the page. Nothing is sent anywhere; it's about 17 MB to load, once.
 Click the screen to type; right-click (or Ctrl-click) is button 3, and Alt-click is button 2.
-It needs a recent Chrome or Edge.
-<a href="demo/">Open it in its own tab</a>, or see the screenshot,
+It needs a recent Chrome or Edge; other browsers see a screenshot,
 <a href="images/docs/desktop.png">a real frame</a> from the end-to-end drag-and-drop test, running headless on h9.
+<a href="demo/">Open it in its own tab</a> for a bigger screen.
 </figcaption>
 <script>
-  document.getElementById('run').onclick = () => {
+  // h9's browser host needs JavaScript Promise Integration and a canvas
+  // a Worker can draw on; without them the screenshot stays.
+  if (typeof WebAssembly.Suspending === 'function' && typeof OffscreenCanvas === 'function') {
     const f = document.createElement('iframe');
     f.src = 'demo/?embed';
     f.title = 'The 9/UX desktop, running live';
     f.allow = 'clipboard-write';
     document.getElementById('live').replaceChildren(f);
-    f.focus();
-  };
+  }
 </script>
 </figure>
 
