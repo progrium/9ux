@@ -1,0 +1,223 @@
+#!/bin/rc
+# Tests for fakedevux against docs/protocols/devux.md.
+# Run from test/fakes after mk: rc test/devux.rc
+rfork ne
+suite=devux
+. test/lib.rc
+bin=./$objtype.fakedevux
+if(! test -x $bin) bin=./7.fakedevux
+
+$bin -s fakedevux.$pid
+mount -a /srv/fakedevux.$pid /dev 7
+d=/dev/ux
+fn fake { echo $* >/dev/fake/ctl }
+
+test=version
+cat $d/version >$out/v
+want '^devux 1\.' $out/v
+want '^feature menubar$' $out/v
+want '^feature desktop$' $out/v
+
+test=windows
+fake new 7 'label=rc'
+fake new 9 '''label=Read Me''' 'rect=200,150,700,500'
+cat $d/windows >$out/w
+same $out/w 'window win=7 rect=100,100,500,400 label=rc state=
+window win=9 rect=200,150,700,500 ''label=Read Me'' state=
+'
+
+test=focus-events
+{
+	fake focus 9
+	fake top 7
+	fake rect 7 'rect=0,0,10,10'
+	drain 4 $out/e
+} <[4]$d/events
+want '^[0-9]+ resync$' $out/e
+want '^[0-9]+ focus win=9$' $out/e
+want '^[0-9]+ top win=7$' $out/e
+want '^[0-9]+ rect win=7 rect=0,0,10,10$' $out/e
+cat $d/windows >$out/w
+want 'win=9 .*state=current' $out/w
+
+test=seq-shared
+{
+	fake focus 7
+	drain 4 $out/a
+	drain 5 $out/b
+} <[4]$d/events <[5]$d/events
+grep focus $out/a >$out/a2
+grep focus $out/b >$out/b2
+if(! cmp -s $out/a2 $out/b2){
+	echo FAIL $test: two readers saw different seq numbers
+	failed=1
+}
+
+test=no-app
+fails 'no app' echo menu file 'title=File' >$d/menubar/ctl
+
+test=registration
+{
+	echo app hello-1 '''title=Hello there''' >[1=3]
+	echo window >[1=3]
+	echo window 9 >[1=3]
+	echo menu file 'title=File' >[1=3]
+	echo item file open '''label=Open…''' 'key=o' >[1=3]
+	echo item file s1 'sep=on' >[1=3]
+	echo item file quit 'label=Quit' 'key=q' >[1=3]
+	echo menu edit 'title=Edit' >[1=3]
+	echo item edit undo 'label=Undo' 'key=z' 'enabled=off' >[1=3]
+	echo item edit redo 'label=Redo' 'key=shift+z' >[1=3]
+	echo menu view 'title=View' 'win=9' >[1=3]
+	echo item view grid '''label=Show Grid''' 'check=on' 'key=g' 'win=9' >[1=3]
+	cat $d/menubar/menus >$out/m
+	same $out/m 'focus app=hello-1 win=7
+app hello-1 ''title=Hello there''
+window 9
+window 7
+menu file title=File
+item file open label=Open… key=o
+item file s1 sep=on
+item file quit label=Quit key=q
+menu edit title=Edit
+item edit undo label=Undo key=z enabled=off
+item edit redo label=Redo key=shift+z
+menu view title=View win=9
+item view grid ''label=Show Grid'' key=g check=on win=9
+'
+
+	test=in-use
+	fails 'in use' echo app hello-1 >$d/menubar/ctl
+	{
+		echo app other-1 >[1=3]
+		fails 'in use' rc -c 'echo window 7 >[1=3]'
+	} >[3]$d/menubar/ctl
+
+	test=keys
+	{
+		fake focus 7
+		fake key q
+		fake key z
+		fake key shift+z
+		fake key g
+		fake key x
+		fake focus 9
+		fake key g
+		drain 4 $out/e
+	} <[4]$d/menubar/events
+	cat /dev/fake/log >$out/log
+	want '^key q action quit$' $out/log
+	want '^key z swallowed$' $out/log
+	want '^key shift\+z action redo$' $out/log
+	want '^key x passed$' $out/log
+	want 'action app=hello-1 win=7 id=quit via=key' $out/e
+	want 'action app=hello-1 win=9 id=grid via=key' $out/e
+	dontwant 'id=undo' $out/e
+	dontwant 'win=7 id=grid' $out/e
+
+	test=click-and-invoke
+	{
+		fake click open
+		echo invoke hello-1 quit 'win=9' >$d/menubar/ctl
+		drain 4 $out/e
+	} <[4]$d/menubar/events
+	want 'action app=hello-1 win=9 id=open via=click' $out/e
+	want 'action app=hello-1 win=9 id=quit via=ctl' $out/e
+	fails disabled echo invoke hello-1 undo >$d/menubar/ctl
+	fails 'not found' echo invoke hello-1 nosuch >$d/menubar/ctl
+	fails 'not found' echo invoke nosuch-1 quit >$d/menubar/ctl
+
+	test=set
+	echo set undo 'enabled=on' '''label=Undo Typing''' >[1=3]
+	cat $d/menubar/menus >$out/m
+	want '^item edit undo ''label=Undo Typing'' key=z$' $out/m
+
+	test=batch
+	echo begin >[1=3]
+	echo menu help 'title=Help' >[1=3]
+	cat $d/menubar/menus >$out/m
+	dontwant '^menu help' $out/m
+	echo commit >[1=3]
+	cat $d/menubar/menus >$out/m
+	want '^menu help title=Help$' $out/m
+	echo begin >[1=3]
+	echo del help >[1=3]
+	echo abort >[1=3]
+	cat $d/menubar/menus >$out/m
+	want '^menu help title=Help$' $out/m
+
+	test=legacy-window
+	fake new 11
+	{
+		fake focus 11
+		fake key q
+		drain 4 $out/e
+	} <[4]$d/menubar/events
+	want 'focus win=11' $out/e
+	dontwant 'app=' $out/e
+	cat /dev/fake/log >$out/log
+	want '^key q passed$' $out/log
+} >[3]$d/menubar/ctl
+
+test=session-end
+cat $d/menubar/menus >$out/m
+dontwant hello-1 $out/m
+cat $d/windows >$out/w
+dontwant 'app=' $out/w
+
+test=desktop
+fake new 3
+{
+	echo claim 3 >[1=3]
+	cat $d/desktop/state >$out/s
+	same $out/s 'win=3 rect=0,20,1024,768
+'
+	{ fails 'in use' rc -c 'echo claim 9 >[1=5]' } >[5]$d/desktop/ctl
+	cat $d/windows >$out/w
+	want '^window win=3 .*state=desktop' $out/w
+} >[3]$d/desktop/ctl
+cat $d/desktop/state >$out/s
+want '^win=0 ' $out/s
+
+test=desktop-events
+{
+	{ echo claim >[1=3] } >[3]$d/desktop/ctl
+	fake screen 'rect=0,0,800,600'
+	drain 4 $out/e
+} <[4]$d/desktop/events
+want 'claim win=7' $out/e
+want 'release win=7' $out/e
+want 'resize rect=0,20,800,600' $out/e
+
+test=mode
+{
+	echo mode off >$d/ctl
+	drain 4 $out/e
+} <[4]$d/events
+want 'mode ux=off' $out/e
+cat $d/ctl >$out/c
+want '^mode off$' $out/c
+{
+	echo app m-1 >[1=3]
+	echo window 7 >[1=3]
+	echo menu file 'title=File' >[1=3]
+	echo item file quit 'key=q' >[1=3]
+	fake focus 7
+	fake key q
+} >[3]$d/menubar/ctl
+cat /dev/fake/log >$out/log
+tail -1 $out/log >$out/last
+want '^key q passed$' $out/last
+echo mode on >$d/ctl
+
+test=errors
+fails 'unknown command' echo frob >$d/ctl
+fails 'bad value' echo cmdkey hyper >$d/ctl
+fails 'not found' echo claim 99 >$d/desktop/ctl
+
+test=short-read
+{
+	fails 'short read' dd -quiet 1 -bs 4 -count 1 -if /fd/4
+} <[4]$d/events
+
+done

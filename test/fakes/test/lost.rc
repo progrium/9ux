@@ -1,0 +1,21 @@
+#!/bin/rc
+# Queue overflow gives `lost`, then events continue (README.md "Stream files").
+rfork ne
+suite=lost
+. test/lib.rc
+bin=./$objtype.fakedevux
+if(! test -x $bin) bin=./7.fakedevux
+
+$bin -q 4 -s fakedevux.lost.$pid
+mount -a /srv/fakedevux.lost.$pid /dev
+test=lost
+{
+	for(i in 1 2 3 4 5 6)
+		echo new $i >/dev/fake/ctl
+	echo focus 2 >/dev/fake/ctl
+	drain 4 $out/e
+} <[4]/dev/ux/events
+want '^[0-9]+ lost n=[0-9]+$' $out/e
+want '^[0-9]+ focus win=2$' $out/e
+dontwant 'resync' $out/e
+done
