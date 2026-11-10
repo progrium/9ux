@@ -2,7 +2,7 @@
 # Run every fake's tests: cd test/fakes; mk test
 rfork e
 st=()
-for(t in test/devux.rc test/lost.rc test/app.rc){
+for(t in test/devux.rc test/lost.rc test/app.rc test/drag.rc){
 	rc $t
 	if(! ~ $status '')
 		st=($st $t)

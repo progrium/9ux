@@ -38,6 +38,10 @@ enum {
 	Qbarctl,
 	Qbarmenus,
 	Qbarevents,
+	Qdragctl,
+	Qdragstate,
+	Qdragevents,
+	Qdragdata,
 	Qfakectl,
 	Qfakelog,
 
@@ -85,9 +89,11 @@ struct Sess {
 
 /* per-open state, in Fid.aux */
 typedef struct Open Open;
+typedef struct Dataopen Dataopen;
 struct Open {
 	Sub	*sub;
 	Sess	*sess;
+	Dataopen	*data;	/* drag/data */
 };
 
 static Win	**wins;		/* stacking order, bottom first */
@@ -102,6 +108,8 @@ static Sess	*sessions;
 static char	*logtext;
 static long	nlog;
 static char	*lastfocusapp;	/* foreground app as last reported */
+
+static int	ownwin(Fid*);
 
 static void
 logf(char *fmt, ...)
@@ -752,6 +760,713 @@ findkey(Sess *s, int win, char *key, int *disabled)
 }
 
 /*
+ * Drag and drop (devux 1.1): the broker, with fake/ctl's press, move
+ * and release standing in for the pointer.
+ */
+typedef struct Drag Drag;
+typedef struct Blob Blob;
+
+enum {
+	Dover,
+	Ddropped,
+
+	Maxdrag = 16*1024*1024,
+
+	/* data fid modes */
+	Mnone = 0,
+	Mput,
+	Mreply,
+	Mfetch,
+};
+
+struct Blob {
+	char	*type;
+	int	item;		/* -1: the type as a whole */
+	int	req;		/* 0: put by the source */
+	char	*buf;
+	long	n;
+	int	done;
+	char	*err;
+	int	ref;
+	Drag	*d;		/* nil once the drag has ended */
+	Blob	*next;
+};
+
+struct Drag {
+	int	id;
+	int	src;
+	char	*app;
+	char	*types;
+	char	*ops;
+	char	*label;
+	Fid	*sess;
+	int	state;
+	int	target;
+	char	*atype;		/* accepted type and op, nil if not accepted */
+	char	*aop;
+	Point	pt;
+	long	total;
+	Blob	*blobs;
+	Drag	*next;
+};
+
+static Drag	*drags;
+static int	dragseq;
+static int	reqseq;
+static int	down;		/* a button is down (fake/ctl press) */
+static int	ptwin;		/* window under the pointer */
+static Point	ptat;
+static Req	**dwait;	/* blocked data reads */
+static int	ndwait;
+
+static Drag*
+finddrag(int id)
+{
+	Drag *d;
+
+	for(d = drags; d != nil; d = d->next)
+		if(d->id == id)
+			return d;
+	return nil;
+}
+
+static Drag*
+flying(void)
+{
+	Drag *d;
+
+	for(d = drags; d != nil; d = d->next)
+		if(d->state == Dover)
+			return d;
+	return nil;
+}
+
+/* is word in the comma-separated list? */
+static int
+inlist(char *list, char *word)
+{
+	char *p, *e;
+	int n;
+
+	n = strlen(word);
+	for(p = list; p != nil && *p; p = e){
+		e = strchr(p, ',');
+		if(e == nil)
+			e = p+strlen(p);
+		if(e-p == n && strncmp(p, word, n) == 0)
+			return 1;
+		if(*e == ',')
+			e++;
+	}
+	return 0;
+}
+
+static char*
+firstof(char *list)
+{
+	char *s, *p;
+
+	s = estrdup9p(list);
+	if((p = strchr(s, ',')) != nil)
+		*p = 0;
+	return s;
+}
+
+/* a list of IDs, or of ops */
+static int
+goodlist(char *list, int ops)
+{
+	char *s, *f[32];
+	int i, n;
+
+	if(list == nil || *list == 0)
+		return 0;
+	s = estrdup9p(list);
+	n = getfields(s, f, nelem(f), 0, ",");
+	for(i = 0; i < n; i++)
+		if(ops ? strcmp(f[i], "copy") != 0 && strcmp(f[i], "move") != 0 && strcmp(f[i], "link") != 0 : !isid(f[i])){
+			free(s);
+			return 0;
+		}
+	free(s);
+	return 1;
+}
+
+static void dragwake(void);
+
+static void
+blobput(Blob *b)
+{
+	if(--b->ref > 0)
+		return;
+	free(b->type);
+	free(b->buf);
+	free(b->err);
+	free(b);
+}
+
+static void
+dragmsg(char *verb, Drag *d, int win)
+{
+	Msg m;
+
+	mbegin(&m, verb);
+	mattr(&m, "id", "%d", d->id);
+	if(win >= 0)
+		mattr(&m, "win", "%d", win);
+	ev("drag", mend(&m));
+}
+
+static void
+dragend(Drag *d)
+{
+	Drag **l;
+	Blob *b, *nb;
+
+	for(l = &drags; *l != nil; l = &(*l)->next)
+		if(*l == d){
+			*l = d->next;
+			break;
+		}
+	for(b = d->blobs; b != nil; b = nb){
+		nb = b->next;
+		b->d = nil;
+		if(!b->done){
+			b->done = 1;
+			if(b->err == nil)
+				b->err = estrdup9p("gone");
+		}
+		blobput(b);
+	}
+	dragmsg("end", d, -1);
+	free(d->app);
+	free(d->types);
+	free(d->ops);
+	free(d->label);
+	free(d->atype);
+	free(d->aop);
+	free(d);
+	dragwake();
+}
+
+static void
+unaccept(Drag *d)
+{
+	free(d->atype);
+	free(d->aop);
+	d->atype = d->aop = nil;
+}
+
+static void
+dragcancel(Drag *d)
+{
+	dragmsg("cancel", d, -1);
+	dragend(d);
+}
+
+/* the pointer moved (or the button came up) while a drag is in flight */
+static void
+dragpointer(void)
+{
+	Drag *d;
+	Msg m;
+
+	d = flying();
+	if(d == nil)
+		return;
+	if(ptwin != d->target){
+		if(d->target != 0)
+			dragmsg("leave", d, d->target);
+		unaccept(d);
+		d->target = ptwin;
+		d->pt = ptat;
+		if(ptwin != 0){
+			mbegin(&m, "enter");
+			mattr(&m, "id", "%d", d->id);
+			mattr(&m, "win", "%d", ptwin);
+			mattr(&m, "pt", "%d,%d", ptat.x, ptat.y);
+			mattr(&m, "types", "%s", d->types);
+			mattr(&m, "ops", "%s", d->ops);
+			ev("drag", mend(&m));
+		}
+	}else if(ptwin != 0 && !eqpt(ptat, d->pt)){
+		d->pt = ptat;
+		mbegin(&m, "over");
+		mattr(&m, "id", "%d", d->id);
+		mattr(&m, "win", "%d", ptwin);
+		mattr(&m, "pt", "%d,%d", ptat.x, ptat.y);
+		ev("drag", mend(&m));
+	}
+	if(down)
+		return;
+	if(d->target == 0 || d->atype == nil){
+		dragcancel(d);
+		return;
+	}
+	d->state = Ddropped;
+	mbegin(&m, "drop");
+	mattr(&m, "id", "%d", d->id);
+	mattr(&m, "win", "%d", d->target);
+	mattr(&m, "pt", "%d,%d", d->pt.x, d->pt.y);
+	mattr(&m, "type", "%s", d->atype);
+	mattr(&m, "op", "%s", d->aop);
+	ev("drag", mend(&m));
+}
+
+static char*
+dragstart(Fid *fid, Cmd *c)
+{
+	Drag *d;
+	Win *w;
+	char *v;
+	int win;
+	Msg m;
+
+	v = cmdattr(c, "win");
+	win = v != nil ? atoi(v) : ownwin(fid);
+	if(win == 0)
+		return "bad syntax: no window";
+	if((w = findwin(win)) == nil)
+		return "not found";
+	if(!goodlist(cmdattr(c, "types"), 0))
+		return "bad value: types";
+	v = cmdattr(c, "ops");
+	if(v != nil && !goodlist(v, 1))
+		return "bad value: ops";
+	if(!down)
+		return "bad value: no button down";
+	if(flying() != nil)
+		return "busy";
+	d = emalloc9p(sizeof *d);
+	memset(d, 0, sizeof *d);
+	d->id = ++dragseq;
+	d->src = win;
+	d->app = w->app != nil && w->app->app != nil ? estrdup9p(w->app->app) : nil;
+	d->types = estrdup9p(cmdattr(c, "types"));
+	d->ops = estrdup9p(v != nil ? v : "copy");
+	d->label = cmdattr(c, "label") != nil ? estrdup9p(cmdattr(c, "label")) : nil;
+	d->sess = fid;
+	d->state = Dover;
+	d->next = drags;
+	drags = d;
+	mbegin(&m, "start");
+	mattr(&m, "id", "%d", d->id);
+	mattr(&m, "win", "%d", win);
+	if(d->app != nil)
+		mattr(&m, "app", "%s", d->app);
+	mattr(&m, "types", "%s", d->types);
+	mattr(&m, "ops", "%s", d->ops);
+	if(d->label != nil)
+		mattr(&m, "label", "%s", d->label);
+	ev("drag", mend(&m));
+	dragpointer();
+	return nil;
+}
+
+typedef struct Dragarg Dragarg;
+struct Dragarg {
+	Fid	*fid;
+};
+
+static char*
+dragcmd(char *line, void *v)
+{
+	Dragarg *a;
+	Cmd c;
+	Drag *d;
+	char *e, *type, *op;
+	int win;
+	Msg m;
+
+	a = v;
+	if(cmdparse(&c, line) == 0){
+		cmdfree(&c);
+		return nil;
+	}
+	logf("drag/ctl %s", line);
+	e = nil;
+	d = c.npos > 1 ? finddrag(atoi(c.tok[1])) : nil;
+	win = cmdattr(&c, "win") != nil ? atoi(cmdattr(&c, "win")) : ownwin(a->fid);
+	if(strcmp(c.tok[0], "start") == 0){
+		e = c.npos != 1 ? "bad syntax" : dragstart(a->fid, &c);
+	}else if(strcmp(c.tok[0], "cancel") == 0){
+		if(c.npos == 1)
+			d = flying();
+		if(c.npos > 2)
+			e = "bad syntax";
+		else if(d == nil || d->state != Dover)
+			e = "not found";
+		else
+			dragcancel(d);
+	}else if(strcmp(c.tok[0], "accept") == 0 || strcmp(c.tok[0], "refuse") == 0){
+		if(c.npos != 2)
+			e = "bad syntax";
+		else if(d == nil)
+			e = "not found";
+		else if(win == 0)
+			e = "bad syntax: no window";
+		else if(c.tok[0][0] == 'r'){
+			if(d->state == Dover && d->target == win && d->atype != nil){
+				unaccept(d);
+				dragmsg("refuse", d, win);
+			}
+		}else{
+			type = cmdattr(&c, "type");
+			op = cmdattr(&c, "op");
+			if(type != nil && !inlist(d->types, type))
+				e = "bad value: type not offered";
+			else if(op != nil && !inlist(d->ops, op))
+				e = "bad value: op not allowed";
+			else if(d->state == Dover && d->target == win){
+				unaccept(d);
+				d->atype = type != nil ? estrdup9p(type) : firstof(d->types);
+				d->aop = op != nil ? estrdup9p(op) : firstof(d->ops);
+				mbegin(&m, "accept");
+				mattr(&m, "id", "%d", d->id);
+				mattr(&m, "win", "%d", win);
+				mattr(&m, "type", "%s", d->atype);
+				mattr(&m, "op", "%s", d->aop);
+				ev("drag", mend(&m));
+			}
+		}
+	}else if(strcmp(c.tok[0], "done") == 0){
+		op = cmdattr(&c, "op");
+		if(c.npos != 2)
+			e = "bad syntax";
+		else if(d == nil || d->state != Ddropped)
+			e = "not found";
+		else if(op != nil && !inlist(d->ops, op))
+			e = "bad value: op not allowed";
+		else{
+			mbegin(&m, "done");
+			mattr(&m, "id", "%d", d->id);
+			mattr(&m, "win", "%d", d->target);
+			mattr(&m, "op", "%s", op != nil ? op : d->aop);
+			if(cmdattr(&c, "err") != nil)
+				mattr(&m, "err", "%s", cmdattr(&c, "err"));
+			ev("drag", mend(&m));
+			dragend(d);
+		}
+	}else
+		e = "unknown command";
+	cmdfree(&c);
+	return e;
+}
+
+static char*
+dragsnapshot(void)
+{
+	Fmt f;
+	Drag *d, **v;
+	int i, n;
+
+	n = 0;
+	for(d = drags; d != nil; d = d->next)
+		n++;
+	v = emalloc9p((n+1)*sizeof v[0]);
+	i = n;
+	for(d = drags; d != nil; d = d->next)
+		v[--i] = d;	/* oldest first */
+	fmtstrinit(&f);
+	for(i = 0; i < n; i++){
+		d = v[i];
+		fmtprint(&f, "drag id=%d win=%d", d->id, d->src);
+		if(d->app != nil)
+			fmtprint(&f, " app=%s", d->app);
+		fmtprint(&f, " types=%s ops=%s", d->types, d->ops);
+		if(d->label != nil)
+			fmtprint(&f, " %s", attrq("label", d->label));
+		fmtprint(&f, " state=%s target=%d", d->state == Dover ? "over" : "dropped", d->target);
+		if(d->atype != nil)
+			fmtprint(&f, " type=%s op=%s", d->atype, d->aop);
+		fmtprint(&f, "\n");
+	}
+	free(v);
+	return fmtstrflush(&f);
+}
+
+/*
+ * drag/data
+ */
+struct Dataopen {
+	int	mode;
+	Blob	*b;
+	long	off;
+};
+
+static Blob*
+newblob(Drag *d, char *type, int item, int req)
+{
+	Blob *b;
+
+	b = emalloc9p(sizeof *b);
+	memset(b, 0, sizeof *b);
+	b->type = estrdup9p(type);
+	b->item = item;
+	b->req = req;
+	b->ref = 2;	/* the drag's list, and the fid */
+	b->d = d;
+	b->next = d->blobs;
+	d->blobs = b;
+	return b;
+}
+
+static Blob*
+findreq(int req)
+{
+	Drag *d;
+	Blob *b;
+
+	for(d = drags; d != nil; d = d->next)
+		for(b = d->blobs; b != nil; b = b->next)
+			if(b->req == req && !b->done)
+				return b;
+	return nil;
+}
+
+/* the first write on a data fid */
+static char*
+datafirst(Dataopen *o, Fid *fid, char *line)
+{
+	Cmd c;
+	Drag *d;
+	Blob *b;
+	char *e, *v;
+	int item;
+	Msg m;
+
+	USED(fid);
+	if(cmdparse(&c, line) == 0){
+		cmdfree(&c);
+		return "bad syntax";
+	}
+	logf("drag/data %s", line);
+	e = nil;
+	v = cmdattr(&c, "item");
+	item = v != nil ? atoi(v) : -1;
+	if(strcmp(c.tok[0], "put") == 0 || strcmp(c.tok[0], "fetch") == 0){
+		d = c.npos == 3 ? finddrag(atoi(c.tok[1])) : nil;
+		if(c.npos != 3)
+			e = "bad syntax";
+		else if(d == nil)
+			e = "not found";
+		else if(!inlist(d->types, c.tok[2]))
+			e = "bad value: type not offered";
+		else if(v != nil && item < 0)
+			e = "bad value: item";
+		else if(c.tok[0][0] == 'p'){
+			o->mode = Mput;
+			o->b = newblob(d, c.tok[2], item, 0);
+		}else if(d->state != Ddropped)
+			e = "bad value: not dropped";
+		else{
+			o->mode = Mfetch;
+			for(b = d->blobs; b != nil; b = b->next)
+				if(b->req == 0 && b->item == item && strcmp(b->type, c.tok[2]) == 0)
+					break;
+			if(b != nil){
+				b->ref++;
+				o->b = b;
+			}else{
+				o->b = newblob(d, c.tok[2], item, ++reqseq);
+				mbegin(&m, "fetch");
+				mattr(&m, "id", "%d", d->id);
+				mattr(&m, "type", "%s", c.tok[2]);
+				if(item >= 0)
+					mattr(&m, "item", "%d", item);
+				mattr(&m, "req", "%d", o->b->req);
+				ev("drag", mend(&m));
+			}
+		}
+	}else if(strcmp(c.tok[0], "reply") == 0 || strcmp(c.tok[0], "fail") == 0){
+		b = c.npos >= 2 ? findreq(atoi(c.tok[1])) : nil;
+		if(c.npos < 2 || (c.tok[0][0] == 'r' && c.npos != 2))
+			e = "bad syntax";
+		else if(b == nil)
+			e = "not found";
+		else if(c.tok[0][0] == 'r'){
+			o->mode = Mreply;
+			b->ref++;
+			o->b = b;
+		}else{
+			b->err = estrdup9p(c.npos > 2 ? c.tok[2] : "failed");
+			b->done = 1;
+			dragwake();
+		}
+	}else
+		e = "unknown command";
+	cmdfree(&c);
+	return e;
+}
+
+static char*
+datawrite(Dataopen *o, Fid *fid, char *data, long n)
+{
+	char *line;
+	Blob *b;
+
+	if(o->mode == Mnone){
+		line = emalloc9p(n+1);
+		memmove(line, data, n);
+		line[n] = 0;
+		if(n > 0 && line[n-1] == '\n')
+			line[n-1] = 0;
+		data = datafirst(o, fid, line);
+		free(line);
+		return data;
+	}
+	if(o->mode == Mfetch)
+		return "bad syntax: fetching";
+	b = o->b;
+	if(b->d == nil)
+		return "gone";
+	if(b->d->total+n > Maxdrag)
+		return "too large";
+	b->buf = erealloc9p(b->buf, b->n+n);
+	memmove(b->buf+b->n, data, n);
+	b->n += n;
+	b->d->total += n;
+	dragwake();
+	return nil;
+}
+
+/* answer a data read if it can be; 0 if it must wait */
+static int
+dataread(Req *r)
+{
+	Dataopen *o;
+	Blob *b;
+	long n;
+
+	o = ((Open*)r->fid->aux)->data;
+	if(o == nil || o->mode != Mfetch){
+		respond(r, "bad syntax: not fetching");
+		return 1;
+	}
+	b = o->b;
+	if(o->off < b->n){
+		n = b->n - o->off;
+		if(n > r->ifcall.count)
+			n = r->ifcall.count;
+		memmove(r->ofcall.data, b->buf+o->off, n);
+		o->off += n;
+		r->ofcall.count = n;
+		respond(r, nil);
+		return 1;
+	}
+	if(!b->done)
+		return 0;
+	if(b->err != nil){
+		respond(r, b->err);
+		return 1;
+	}
+	r->ofcall.count = 0;
+	respond(r, nil);
+	return 1;
+}
+
+static void
+dragwake(void)
+{
+	int i;
+
+	for(i = 0; i < ndwait; ){
+		if(dataread(dwait[i])){
+			ndwait--;
+			memmove(dwait+i, dwait+i+1, (ndwait-i)*sizeof dwait[0]);
+		}else
+			i++;
+	}
+}
+
+static void
+datawait(Req *r)
+{
+	if(dataread(r))
+		return;
+	dwait = erealloc9p(dwait, (ndwait+1)*sizeof dwait[0]);
+	dwait[ndwait++] = r;
+}
+
+static int
+dataflush(Req *old)
+{
+	int i;
+
+	for(i = 0; i < ndwait; i++)
+		if(dwait[i] == old){
+			ndwait--;
+			memmove(dwait+i, dwait+i+1, (ndwait-i)*sizeof dwait[0]);
+			respond(old, "interrupted");
+			return 1;
+		}
+	return 0;
+}
+
+static void
+dataclose(Dataopen *o)
+{
+	if(o->b != nil){
+		if(o->mode == Mput || o->mode == Mreply){
+			o->b->done = 1;
+			dragwake();
+		}
+		blobput(o->b);
+	}
+	free(o);
+}
+
+/* the fid that started drags is gone: so are they */
+static void
+dragsessclose(Fid *f)
+{
+	Drag *d, *nd;
+
+	for(d = drags; d != nil; d = nd){
+		nd = d->next;
+		if(d->sess != f)
+			continue;
+		if(d->state == Dover)
+			dragmsg("cancel", d, -1);
+		dragend(d);
+	}
+}
+
+/* fake/ctl: press, move, release */
+static char*
+fakepointer(Cmd *c)
+{
+	char *v;
+	Point p;
+
+	p = ZP;
+	if((v = cmdattr(c, "pt")) != nil){
+		p.x = atoi(v);
+		v = strchr(v, ',');
+		if(v == nil)
+			return "bad value: pt";
+		p.y = atoi(v+1);
+	}
+	if(strcmp(c->tok[0], "release") == 0){
+		if(c->npos != 1)
+			return "bad syntax";
+		down = 0;
+		dragpointer();
+		return nil;
+	}
+	if(c->npos != 2)
+		return "bad syntax";
+	if(atoi(c->tok[1]) != 0 && findwin(atoi(c->tok[1])) == nil)
+		return "not found";
+	ptwin = atoi(c->tok[1]);
+	ptat = p;
+	if(c->tok[0][0] == 'p')
+		down = 1;
+	dragpointer();
+	return nil;
+}
+
+/*
  * fake/ctl: play rio and the person
  */
 static char*
@@ -773,7 +1488,9 @@ fakecmd(char *line, void*)
 	e = nil;
 	id = c.npos > 1 ? atoi(c.tok[1]) : 0;
 	w = findwin(id);
-	if(strcmp(verb, "new") == 0){
+	if(strcmp(verb, "press") == 0 || strcmp(verb, "move") == 0 || strcmp(verb, "release") == 0){
+		e = fakepointer(&c);
+	}else if(strcmp(verb, "new") == 0){
 		if(c.npos != 2 || id <= 0)
 			e = "bad syntax";
 		else if(w != nil)
@@ -1112,6 +1829,13 @@ fsopen(Req *r)
 	case Qbarevents:
 		o->sub = subopen("menubar");
 		break;
+	case Qdragevents:
+		o->sub = subopen("drag");
+		break;
+	case Qdragdata:
+		o->data = emalloc9p(sizeof *o->data);
+		memset(o->data, 0, sizeof *o->data);
+		break;
 	case Qbarctl:
 		if((r->ifcall.mode&OMASK) != OREAD){
 			s = emalloc9p(sizeof *s);
@@ -1168,7 +1892,7 @@ fsread(Req *r)
 	o = r->fid->aux;
 	switch(qid(r->fid)){
 	case Qversion:
-		readstr(r, "devux 1.0\nfeature focus\nfeature desktop\nfeature menubar\n");
+		readstr(r, "devux 1.1\nfeature focus\nfeature desktop\nfeature menubar\nfeature drag\n");
 		break;
 	case Qctl:
 		snprint(buf, sizeof buf, "mode %s\ncmdkey %s\n", modeon ? "on" : "off", cmdkey);
@@ -1191,9 +1915,18 @@ fsread(Req *r)
 	case Qbarmenus:
 		readsnap(r, menusnapshot());
 		break;
+	case Qdragctl:
+		readstr(r, "start -\naccept -\nrefuse -\ndone -\ncancel -\n");
+		break;
+	case Qdragstate:
+		readsnap(r, dragsnapshot());
+		break;
+	case Qdragdata:
+		datawait(r);
+		return;
 	case Qfakectl:
 		readstr(r, "new -\nfocus -\ndelete -\nrect -\nhide -\nunhide -\ntop -\n"
-			"label -\nscreen -\nclick -\nkey -\n");
+			"label -\nscreen -\nclick -\nkey -\npress -\nmove -\nrelease -\n");
 		break;
 	case Qfakelog:
 		readstr(r, logtext != nil ? logtext : "");
@@ -1201,6 +1934,7 @@ fsread(Req *r)
 	case Qevents:
 	case Qdeskevents:
 	case Qbarevents:
+	case Qdragevents:
 		subread(o->sub, r);
 		return;
 	default:
@@ -1218,7 +1952,7 @@ fswrite(Req *r)
 	Deskarg a;
 
 	o = r->fid->aux;
-	if(r->ifcall.count > Maxmsg){
+	if(r->ifcall.count > Maxmsg && qid(r->fid) != Qdragdata){
 		respond(r, "too large");
 		return;
 	}
@@ -1237,6 +1971,17 @@ fswrite(Req *r)
 	case Qfakectl:
 		e = eachline(r->ifcall.data, r->ifcall.count, fakecmd, nil);
 		break;
+	case Qdragctl:
+		{
+			Dragarg da;
+
+			da.fid = r->fid;
+			e = eachline(r->ifcall.data, r->ifcall.count, dragcmd, &da);
+		}
+		break;
+	case Qdragdata:
+		e = datawrite(o->data, r->fid, r->ifcall.data, r->ifcall.count);
+		break;
 	default:
 		e = "permission denied";
 		break;
@@ -1249,7 +1994,8 @@ fswrite(Req *r)
 static void
 fsflush(Req *r)
 {
-	subflush(r->oldreq);
+	if(!subflush(r->oldreq))
+		dataflush(r->oldreq);
 	respond(r, nil);
 }
 
@@ -1266,6 +2012,9 @@ fsdestroyfid(Fid *f)
 		subclose(o->sub);
 	if(o->sess != nil)
 		endsess(o->sess);
+	if(o->data != nil)
+		dataclose(o->data);
+	dragsessclose(f);
 	if(deskfid == f){
 		mbegin(&m, "release");
 		mattr(&m, "win", "%d", deskwin);
@@ -1356,6 +2105,12 @@ main(int argc, char **argv)
 	mk(d, "ctl", Qbarctl, 0666);
 	mk(d, "menus", Qbarmenus, 0444);
 	mk(d, "events", Qbarevents, 0444);
+	closefile(d);
+	d = createfile(ux, "drag", nil, DMDIR|0777, nil);
+	mk(d, "ctl", Qdragctl, 0666);
+	mk(d, "state", Qdragstate, 0444);
+	mk(d, "events", Qdragevents, 0444);
+	mk(d, "data", Qdragdata, 0666);
 	closefile(d);
 	closefile(ux);
 	fk = createfile(fs.tree->root, "fake", nil, DMDIR|0777, nil);

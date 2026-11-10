@@ -1,11 +1,11 @@
 # devux: rio's `/dev/ux` files
 
-**Protocol:** `devux 1.0` · **Server:** the 9/UX rio fork (`rio/`) ·
+**Protocol:** `devux 1.1` · **Server:** the 9/UX rio fork (`rio/`) ·
 **Fake:** [`test/fakes/fakedevux`](../../test/fakes/) ·
 **Conventions:** [README.md](README.md)
 
 `/dev/ux` is what rio adds for 9/UX: window and focus events, the
-desktop layer, the global menu bar, and (later) drag and drop. Everything
+desktop layer, the global menu bar, and drag and drop. Everything
 here is additive. Stock rio files keep their meaning (see
 [rio.md](rio.md)), and a rio program that never opens `/dev/ux` sees no
 difference.
@@ -71,7 +71,11 @@ name the window.
         ctl          rw   app, window and menu registration; invoke
         menus        r    snapshot of every registration
         events       r    stream: actions and bar focus
-    drag/            (reserved for the drag feature; see below)
+    drag/
+        ctl          rw   start, accept, refuse, done, cancel
+        state        r    snapshot of drags in progress
+        events       r    stream: the pointer over targets, drops
+        data         rw   payload transfer
 ```
 
 Permissions are like rio's other files: owned by the user running rio,
@@ -80,13 +84,12 @@ mode 0600 for files (0400 where read-only), 0500 for directories.
 ## version
 
 ```text
-devux 1.0
+devux 1.1
 feature focus
 feature desktop
 feature menubar
+feature drag
 ```
-
-`drag` is added as a feature when the drag files exist.
 
 ## ctl (`/dev/ux/ctl`)
 
@@ -355,8 +358,9 @@ In mode on, a mouse event goes to the first of these that contains the
 pointer:
 
 1. **Menu bar strip**: rio tracks the menus; nothing is sent to windows.
-2. **An active drag**: once the drag feature exists, the drag broker
-   gets the pointer until the drop or cancel.
+2. **An active drag**: the drag broker gets the pointer until the drop
+   or cancel (see [Drag and drop](#drag-and-drop)). Over the menu bar
+   strip a drag has no target.
 3. **Window chrome**: the border, or the 9/UX title bar on windows that
    opted into classic chrome; handled by rio (move, resize, close).
 4. **The topmost window** under the pointer, through its `/dev/mouse`
@@ -364,19 +368,174 @@ pointer:
 5. **The desktop window**, if one is claimed.
 6. **rio's background**: the stock button-3 menu.
 
-In mode off, only stock rio's rules apply.
+In mode off, only stock rio's rules apply, except that a drag still
+gets the pointer while it is in flight.
 
-## drag (reserved)
+## Drag and drop
 
-`/dev/ux/drag/` is reserved for drag and drop (workstream S9). It will
-have `ctl` (start a drag with typed offers, accept or refuse at a
-target, cancel) and `events` (`enter`, `over`, `leave`, `drop`,
-`cancel`), following these rules from the design: payloads are typed
-offers, the target accepts a type, and bytes or files move through a
-brokered endpoint, never as a bare path across namespaces. Until
-`feature drag` appears in `version`, the directory may be absent and
-clients must not rely on it. Its grammar is added to this document as a
-minor version.
+`feature drag`, added in devux 1.1. rio is the **drag broker**: it owns
+the pointer from the moment a drag starts until the drop, tells targets
+what is over them, and carries the payload from the source to the
+target through `drag/data`. A source never hands a target a path: a
+target asks for the bytes of a type, and the source (or rio, holding
+bytes the source gave it) answers. This works between windows in
+different namespaces, and between programs on different machines, since
+both sides only talk to rio.
+
+```text
+/dev/ux/drag/
+    ctl        rw   start, accept, refuse, done, cancel
+    state      r    snapshot of every drag rio still holds
+    events     r    stream: start, enter, over, leave, accept, refuse,
+                    drop, cancel, fetch, done, end
+    data       rw   payload: put and reply by sources, fetch by targets
+```
+
+### A drag's life
+
+1. **Start.** A source program, while a mouse button is down in one of
+   its windows (it is reading `/dev/mouse` and saw the press and some
+   movement), writes `start` to `drag/ctl`. rio gives the drag a number
+   (`id`, never reused while rio runs), posts `start`, and takes over the
+   pointer. The source window is sent a mouse event with no buttons
+   down, as if the button had been released, so its own tracking ends.
+2. **Over targets.** While the button stays down, rio follows the
+   pointer and posts `enter` when it moves into a window, `over` as it
+   moves inside one, and `leave` when it moves out. Windows get no mouse
+   events during a drag. The menu bar strip is never a target.
+3. **Accept or refuse.** A target that wants the drop writes `accept`
+   for its window, naming the type it will fetch and the operation;
+   `refuse` takes that back. A target may change its mind on every
+   `over` (accept over a folder icon, refuse over empty space). rio shows
+   whether the window under the pointer has accepted with the cursor.
+4. **Drop or cancel.** When the button is released over a window that
+   has accepted, rio posts `drop`. Released anywhere else, or after a
+   `cancel`, it posts `cancel`, then `end`.
+5. **Transfer.** After `drop`, the target fetches the type it accepted
+   through `drag/data`, as many times and items as it needs, then
+   writes `done`. rio posts `done` (so a source that offered `move` can
+   delete its original) and `end`, and forgets the drag.
+
+Only one drag follows the pointer at a time; `start` while another is
+in flight fails with `busy`. Drags that have dropped and are still
+transferring don't count.
+
+### drag/ctl
+
+| Command | Who | Meaning |
+|---|---|---|
+| `start types=list [ops=list] [win=winid] [label=text]` | source | Start a drag offering `types` (in the source's order of preference), allowing operations `ops` (`copy`, `move`, `link`; default `copy`). `win` is the source window (default: the fid's own window). `label` is a short description for people. Fails with `bad value: no button down` if no button is down, `busy` if a drag is in flight |
+| `accept id [win=winid] [type=type] [op=op]` | target | Accept the drop on `win` (default: the fid's own window), fetching `type` (default: the first offered) with operation `op` (default: the first offered). Ignored if the drag is no longer over that window |
+| `refuse id [win=winid]` | target | Take an accept back |
+| `done id [op=op] [err=text]` | target | The transfer is over. `op` is what the target actually did (default: the accepted op); `err` says it failed |
+| `cancel [id]` | anyone | Cancel a drag that hasn't dropped (default: the one in flight) |
+
+The drag belongs to the fid that wrote `start` (its **source
+session**), which must stay open until `end`: closing it cancels a drag
+in flight, and ends a dropped one (fetches still waiting fail with
+`gone`). One fid can be a source session and also accept drops for its
+windows. Commands naming an `id` rio doesn't hold fail with `not found`;
+a `type` that wasn't offered, or an `op` that isn't allowed, fails with
+`bad value`.
+
+### drag/state
+
+One line for each drag rio holds, oldest first; empty when there are
+none:
+
+```text
+drag id=4 win=9 app=finder-1 types=file,text ops=move,copy state=over target=12 type=file op=move
+drag id=3 win=7 types=text ops=copy state=dropped target=9 type=text op=copy
+```
+
+`state` is `over` (following the pointer) or `dropped` (transferring).
+`target` is the window under the pointer (`0` for none) or, once
+dropped, the window it dropped on. `type` and `op` are present while
+the target has accepted, and say what it accepted. `app` is absent for windows
+without an app; `label` is written when the source gave one.
+
+### drag/events
+
+A stream like every `events` file. Every reader sees every drag; a
+target picks out the windows it owns by `win`, a source picks out its
+drags by `id`.
+
+| Event | Attributes | When |
+|---|---|---|
+| `start` | `id`, `win`, `app`, `types`, `ops`, `label` | A drag started (`win` is the source window) |
+| `enter` | `id`, `win`, `pt`, `types`, `ops` | The pointer moved into window `win` |
+| `over` | `id`, `win`, `pt` | The pointer moved within `win` |
+| `leave` | `id`, `win` | The pointer left `win` (any accept for it is dropped) |
+| `accept` | `id`, `win`, `type`, `op` | `win` accepted |
+| `refuse` | `id`, `win` | `win` took its accept back |
+| `drop` | `id`, `win`, `pt`, `type`, `op` | Dropped on `win`, which accepted `type` and `op` |
+| `cancel` | `id` | The drag ended without a drop |
+| `fetch` | `id`, `type`, `item`, `req` | A target asked for data rio doesn't hold; the source should reply to `req` (see below). `item` is absent for the type as a whole |
+| `done` | `id`, `win`, `op`, `err` | The target finished (`err` present if it failed) |
+| `end` | `id` | rio forgot the drag. Always the last event for an `id` |
+
+`pt` is window-local: relative to the window's drawable area, the
+window inset by `Borderwidth`, as libdraw's `screen->r.min` (see
+[README.md](README.md#value-forms)). `types` and `ops` are lists.
+
+Example: a file dragged from window 9 onto window 12, which accepts it:
+
+```text
+1 resync
+2 start id=4 win=9 app=finder-1 types=file,text ops=move,copy
+3 enter id=4 win=9 pt=40,60 types=file,text ops=move,copy
+4 leave id=4 win=9
+5 enter id=4 win=12 pt=10,15 types=file,text ops=move,copy
+6 accept id=4 win=12 type=file op=copy
+7 over id=4 win=12 pt=30,40
+8 drop id=4 win=12 pt=30,40 type=file op=copy
+9 fetch id=4 type=file req=1
+10 fetch id=4 type=file item=0 req=2
+11 done id=4 win=12 op=copy
+12 end id=4
+```
+
+### drag/data
+
+`data` moves payload bytes. Each open is used for one transfer, chosen
+by its first write, a line in the usual grammar:
+
+| First write | Who | Then |
+|---|---|---|
+| `put id type [item=n]` | source | Further writes are the bytes of `type` (or of item `n` of it). They are complete when the fid is closed; rio keeps them and answers every later fetch of that type and item itself |
+| `reply req` | source | Further writes are the bytes for fetch request `req`; closing the fid ends them |
+| `fail req text` | source | Fetch request `req` fails with `text` |
+| `fetch id type [item=n]` | target | Reads return the bytes of `type` (or of item `n`), in order, ignoring offsets, then end of file. A read blocks until bytes arrive. If the source fails the request, or its session closes first, the read fails with the source's text or `gone` |
+
+A fetch is answered from bytes the source `put` if it has them (waiting
+for an unfinished `put` of the same type and item to be closed);
+otherwise rio posts a `fetch` event with a fresh `req` number and waits
+for the source to `reply`. A source can put everything when it starts,
+answer every fetch as it comes, or mix the two (put small types, reply
+to requests for large ones). Fetching is allowed once the drag has
+dropped, and before that only by a fid of the source session (to check
+what it put). A fetch for a type that wasn't offered fails with `bad
+value`. rio holds at most 16 MiB of put and replied bytes per drag;
+past that, writes fail with `too large`.
+
+### Types
+
+A type is an ID (the form of a control ID in
+[README.md](README.md#identifiers)). These are defined; others are
+agreed between programs, with an `x.` prefix for experiments:
+
+| Type | Bytes |
+|---|---|
+| `text` | UTF-8 text |
+| `file` | A list of files, one line each: `file name=NAME [size=N] [dir=on] [mode=M]` (`mode` octal, as `ls -l` would show its permission bits). Item `n` (counting from 0) is the contents of the `n`th file; a `dir=on` entry has no contents (fetching it fails with `bad value`) |
+| `image` | An image in Plan 9 `image(6)` format |
+| `ux.icon` | Items dragged out of a libux icon view, one line each: `icon id=ITEM [label=TEXT]`. Lets an app recognise its own icons |
+
+`name` in a `file` entry is a file name, never a path: the target
+decides where the file goes in its own namespace. A program that wants
+to do something smarter when it is both source and target (Finder
+moving a file between two of its own windows) can see that from the
+`start` event's `app` and use what it knows itself.
 
 ## Errors
 
@@ -392,6 +551,11 @@ cases:
 | `item` for an undefined `menuid`, or `sub=` naming an undefined menu at `commit` (or at once, outside a batch) | `not found` |
 | `invoke` of a disabled action | `disabled` |
 | A bad shortcut, flag or rectangle | `bad value` |
+| `start` with no mouse button down | `bad value: no button down` |
+| `start` while another drag follows the pointer | `busy` |
+| A drag `id` or fetch `req` rio doesn't hold | `not found` |
+| A type the source didn't offer, or an op it didn't allow | `bad value` |
+| More than 16 MiB of payload in one drag | `too large` |
 
 ## Examples in rc
 
@@ -425,3 +589,4 @@ echo invoke hello-1 quit >/dev/ux/menubar/ctl
 | Version | Change |
 |---|---|
 | 1.0 | First version |
+| 1.1 | Drag and drop: `/dev/ux/drag/` and `feature drag` |

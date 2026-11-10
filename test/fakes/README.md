@@ -37,6 +37,8 @@ Everything in `/dev/ux` behaves as devux.md says, except:
 - Inside a `begin`/`commit` batch, commands are checked when `commit`
   runs them, not when written.
 - Windows exist only when `fake/ctl` makes them.
+- Drags follow `fake/ctl`'s `press`, `move` and `release` instead of a
+  real pointer, and no window is sent a mouse event when one starts.
 
 `/dev/fake/ctl` plays rio and the person at the screen:
 
@@ -49,6 +51,9 @@ Everything in `/dev/ux` behaves as devux.md says, except:
 | `screen rect=r` | Resize the screen |
 | `click actionid` | Choose the foreground app's item from the bar (`via=click`) |
 | `key shortcut` | Type Command plus `shortcut` (as in `key=`); follows devux.md's [Keyboard shortcuts](../../docs/protocols/devux.md#keyboard-shortcuts) |
+| `press winid [pt=x,y]` | Press a mouse button with the pointer over window `winid` at window-local `pt` |
+| `move winid [pt=x,y]` | Move the pointer over `winid` (`0`: over no window). During a drag this is what posts `enter`, `over` and `leave` |
+| `release` | Let the button go: a drag in flight drops or cancels |
 
 `/dev/fake/log` records every line written to any ctl file, in order,
 and what each `key` did: `key q action quit`, `key z swallowed` (only a
