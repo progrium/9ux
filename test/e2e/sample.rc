@@ -1,0 +1,6 @@
+#!/bin/rc
+# sample.rc: the libux sample app from the tree; it registers with uxd.
+cd /mnt/term/cwd/apps/sample
+O=`{sed -n 's/^O=//p' /$objtype/mkfile}
+resfs=../../resfs/$O.resfs uxsysres=../../assets/gen/system.rsrc \
+	exec ./$O.out >[2]$work/sample.err
