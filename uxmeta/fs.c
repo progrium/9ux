@@ -57,6 +57,7 @@ typedef struct Faux Faux;
 struct Faux {
 	int	rights;
 	char	*buf;	/* snapshot, query result, or ctl reply */
+	long	pos;	/* query and ctl: read position, reset by each write */
 	Reader	*rd;
 };
 
@@ -166,28 +167,34 @@ fsstat(Req *r)
 	respond(r, nil);
 }
 
+/* queue a line; a full queue becomes one "lost" line */
 static void
 pushline(Reader *rd, char *line)
 {
 	int i;
 
-	if(rd->n >= Qmax-1 && !(rd->n == Qmax-1 && strstr(line, " lost\n") != nil)){
+	if(rd->n >= Qmax){
 		for(i = 0; i < rd->n; i++)
 			free(rd->q[i]);
 		rd->n = 0;
 		rd->q[rd->n++] = smprint("%llud lost\n", meta.gen);
+		free(line);
 		return;
 	}
 	rd->q[rd->n++] = line;
 }
 
-/* answer waiting reads with whole lines */
+/*
+ * Answer waiting reads with whole lines when they fit; a read too small
+ * for the next line gets its first part, and the rest stays queued.
+ */
 static void
 deliver(Reader *rd)
 {
 	Req *r;
 	long n, l, max;
 	int i;
+	char *rest;
 
 	while(rd->nwait > 0 && rd->n > 0){
 		r = rd->wait[0];
@@ -197,17 +204,17 @@ deliver(Reader *rd)
 		n = 0;
 		for(i = 0; i < rd->n; i++){
 			l = strlen(rd->q[i]);
-			if(n + l > max){
-				if(i == 0){
-					/* a line longer than the read: cut it */
-					memmove(r->ofcall.data, rd->q[0], max);
-					n = max;
-					i = 1;
-				}
+			if(n + l > max)
 				break;
-			}
 			memmove(r->ofcall.data+n, rd->q[i], l);
 			n += l;
+		}
+		if(i == 0 && max > 0){
+			memmove(r->ofcall.data, rd->q[0], max);
+			n = max;
+			rest = estrdup9p(rd->q[0]+max);
+			free(rd->q[0]);
+			rd->q[0] = rest;
 		}
 		r->ofcall.count = n;
 		while(i-- > 0){
@@ -299,7 +306,13 @@ fsread(Req *r)
 		qunlock(&lk);
 		return;
 	}
-	readstr(r, a->buf ? a->buf : "");
+	if(r->fid->qid.path == Qquery || r->fid->qid.path == Qctl){
+		/* results read from their start after each write, whatever the offset */
+		r->ifcall.offset = a->pos;
+		readstr(r, a->buf ? a->buf : "");
+		a->pos += r->ofcall.count;
+	}else
+		readstr(r, a->buf ? a->buf : "");
 	respond(r, nil);
 }
 
@@ -314,6 +327,7 @@ fswrite(Req *r)
 	memmove(s, r->ifcall.data, r->ifcall.count);
 	s[r->ifcall.count] = 0;
 	err = nil;
+	a->pos = 0;
 	qlock(&lk);
 	switch((int)r->fid->qid.path){
 	case Qctl:

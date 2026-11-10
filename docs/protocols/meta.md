@@ -51,7 +51,7 @@ item=/usr/glenda/doc/notes.txt x=32 y=48
 | `type` | type name | `open` (app or port), `icon`, `desc` | A document type |
 | `ext` | file name suffix with its dot, e.g. `.txt` | `type`, `open`, `icon`, `plumb` | Maps a file name suffix to a type and how to open it |
 | `icon` | icon name | `image` (image(6) file), or `rsrc` with `res` (`TYPE ID`) | Where an icon's pixels come from |
-| `volume` | volume name | `path` (mount point in the session namespace), `addr` (dial string for a remote volume), `icon`, `desktop` (`yes`/`no`), `x`, `y` | A registered volume (design §4: volumes are declared, never inferred) |
+| `volume` | volume name | `path` (mount point in the session namespace), `addr` (dial string of a 9P server to mount there) or `srv` (a `/srv` file to mount there), `spec` (attach name), `icon`, `desktop` (`yes`/`no`), `x`, `y` | A registered volume (design §4: volumes are declared, never inferred). With neither `addr` nor `srv`, `path` is already in the namespace. |
 | `folder` | absolute directory path | `view` (`icons`/`list`), `sort` (`name`/`kind`/`date`/`size`), `x`, `y`, `width`, `height`, `scrollx`, `scrolly`, `icon` | A folder window's layout |
 | `item` | absolute path of a file or directory | `x`, `y` (position in its parent's icon view), `icon` (custom icon), `label` | One entry's layout and per-item choices |
 
@@ -123,7 +123,8 @@ whoever imports them.
   `wstat` within one directory; Plan 9 file servers can't rename over an
   existing file, hence the three steps). At start, if `F` is missing,
   `uxmeta` recovers from `F.new` if it ends with `#uxmeta end`, otherwise
-  from `F.old`.
+  from `F.old`. Files `uxmeta` writes therefore end with that comment
+  line; it is ignored when reading.
 - **Formatting kept.** Comments, blank lines, and records `uxmeta` didn't
   change are written back byte for byte. A changed record is rewritten in
   place in a canonical form: kind and key first, then the other
@@ -170,10 +171,13 @@ client that sees a lower `gen` than before must resync.
 
 ### Queries: `query`
 
-Open `query`, write one query, read the result from offset 0 on the same
-fid. Each write replaces the fid's result. The result starts with a
+Open `query`, write one query, and read the result on the same fid.
+Each write replaces the fid's result, and reads after a write start at
+the beginning of the result whatever their offset, so `rc` can use one
+`<>` file descriptor for both. The result starts with a
 comment line `# gen N` (the generation it reflects) followed by matching
-merged records in ndb form, ordered by kind then key.
+merged records in ndb form, one record per line, ordered by kind then
+key.
 
 ```text
 KIND [KEY] [ATTR=VALUE ...]   records of KIND, optionally with key KEY and
@@ -201,7 +205,8 @@ just `file=PATH`.
 Write one or more commands, one per line. **All commands in one write are
 one transaction**: they all apply, the files are written, and `gen`
 increases once, or none apply and the write fails with the first error.
-After a successful write, reading the same fid returns `gen N`.
+After a successful write, reading the same fid (from the start, as with
+`query`) returns `gen N`.
 
 ```text
 set KIND KEY ATTR=VALUE ...    set attributes on KIND KEY (creating the

@@ -552,15 +552,40 @@ metalayers(Meta *m)
 	return fmtstrflush(&f);
 }
 
-/* hold an exclusive-use lock file for the life of the process */
+/*
+ * Hold the single-writer lock for the life of the process: an
+ * exclusive-use (DMEXCL) file in the user directory, which file servers
+ * that support DMEXCL enforce across machines, and a /srv entry named
+ * after the directory, removed by the kernel when this process exits,
+ * which works on file servers that ignore DMEXCL.  Returns -1 if
+ * another uxmeta holds either.
+ */
 int
 metalock(char *path)
 {
-	int fd;
+	int fd, sfd;
+	uint h;
+	uchar *p;
+	char *srv, err[ERRMAX];
 
 	fd = create(path, ORDWR, DMEXCL|0600);
 	if(fd < 0)
 		return -1;
+	h = 5381;
+	for(p = (uchar*)path; *p; p++)
+		h = h*33 + *p;
+	srv = smprint("/srv/uxmeta.lock.%s.%08ux", getuser(), h);
+	sfd = create(srv, OWRITE|ORCLOSE, 0600);
+	if(sfd < 0){
+		rerrstr(err, sizeof err);
+		if(strstr(err, "exist") != nil){
+			close(fd);
+			werrstr("%s exists", srv);
+			free(srv);
+			return -1;
+		}
+	}
+	free(srv);
 	return fd;
 }
 

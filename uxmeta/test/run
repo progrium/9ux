@@ -1,2 +1,353 @@
 #!/bin/rc
-echo run: todo
+# Interface tests for uxmeta over 9P: rc test/run [path/to/uxmeta]
+#
+# Each test starts a uxmeta on scratch directories under /tmp, mounts
+# it on /n/meta, and checks its files: queries, transactions, attach
+# rights, the change stream, edits made behind its back, concurrent
+# writers, the single-writer lock, and persistence across restarts.
+
+rfork ne
+uxmeta=$1
+if(~ $#uxmeta 0)
+	uxmeta=../$cputype.out
+if(! ~ $uxmeta /*)
+	uxmeta=`{pwd}^/$uxmeta
+t=/tmp/uxmeta-rc.$pid
+srvname=uxmeta-test.$pid
+nfail=0
+npass=0
+home=$t/home
+
+fn pass { npass=`{echo $npass + 1 | hoc} }
+fn fail {
+	echo FAIL: $test: $* >[1=2]
+	nfail=`{echo $nfail + 1 | hoc}
+}
+
+# expect file: compare a file with the text on stdin
+fn expect {
+	cat > $t/want
+	if(cmp -s $1 $t/want)
+		pass
+	if not {
+		fail $1 differs
+		echo '--- got' >[1=2]; cat $1 >[1=2]
+		echo '--- want' >[1=2]; cat $t/want >[1=2]
+	}
+}
+
+# has file pattern...: each pattern (grep -s) is in file
+fn has {
+	f=$1
+	shift
+	for(p in $*){
+		if(grep -s -- $p $f)
+			pass
+		if not
+			fail $f lacks $p
+	}
+}
+
+# q 'query': run a query, result (without the gen line) on stdout
+fn q {
+	{
+		echo $* >[1=3]
+		cat <[0=3] | grep -v '^# gen '
+	} <>[3]/n/meta/query
+}
+
+# c 'command': write to ctl, expect success
+fn c {
+	if(! echo $* >/n/meta/ctl >[2]$t/err){
+		fail ctl $*: `{cat $t/err}
+		status=fail
+	}
+	if not
+		pass
+}
+
+# cerr pattern 'command': write to ctl, expect an error matching pattern
+fn cerr {
+	p=$1
+	shift
+	if(echo $* >/n/meta/ctl >[2]$t/err)
+		fail ctl $* succeeded
+	if not if(grep -s $p $t/err)
+		pass
+	if not
+		fail ctl $*: wrong error `{cat $t/err}
+}
+
+fn gen { cat /n/meta/gen }
+
+fn start {
+	$uxmeta -s $srvname -m /n/meta -d $t/sys -a $t/apps -u $t/user -i 50 $*
+}
+
+fn stop {
+	unmount /n/meta >[2]/dev/null
+	rm -f /srv/$srvname
+	# wait until the old server is gone and its lock is free
+	for(i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20){
+		if(! test -e /srv/$srvname && ! ps | grep -s $uxmeta)
+			i=done
+		if not
+			sleep 0.1
+	}
+}
+
+fn waitgen {	# waitgen N: until gen > N, up to 2s
+	for(i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20){
+		if(test `{gen} -le $1)
+			sleep 0.1
+	}
+}
+
+fn setup {
+	rm -rf $t
+	mkdir -p $t/sys $t/apps/Sketch $t/user $home/lib
+	cat > $t/sys/base.ndb <<'EOF'
+# system defaults
+ext=.txt type=text
+type=text open=edit icon=text
+ext=.png open=page icon=image
+volume=root path=/ icon=disk desktop=yes x=20 y=40
+EOF
+	cat > $t/apps/Sketch/app.ndb <<'EOF'
+app=sketch exec=/apps/Sketch/sketch port=sketch icon=sketch
+ext=.skt open=sketch icon=sketchdoc
+volume=sneaky path=/n/sneaky desktop=yes
+EOF
+}
+
+mkdir -p /n/meta /n/ro /n/lay
+
+test=basics
+setup
+start
+has /n/meta/version '^uxmeta 1 ' resolve changes ifgen
+q volume > $t/out
+expect $t/out <<'EOF'
+volume=root path=/ icon=disk desktop=yes x=20 y=40
+EOF
+q resolve /usr/glenda/a.txt > $t/out
+expect $t/out <<'EOF'
+file=/usr/glenda/a.txt ext=.txt type=text open=edit icon=text port=edit
+EOF
+q resolve /tmp/pic.skt > $t/out
+expect $t/out <<'EOF'
+file=/tmp/pic.skt ext=.skt open=sketch icon=sketchdoc port=sketch exec=/apps/Sketch/sketch
+EOF
+cat /n/meta/layers > $t/out
+has $t/out '^system/base .* ok$' '^apps/Sketch .* ok ''ignored kinds: volume''$' '^user .* missing$' '^workspace .* missing$'
+cat /n/meta/plumbing > $t/out
+has $t/out '^plumb to edit$' '^plumb client /apps/Sketch/sketch$'
+ls /n/meta > $t/out
+has $t/out '^/n/meta/ctl$' '^/n/meta/changes$' '^/n/meta/db$'
+if(echo under folder > /n/meta/query >[2]/dev/null)
+	fail bad query accepted
+if not
+	pass
+
+test=updates
+g=`{gen}
+c 'set folder /usr/glenda/doc view=icons x=100 y=90 width=550 height=400'
+c 'set ext .md open=edit icon=text'
+if(test `{gen} -gt $g) pass
+if not fail gen did not move
+q folder > $t/out
+expect $t/out <<'EOF'
+folder=/usr/glenda/doc view=icons x=100 y=90 width=550 height=400
+EOF
+has $t/user/workspace/default.ndb '^folder=/usr/glenda/doc '
+has $t/user/meta.ndb '^ext=.md open=edit icon=text$'
+# ctl reads back the generation of the fid's last write
+{
+	echo 'set item /usr/glenda/doc/a.txt x=4 y=5' >[1=3]
+	cat <[0=3] > $t/out
+} <>[3]/n/meta/ctl
+echo gen `{gen} | expect $t/out
+# several lines are one transaction
+g=`{gen}
+echo 'set ext .c open=acme
+set ext .h open=acme' > /n/meta/ctl
+if(test `{gen} -eq `{echo $g + 1 | hoc}) pass
+if not fail two-line write moved gen by more than one
+cerr 'unknown command' 'set ext .y open=x
+frobnicate'
+q ext .y > $t/out
+expect $t/out </dev/null
+cerr 'generation mismatch' 'ifgen=1 set ext .z open=x'
+c ifgen^'='^`{gen}^' set ext .z open=x'
+cerr 'read-only' 'layer=system/base set ext .q open=x'
+c 'rename /usr/glenda/doc /usr/glenda/papers'
+q under item /usr/glenda > $t/out
+expect $t/out <<'EOF'
+item=/usr/glenda/papers/a.txt x=4 y=5
+EOF
+
+test=rights
+mount -c /srv/$srvname /n/ro ro
+mount -c /srv/$srvname /n/lay layout
+if(echo 'set folder /a x=1' > /n/ro/ctl >[2]/dev/null) fail ro could write
+if not pass
+if(echo 'set folder /a x=1' > /n/lay/ctl) pass
+if not fail layout could not move a folder
+if(echo 'set volume root x=7 y=8' > /n/lay/ctl) pass
+if not fail layout could not move a volume
+if(echo 'set volume root path=/n/x' > /n/lay/ctl >[2]/dev/null) fail layout changed a path
+if not pass
+if(echo 'set ext .txt open=evil' > /n/lay/ctl >[2]/dev/null) fail layout changed an association
+if not pass
+q volume root > $t/out
+expect $t/out <<'EOF'
+volume=root path=/ icon=disk desktop=yes x=7 y=8
+EOF
+unmount /n/ro
+unmount /n/lay
+
+test=changes
+g=`{gen}
+read -n 4 /n/meta/changes > $t/ch &
+rd=$apid
+sleep 0.2
+echo 'set ext .log open=edit
+set item /x x=1' > /n/meta/ctl
+c 'set ext .log icon=text'
+wait $rd
+g1=`{echo $g + 1 | hoc}
+g2=`{echo $g + 2 | hoc}
+expect $t/ch <<EOF
+$g sync
+$g1 set ext .log
+$g1 set item /x
+$g2 set ext .log
+EOF
+# a reader that is killed while blocked doesn't wedge the server
+cat /n/meta/changes > /dev/null &
+rd=$apid
+sleep 0.1
+echo kill > /proc/$rd/note
+c 'set ext .after open=edit'
+q ext .after > $t/out
+has $t/out '^ext=.after open=edit$'
+
+test=external
+g=`{gen}
+read -n 2 /n/meta/changes > $t/ch &
+rd=$apid
+sleep 0.1
+# edit the user layer by hand, behind uxmeta's back
+echo 'volume=home path=/usr/glenda desktop=yes # added by hand' >> $t/user/meta.ndb
+waitgen $g
+wait $rd
+has $t/ch ' sync$' ' set volume home$'
+q volume home > $t/out
+expect $t/out <<'EOF'
+volume=home path=/usr/glenda desktop=yes
+EOF
+# a write through uxmeta keeps the hand edit
+c 'set ext .txt icon=mytext'
+has $t/user/meta.ndb '^volume=home path=/usr/glenda desktop=yes # added by hand$' '^ext=.txt icon=mytext$'
+# an edit followed at once by a write: the write sees it
+echo 'ext=.quick open=edit' >> $t/user/meta.ndb
+c 'set ext .quick2 open=edit'
+has $t/user/meta.ndb '^ext=.quick open=edit$' '^ext=.quick2 open=edit$'
+# a new app is noticed, and so is its removal
+mkdir -p $t/apps/Paint
+echo 'app=paint exec=/apps/Paint/paint' > $t/apps/Paint/app.ndb
+g=`{gen}
+waitgen $g
+q app paint > $t/out
+has $t/out '^app=paint '
+rm -rf $t/apps/Paint
+g=`{gen}
+waitgen $g
+q app paint > $t/out
+expect $t/out </dev/null
+# a broken edit keeps the last good contents in effect
+# (a file that can't be read at all: make it a directory)
+
+test=concurrent
+# eight writers, twenty updates each, all at once
+for(w in 1 2 3 4 5 6 7 8) @{
+	for(i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20)
+		echo set item /c/w$w/f$i x^'='^$i y^'='^$w > /n/meta/ctl
+} &
+wait
+q under item /c > $t/out
+n=`{wc -l < $t/out}
+if(~ $n 160) pass
+if not fail $n of 160 items
+n=`{grep -c '^item=/c/' $t/user/workspace/default.ndb}
+if(~ $n 160) pass
+if not fail $n of 160 items on disk
+# read-modify-write with ifgen: no increment is lost
+c 'set ext .counter n=0'
+for(w in 1 2 3 4) @{
+	for(i in 1 2 3 4 5 6 7 8 9 10){
+		done=no
+		while(~ $done no){
+			{
+				echo ext .counter >[1=3]
+				r=`{cat <[0=3]}
+			} <>[3]/n/meta/query
+			# r is: # gen G ext=.counter n=N
+			gg=$r(3)
+			nn=`{echo $r(5) | sed 's/n=//'}
+			nn=`{echo $nn + 1 | hoc}
+			if(echo ifgen^'='^$gg set ext .counter n^'='^$nn > /n/meta/ctl >[2]/dev/null)
+				done=yes
+		}
+	}
+} &
+wait
+q ext .counter > $t/out
+expect $t/out <<'EOF'
+ext=.counter n=40
+EOF
+
+test=lock
+if($uxmeta -s $srvname.2 -n -d $t/sys -a $t/apps -u $t/user >[2]$t/err)
+	fail second uxmeta started
+if not
+	has $t/err 'another uxmeta'
+
+test=restart
+q '*' > $t/before
+g=`{gen}
+stop
+start
+q '*' > $t/after
+if(cmp -s $t/before $t/after) pass
+if not fail merged view differs after restart
+if(test `{gen} -ge $g) pass
+if not fail gen went back from $g to `{gen}
+
+test=recover
+c 'set ext .r open=one'
+stop
+# a crash between the two renames: meta.ndb is gone, meta.ndb.new is whole
+mv $t/user/meta.ndb $t/user/meta.ndb.new
+start
+q ext .r > $t/out
+expect $t/out <<'EOF'
+ext=.r open=one
+EOF
+stop
+# a crash while writing meta.ndb.new: fall back to meta.ndb.old
+cp $t/user/meta.ndb $t/user/meta.ndb.old
+mv $t/user/meta.ndb $t/user/meta.ndb.new
+echo 'ext=.partial' > $t/user/meta.ndb.new
+start
+q ext .r > $t/out
+expect $t/out <<'EOF'
+ext=.r open=one
+EOF
+
+stop
+rm -rf $t
+echo run: $npass passed, $nfail failed
+if(! ~ $nfail 0)
+	exit fail
+exit ''
