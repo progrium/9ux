@@ -298,6 +298,15 @@ setcurrent(Uxwin *w)
 			_winstate(ux.win[i], ux.win[i]->state & ~Wcurrent);
 	ux.front = w;
 	_winstate(w, w->state | Wcurrent);
+	if(w->fn != nil){
+		Uxev e;
+
+		memset(&e, 0, sizeof e);
+		e.type = UXfront;
+		e.via = UXui;
+		e.win = w;
+		_notify(w->fn, w->arg, &e);
+	}
 }
 
 void
@@ -445,6 +454,15 @@ _winresize(Uxwin *w)
 	if(!eqrect(old, w->r)){
 		snprint(buf, sizeof buf, "%d,%d,%d,%d", w->r.min.x, w->r.min.y, w->r.max.x, w->r.max.y);
 		_event(w, "rect", "rect", buf, nil);
+		if(w->fn != nil){
+			Uxev e;
+
+			memset(&e, 0, sizeof e);
+			e.type = UXresize;
+			e.via = UXui;
+			e.win = w;
+			_notify(w->fn, w->arg, &e);
+		}
 	}
 	w->dirty = 1;
 }

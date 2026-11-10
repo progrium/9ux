@@ -37,6 +37,8 @@ enum {
 	UXcancel,	/* dialog cancel (Esc, or ctl cancel); chooser cancelled */
 	UXchoose,	/* file chooser chose Uxev.text */
 	UXquit,		/* app quit asked for */
+	UXresize,	/* window moved or resized (Uxev.win); see uxwinrect */
+	UXfront,	/* window became the app's current window */
 };
 
 /* how an event came about; Uxev.via */
@@ -82,7 +84,10 @@ Uxwin*	uxwindow(char *kind, char *title, Rectangle r);
 void	uxwinhandler(Uxwin*, Uxfn*, void*);
 void	uxwinsettitle(Uxwin*, char*);
 void	uxwinclose(Uxwin*);
+void	uxwinfront(Uxwin*);	/* raise, show and focus it */
 int	uxwinid(Uxwin*);
+Rectangle	uxwinrect(Uxwin*);	/* the whole window, screen coordinates */
+Point	uxwinsize(Uxwin*);	/* the drawable area: controls lie in 0,0 to this */
 void	uxdefault(Uxwin*, Uxctl*);	/* the default button */
 Uxwin*	uxdialog(char *title, Rectangle r);	/* a modal dialog window */
 
@@ -99,6 +104,7 @@ Uxctl*	uxfilechooser(Uxwin*, char *id, char *dir, Rectangle r);
 void	uxdelete(Uxctl*);
 void	uxhandler(Uxctl*, Uxfn*, void*);
 void	uxsetparent(Uxctl*, Uxctl*);
+void	uxsetrect(Uxctl*, Rectangle);	/* window-local */
 
 char*	uxctlid(Uxctl*);	/* not a copy; stable for the control's life */
 char*	uxgetvalue(Uxctl*);	/* malloc'd: text, label value, on/off/mixed, chooser name */
@@ -116,6 +122,9 @@ int	uxgetsel(Uxctl*, int **sel);	/* malloc'd array */
 void	uxiconadd(Uxctl*, char *itemid, char *label, char *icon, Point pt);
 void	uxicondel(Uxctl*, char *itemid);
 void	uxiconclear(Uxctl*);
+void	uxiconset(Uxctl*, char *itemid, char *label, char *icon, Point pt);	/* nil label or icon: unchanged */
+int	uxicongetsel(Uxctl*, char ***ids);	/* malloc'd array of malloc'd IDs */
+void	uxiconselect(Uxctl*, char **ids, int n);
 
 /* scroll views */
 void	uxsetextent(Uxctl*, Rectangle);

@@ -259,10 +259,45 @@ uxwinclose(Uxwin *w)
 	kick();
 }
 
+void
+uxwinfront(Uxwin *w)
+{
+	qlock(&uxlk);
+	if(!w->dead)
+		_front(w);
+	qunlock(&uxlk);
+	kick();
+}
+
 int
 uxwinid(Uxwin *w)
 {
 	return w->winid;
+}
+
+Rectangle
+uxwinrect(Uxwin *w)
+{
+	Rectangle r;
+
+	qlock(&uxlk);
+	r = w->r;
+	qunlock(&uxlk);
+	return r;
+}
+
+Point
+uxwinsize(Uxwin *w)
+{
+	Point p;
+
+	qlock(&uxlk);
+	if(w->img != nil)
+		p = Pt(Dx(w->img->r), Dy(w->img->r));
+	else
+		p = Pt(Dx(w->r), Dy(w->r));
+	qunlock(&uxlk);
+	return p;
 }
 
 void
@@ -433,6 +468,22 @@ uxsetparent(Uxctl *c, Uxctl *p)
 	qlock(&uxlk);
 	c->parent = p;
 	c->w->dirty = 1;
+	qunlock(&uxlk);
+	kick();
+}
+
+void
+uxsetrect(Uxctl *c, Rectangle r)
+{
+	char buf[64];
+
+	qlock(&uxlk);
+	if(!eqrect(r, c->r)){
+		c->r = r;
+		snprint(buf, sizeof buf, "%d,%d,%d,%d", r.min.x, r.min.y, r.max.x, r.max.y);
+		_event(c, "rect", "rect", buf, nil);
+		c->w->dirty = 1;
+	}
 	qunlock(&uxlk);
 	kick();
 }
@@ -644,6 +695,66 @@ uxiconclear(Uxctl *c)
 	c->nicons = 0;
 	c->w->dirty = 1;
 	_event(c, "items", nil);
+	qunlock(&uxlk);
+	kick();
+}
+
+void
+uxiconset(Uxctl *c, char *id, char *label, char *icon, Point pt)
+{
+	Icon *ic;
+	int i;
+
+	qlock(&uxlk);
+	for(i = 0; i < c->nicons; i++){
+		ic = &c->icons[i];
+		if(strcmp(ic->id, id) != 0)
+			continue;
+		if(label != nil){
+			free(ic->label);
+			ic->label = estrdup(label);
+		}
+		if(icon != nil){
+			free(ic->icon);
+			ic->icon = estrdup(icon);
+		}
+		ic->pt = pt;
+		c->w->dirty = 1;
+		_event(c, "items", nil);
+		break;
+	}
+	qunlock(&uxlk);
+	kick();
+}
+
+int
+uxicongetsel(Uxctl *c, char ***ids)
+{
+	int i, n;
+
+	qlock(&uxlk);
+	*ids = emalloc((c->nicons+1)*sizeof(char*));
+	n = 0;
+	for(i = 0; i < c->nicons; i++)
+		if(c->icons[i].sel)
+			(*ids)[n++] = estrdup(c->icons[i].id);
+	qunlock(&uxlk);
+	return n;
+}
+
+void
+uxiconselect(Uxctl *c, char **ids, int n)
+{
+	int i, j;
+
+	qlock(&uxlk);
+	for(i = 0; i < c->nicons; i++){
+		c->icons[i].sel = 0;
+		for(j = 0; j < n; j++)
+			if(strcmp(c->icons[i].id, ids[j]) == 0)
+				c->icons[i].sel = 1;
+	}
+	_iconsel(c, UXui);
 	qunlock(&uxlk);
 	kick();
 }
