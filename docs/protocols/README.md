@@ -129,8 +129,8 @@ describe windows themselves are in screen coordinates, as in
 - A successful write returns the full count written.
 - Reading a ctl file is allowed and returns help for that file: one
   line per verb it accepts, `verb class`, where `class` is the right
-  needed to use it (see [ux.md](ux.md#rights)) or `-` where rights don't
-  apply. This is how uxd learns which rights a control's verbs need, and
+  needed to use it (see [ux.md](ux.md#rights)) or `-` on servers with
+  no rights at all, such as rio's (uxd refuses `-` verbs in app trees). This is how uxd learns which rights a control's verbs need, and
   it lets a person discover commands with `cat`.
 
 ## Errors

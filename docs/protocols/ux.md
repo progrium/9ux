@@ -332,14 +332,18 @@ can do the same.
 
    `id=` asks for a particular app ID (used when re-registering after
    uxd restarts); uxd grants it if it is free and its name part matches
-   `name`. Otherwise uxd assigns `name-N`.
+   `name`. Otherwise uxd assigns `name-N`, so an app that restarts
+   without `id=` gets a new `N`. `srv=` must name an entry directly in
+   `/srv` whose name starts with `ux.` (`/srv/ux.*`, no further `/`);
+   anything else fails with `bad value`.
 3. uxd opens the `/srv` entry, removes it, attaches, and reads the app's
    `version`. A different major version fails the write with
    `version mismatch`. On success the write returns, and a read of the
    same fid returns the app ID and a newline.
 4. The app keeps the fid open. Further commands on it: `window winid`
    and `unwindow winid` as windows open and close, and `title text`.
-   uxd keeps the `winid` map from these.
+   uxd keeps the `winid` map from these. Before a successful `register`
+   on the fid, these fail with `bad value: not registered`.
 5. A second read of the fid blocks until the registration ends, then
    returns end of file (or an error, if uxd went away). The registration
    ends when the app closes the fid, when the app's 9P connection hangs
@@ -347,7 +351,8 @@ can do the same.
 
 **When uxd restarts**, the app's blocked read fails. libux then waits
 for `/srv/uxd.$user` to come back (retrying with backoff from 250 ms up
-to 1 s), mounts it again, and registers again with `id=` set to its old
+to 1 s), mounts that public service on `/mnt/ux` again (registering is
+open to every attach, so the app needs no more than that), and registers again with `id=` set to its old
 ID. Nothing in the app is lost, and its app ID normally doesn't change.
 
 **Without uxd**, an app runs normally and is simply not visible in
@@ -410,13 +415,22 @@ reader of `/mnt/ux` stalls only itself.
 
 uxd decides what a `ctl` write needs from the control's own `ctl` help
 (`verb right` lines), which it reads once per control and caches; an
-unlisted verb is refused. Refusals return `permission denied`. A write
-is checked line by line, and nothing is forwarded if any line is refused.
+unlisted verb is refused. In an app tree every verb names a right; a
+verb whose class is `-` is treated like an unlisted one. Refusals
+return `permission denied`. A write is checked line by line, and
+nothing is forwarded if any line is refused.
+
+On an attach with the `admin` right (the session service), uxd skips
+the verb check and forwards the write, so an unknown verb gets the
+app's own `unknown command`. Create, remove and wstat are refused
+everywhere under `/mnt/ux` with `permission denied`: the tree's shape
+belongs to the apps.
 
 **Sensitive and secret controls.** A control with `sensitive` in its
 `state` has its `value`, `items` and `selection` readable only with the
 `sensitive` right; without it, opening them fails with `permission
-denied`, and its events reach the client with `value` removed and
+denied`, and its events reach the client with every attribute that
+carries content removed (`value`, `sel`, `item`, `items`) and
 `redacted=on` added. A control with `secret` (a password field) is
 stronger: libux never serves its value or its keystrokes to anyone,
 uxd included, so `value` always reads empty and its `value` events never
@@ -443,6 +457,11 @@ aname:
 ```rc
 mount /srv/uxd.$user /n/ux 0f3a9c2e1b7d4c55e1a2b3c4d5e6f708
 ```
+
+`rights=` may name any right except `admin`, which comes only from the
+session service; a grant asking for it fails with `bad value`. A
+client's `rights` file lists its rights only, not the grant's `app=`
+scope.
 
 `grants/list` lists `grant token=... rights=... app=... note=...` per
 line. `grants/ctl` accepts `revoke token`; attaches using a revoked

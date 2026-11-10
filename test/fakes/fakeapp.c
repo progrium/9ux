@@ -144,6 +144,7 @@ static File	*wdir, *cdir;
 static char	*wtopic;
 static Ctl	*ctls;
 static char	*user;
+static int	mainpid;	/* the registering proc, with -r */
 
 static Node*
 node(int q, Ctl *c)
@@ -387,6 +388,9 @@ quit(void)
 {
 	subgone("app");
 	subgone("menu/file");
+	/* with -r, the registering proc is in another note group */
+	if(mainpid != 0 && mainpid != getpid())
+		postnote(PNPROC, mainpid, "kill");
 	postnote(PNGROUP, getpid(), "kill");
 	exits(nil);
 }
@@ -1113,10 +1117,11 @@ registerloop(void)
 		if(delay < 1000)
 			delay *= 2;
 		/* uxd may be back: remount it */
-		if(access(smprint("/srv/uxd.%s.admin", user), AEXIST) == 0){
+		if(access(smprint("/srv/uxd.%s", user), AEXIST) == 0){
 			int fd;
 
-			if((fd = open(smprint("/srv/uxd.%s.admin", user), ORDWR)) >= 0){
+			/* the public service: registering is open to every attach */
+			if((fd = open(smprint("/srv/uxd.%s", user), ORDWR)) >= 0){
 				if(mount(fd, -1, "/mnt/ux", MREPL, "") < 0)
 					close(fd);
 			}
@@ -1217,7 +1222,9 @@ main(int argc, char **argv)
 	fs.destroyfid = fsdestroyfid;
 
 	if(reg){
-		rfork(RFNOTEG);
+		/* own namespace: remounting /mnt/ux must not touch the caller's */
+		rfork(RFNOTEG|RFNAMEG);
+		mainpid = getpid();
 		registerloop();
 	}
 	postmountsrv(&fs, srvname, mtpt, MREPL);
