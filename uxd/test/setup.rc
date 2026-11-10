@@ -9,7 +9,23 @@ cp $bin $out/uxd
 grants=$out/grants
 mkdir -p /mnt/ux >[2]/dev/null
 
+# A uxd that an earlier test left behind (one that failed or hung
+# before its cleanup) still holds /srv/uxd.$user, and a new one can't
+# post there; so stop it and clear its entries first.
+fn clearuxd {
+	kill uxd | rc >[2]/dev/null
+	n=0
+	while(test -e /srv/uxd.$user -o -e /srv/uxd.$user.admin && ! ~ $n 30){
+		sleep 0.1
+		n=`{echo $n+1 | hoc}
+	}
+	rm -f /srv/uxd.$user /srv/uxd.$user.admin >[2]/dev/null
+	unmount /mnt/ux >[2]/dev/null
+	status=()
+}
+
 fn startuxd {
+	clearuxd
 	$out/uxd -m /mnt/ux -g $grants $uxdflags
 }
 
@@ -53,5 +69,5 @@ fn killapps {
 
 fn cleanup {
 	killapps
-	kill uxd | rc >[2]/dev/null
+	clearuxd
 }
