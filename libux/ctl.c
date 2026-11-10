@@ -488,14 +488,20 @@ listmouse(Uxctl *c, Mouse *m)
 {
 	Rectangle r;
 	uchar *sel;
-	int n;
+	int n, y0;
 
 	if(!(m->buttons & 1))
 		return 0;
 	r = _abs(c);
-	if(c->t == ctltypes[8])
-		r.min.y += UXlistrowheight + 1;
-	n = c->top + (m->xy.y - r.min.y - 1) / lineheight(c);
+	y0 = r.min.y + _listhead(c);
+	if(c->ncols == 0 || c->parent == nil || strcmp(c->parent->t->name, "scroll-view") != 0)
+		y0++;	/* the frame */
+	/* the header stays at the top of what shows */
+	if(_listhead(c) > 0 && m->xy.y < _vis(c).min.y + _listhead(c))
+		return 0;
+	if(m->xy.y < y0)
+		return 0;
+	n = c->top + (m->xy.y - y0) / lineheight(c);
 	if(n < 0 || n >= c->nitems)
 		return 0;
 	if(c->lastitem == n && m->msec - c->lastclick < 400){
@@ -854,7 +860,7 @@ iconmouse(Uxctl *c, Mouse *m)
 		c->drag = Dmove;
 		/* fall through */
 	case Dmove:
-		if(!ptinrect(m->xy, _abs(c)) && _icondragout != nil && _icondragout(c, m)){
+		if(!ptinrect(m->xy, _vis(c)) && _icondragout != nil && _icondragout(c, m)){
 			movesel(c, subpt(c->dragp, c->dragl));
 			c->drag = Dnone;
 			return 0;
@@ -888,12 +894,42 @@ iconmouse(Uxctl *c, Mouse *m)
 
 /* scroll view */
 
+static int
+active(Uxwin *w)
+{
+	return ux.front == nil || ux.front == w;
+}
+
+/* p kept within the extent, so the view never shows past its end */
+Point
+_clampedorigin(Uxctl *c, Point p)
+{
+	Rectangle port, vb, hb, gb;
+	int m;
+
+	_scrollparts(c, c->r, &port, &vb, &hb, &gb);
+	m = c->extent.max.x - Dx(port);
+	if(p.x > m)
+		p.x = m;
+	if(p.x < c->extent.min.x)
+		p.x = c->extent.min.x;
+	m = c->extent.max.y - Dy(port);
+	if(p.y > m)
+		p.y = m;
+	if(p.y < c->extent.min.y)
+		p.y = c->extent.min.y;
+	return p;
+}
+
 void
 _setorigin(Uxctl *c, Point p, int via)
 {
 	char buf[32];
 	Uxev e;
 
+	p = _clampedorigin(c, p);
+	if(eqpt(p, c->origin))
+		return;
 	c->origin = p;
 	dirty(c);
 	snprint(buf, sizeof buf, "%d,%d", p.x, p.y);
@@ -907,6 +943,12 @@ _setorigin(Uxctl *c, Point p, int via)
 	_notify(c->fn, c->arg, &e);
 }
 
+void
+_clamporigin(Uxctl *c, int via)
+{
+	_setorigin(c, c->origin, via);
+}
+
 static char*
 vscroll(Uxctl *c, int, char **argv)
 {
@@ -918,16 +960,168 @@ vscroll(Uxctl *c, int, char **argv)
 	return nil;
 }
 
+/* the part of a scroll view under the pointer (Uxctl.sbpart) */
+enum {
+	Sbnone,
+	Sbup, Sbdown, Sbpageup, Sbpagedown, Sbvthumb,
+	Sbleft, Sbright, Sbpageleft, Sbpageright, Sbhthumb,
+	Sbgrow,
+};
+
+/*
+ * Where the thumb is in a bar of length len (its edges included): its
+ * offset from the bar's start and its length; 0 length when there's
+ * nothing to scroll. off is how far the origin is from the extent's
+ * start, see is how much shows and all the extent's size.
+ */
+int
+_thumbat(int len, int off, int see, int all, int *tl)
+{
+	int track, sb;
+
+	sb = UXscrollwidth;
+	track = len - 2*sb + 2;
+	*tl = 0;
+	if(all <= see || track < UXscrollthumbmin)
+		return 0;
+	*tl = (vlong)track*see/all;
+	if(*tl < UXscrollthumbmin)
+		*tl = UXscrollthumbmin;
+	if(*tl > track)
+		*tl = track;
+	return sb-1 + (vlong)(track - *tl)*off/(all - see);
+}
+
+static int
+sbpart(Uxctl *c, Point p, Rectangle r)
+{
+	Rectangle port, vb, hb, gb;
+	int t, tl, sb;
+
+	sb = UXscrollwidth;
+	_scrollparts(c, r, &port, &vb, &hb, &gb);
+	if(ptinrect(p, gb))
+		return Sbgrow;
+	if(ptinrect(p, vb)){
+		if(p.y < vb.min.y+sb)
+			return Sbup;
+		if(p.y >= vb.max.y-sb)
+			return Sbdown;
+		t = _thumbat(Dy(vb), c->origin.y - c->extent.min.y, Dy(port), Dy(c->extent), &tl);
+		if(tl == 0)
+			return Sbnone;
+		if(p.y < vb.min.y+t)
+			return Sbpageup;
+		if(p.y >= vb.min.y+t+tl)
+			return Sbpagedown;
+		return Sbvthumb;
+	}
+	if(ptinrect(p, hb)){
+		if(p.x < hb.min.x+sb)
+			return Sbleft;
+		if(p.x >= hb.max.x-sb)
+			return Sbright;
+		t = _thumbat(Dx(hb), c->origin.x - c->extent.min.x, Dx(port), Dx(c->extent), &tl);
+		if(tl == 0)
+			return Sbnone;
+		if(p.x < hb.min.x+t)
+			return Sbpageleft;
+		if(p.x >= hb.min.x+t+tl)
+			return Sbpageright;
+		return Sbhthumb;
+	}
+	return Sbnone;
+}
+
+/* the window's new rectangle for a grow box dragged by d */
+static void
+grow(Uxctl *c, Point d)
+{
+	Rectangle r;
+
+	if(c->w->wctlfd < 0 || eqpt(d, ZP))
+		return;
+	r = c->w->r;
+	r.max = addpt(r.max, d);
+	if(Dx(r) < UXwindowminwidth)
+		r.max.x = r.min.x + UXwindowminwidth;
+	if(Dy(r) < UXwindowminheight)
+		r.max.y = r.min.y + UXwindowminheight;
+	fprint(c->w->wctlfd, "resize -r %d %d %d %d", r.min.x, r.min.y, r.max.x, r.max.y);
+}
+
+/*
+ * Wheel: three lines. Button 1: an arrow scrolls a line, the track a
+ * page, the thumb follows the pointer, and the grow box resizes the
+ * window when released.
+ */
 static int
 scrollmouse(Uxctl *c, Mouse *m)
 {
-	int d;
+	Rectangle r, port, vb, hb, gb;
+	Point o;
+	int d, line, len, see, all, tl;
 
-	d = lineheight(c)*3;
-	if(m->buttons & 8)
-		_setorigin(c, Pt(c->origin.x, c->origin.y - d < c->extent.min.y ? c->extent.min.y : c->origin.y - d), UXui);
-	else if(m->buttons & 16)
-		_setorigin(c, Pt(c->origin.x, c->origin.y + d), UXui);
+	line = lineheight(c);
+	d = line*3;
+	r = _abs(c);
+	_scrollparts(c, r, &port, &vb, &hb, &gb);
+	o = c->origin;
+	if(c->sbpart == Sbnone){
+		if(m->buttons & 8){
+			_setorigin(c, Pt(o.x, o.y - d), UXui);
+			return 0;
+		}
+		if(m->buttons & 16){
+			_setorigin(c, Pt(o.x, o.y + d), UXui);
+			return 0;
+		}
+		if(!(m->buttons & 1) || !active(c->w))
+			return 0;
+		c->sbpart = sbpart(c, m->xy, r);
+		c->dragp = m->xy;
+		c->sborg = o;
+		switch(c->sbpart){
+		case Sbnone:
+			return 0;
+		case Sbup:	o.y -= line; break;
+		case Sbdown:	o.y += line; break;
+		case Sbpageup:	o.y -= Dy(port) - line; break;
+		case Sbpagedown:	o.y += Dy(port) - line; break;
+		case Sbleft:	o.x -= line; break;
+		case Sbright:	o.x += line; break;
+		case Sbpageleft:	o.x -= Dx(port) - line; break;
+		case Sbpageright:	o.x += Dx(port) - line; break;
+		}
+		_setorigin(c, o, UXui);
+		return 1;
+	}
+	if(m->buttons & 1){
+		switch(c->sbpart){
+		case Sbvthumb:
+			len = Dy(vb);
+			see = Dy(port);
+			all = Dy(c->extent);
+			_thumbat(len, 0, see, all, &tl);
+			if(len - 2*UXscrollwidth + 2 - tl > 0)
+				o.y = c->sborg.y + (vlong)(m->xy.y - c->dragp.y)*(all - see)/(len - 2*UXscrollwidth + 2 - tl);
+			_setorigin(c, o, UXui);
+			break;
+		case Sbhthumb:
+			len = Dx(hb);
+			see = Dx(port);
+			all = Dx(c->extent);
+			_thumbat(len, 0, see, all, &tl);
+			if(len - 2*UXscrollwidth + 2 - tl > 0)
+				o.x = c->sborg.x + (vlong)(m->xy.x - c->dragp.x)*(all - see)/(len - 2*UXscrollwidth + 2 - tl);
+			_setorigin(c, o, UXui);
+			break;
+		}
+		return 1;
+	}
+	if(c->sbpart == Sbgrow)
+		grow(c, subpt(m->xy, c->dragp));
+	c->sbpart = Sbnone;
 	return 0;
 }
 

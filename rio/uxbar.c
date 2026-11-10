@@ -64,6 +64,12 @@ struct Drop
 static	Drop		drops[Maxlevel];
 static	int		ndrops;
 
+/* the clock at the right of the bar: on, off, or frozen at some text */
+static	int		clockmode = 1;
+static	char		*clockfixed;
+static	Channel	*clocktick;
+static	Rectangle	clockr;
+
 Uxmenu*	uxbarmenus(Uxapp*, int);
 Uxmenu*	uxmenufor(Uxapp*, char*, int);
 Uxmenu*	uxdupmenu(Uxmenu*);
@@ -78,10 +84,107 @@ itemh(void)
 	return UXmenuitemheight;
 }
 
+/* once a minute, just after the minute turns */
+static void
+clockproc(void*)
+{
+	threadsetname("uxclock");
+	for(;;){
+		sleep((60 - time(0)%60)*1000 + 50);
+		sendul(clocktick, 1);
+	}
+}
+
+static void
+clockthread(void*)
+{
+	threadsetname("uxclockdraw");
+	for(;;){
+		recvul(clocktick);
+		uxbardraw();
+	}
+}
+
+static char*
+clocktext(char *buf, int n)
+{
+	static char *days[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+	Tm *tm;
+
+	if(clockmode == 0)
+		return nil;
+	if(clockfixed != nil)
+		return clockfixed;
+	tm = localtime(time(0));
+	snprint(buf, n, "%s %02d:%02d", days[tm->wday%7], tm->hour, tm->min);
+	return buf;
+}
+
+/* the clock, right-aligned in the system font (assets/README.md, The menu bar) */
+static void
+drawclock(void)
+{
+	char buf[32], *s;
+	Point p;
+	int w;
+
+	clockr = ZR;
+	s = clocktext(buf, sizeof buf);
+	if(s == nil || s[0] == 0)
+		return;
+	w = stringwidth(F, s);
+	p = Pt(barr.max.x-UXmenubarclockpad-w, barr.min.y+(Dy(barr)-1-F->height)/2);
+	clockr = Rect(p.x, barr.min.y, barr.max.x, barr.max.y-1);
+	string(bar, p, uxcolor(UXink), ZP, F, s);
+}
+
+/* clock on, clock off, or clock at text... (frozen, for screenshots and tests) */
+char*
+uxclockctl(char **f, int nf)
+{
+	char *s;
+	int i;
+
+	if(nf == 2 && strcmp(f[1], "on") == 0){
+		clockmode = 1;
+		free(clockfixed);
+		clockfixed = nil;
+	}else if(nf == 2 && strcmp(f[1], "off") == 0)
+		clockmode = 0;
+	else if(nf >= 3 && strcmp(f[1], "at") == 0){
+		clockmode = 1;
+		free(clockfixed);
+		clockfixed = estrdup(f[2]);
+		for(i = 3; i < nf; i++){
+			s = clockfixed;
+			clockfixed = smprint("%s %s", s, f[i]);
+			free(s);
+		}
+	}else
+		return "bad syntax";
+	uxbardraw();
+	return nil;
+}
+
+char*
+uxclockstate(void)
+{
+	if(clockmode == 0)
+		return "off";
+	if(clockfixed != nil)
+		return clockfixed;
+	return "on";
+}
+
 void
 uxbarinit(void)
 {
 	uxstyleinit();
+	if(clocktick == nil){
+		clocktick = chancreate(sizeof(ulong), 0);
+		proccreate(clockproc, nil, STACK);
+		threadcreate(clockthread, nil, STACK);
+	}
 	uxbarh = UXmenubarheight;
 	barr = screen->r;
 	barr.max.y = barr.min.y+uxbarh;
@@ -287,6 +390,7 @@ uxbardraw(void)
 	layout();
 	draw(bar, barr, uxcolor(UXpaper), nil, ZP);
 	draw(bar, Rect(barr.min.x, barr.max.y-1, barr.max.x, barr.max.y), uxcolor(UXink), nil, ZP);
+	drawclock();
 	for(k=0; k<ntitles; k++)
 		drawtitle(k, k == openedtitle);
 	flushimage(display, 1);

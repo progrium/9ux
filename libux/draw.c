@@ -46,6 +46,9 @@ _winfonts(Uxwin *w)
 	w->sysfont = openfont(w->d, "/lib/font/bit/lucidasans/boldunicode.7.font");
 	if(w->sysfont == nil)
 		w->sysfont = w->font;
+	w->smallfont = openfont(w->d, "/lib/font/bit/lucidasans/unicode.6.font");
+	if(w->smallfont == nil)
+		w->smallfont = w->font;
 }
 
 static int
@@ -54,12 +57,12 @@ active(Uxwin *w)
 	return ux.front == nil || ux.front == w;
 }
 
-/* a glyph from assets/gen/uxglyphs.c as a mask, cached per window */
+/* a glyph from assets/gen/uxglyphs.c as a mask (its ink or white layer), cached per window */
 static Image*
-glyphmask(Uxwin *w, char *name, Point *sz)
+glyphlayer(Uxwin *w, char *name, Point *sz, int white)
 {
 	UXglyph *g;
-	Image *m;
+	Image *m, **cache;
 	int i;
 
 	for(i = 0; uxglyphs[i].name != nil; i++)
@@ -69,14 +72,38 @@ glyphmask(Uxwin *w, char *name, Point *sz)
 	if(g->name == nil || i >= nelem(w->glyph))
 		return nil;
 	*sz = Pt(g->w, g->h);
-	if(w->glyph[i] == nil){
+	cache = white ? w->glyphw : w->glyph;
+	if(cache[i] == nil){
 		m = allocimage(w->d, Rect(0, 0, g->w, g->h), GREY1, 0, DBlack);
 		if(m == nil)
 			return nil;
-		loadimage(m, m->r, g->black, ((g->w+7)/8)*g->h);
-		w->glyph[i] = m;
+		loadimage(m, m->r, white ? g->white : g->black, ((g->w+7)/8)*g->h);
+		cache[i] = m;
 	}
-	return w->glyph[i];
+	return cache[i];
+}
+
+static Image*
+glyphmask(Uxwin *w, char *name, Point *sz)
+{
+	return glyphlayer(w, name, sz, 0);
+}
+
+/* glyph name centred in r, its ink layer in ink and its white layer in white */
+static void
+glyph2in(Uxwin *w, char *name, Rectangle r, ulong ink, ulong white)
+{
+	Image *m;
+	Point sz, p;
+
+	m = glyphlayer(w, name, &sz, 1);
+	if(m == nil)
+		return;
+	p = Pt(r.min.x + (Dx(r)-sz.x)/2, r.min.y + (Dy(r)-sz.y)/2);
+	draw(w->img, Rpt(p, addpt(p, sz)), _color(w, white), m, ZP);
+	m = glyphlayer(w, name, &sz, 0);
+	if(m != nil)
+		draw(w->img, Rpt(p, addpt(p, sz)), _color(w, ink), m, ZP);
 }
 
 /* draw glyph name with its top left at p */
@@ -102,9 +129,9 @@ glyphin(Uxwin *w, char *name, Rectangle r, Image *col)
 	glyph(w, name, Pt(r.min.x + (Dx(r)-sz.x)/2, r.min.y + (Dy(r)-sz.y)/2), col);
 }
 
-/* c's rectangle in screen coordinates, scrolled by its parents' scroll views */
+/* c's rectangle, window-local, moved by its parents' scroll views */
 Rectangle
-_abs(Uxctl *c)
+_local(Uxctl *c)
 {
 	Rectangle r;
 	Uxctl *p;
@@ -113,7 +140,87 @@ _abs(Uxctl *c)
 	for(p = c->parent; p != nil; p = p->parent)
 		if(strcmp(p->t->name, "scroll-view") == 0)
 			r = rectsubpt(r, p->origin);
-	return rectaddpt(r, c->w->img->r.min);
+	return r;
+}
+
+/* c's rectangle in screen coordinates, scrolled by its parents' scroll views */
+Rectangle
+_abs(Uxctl *c)
+{
+	return rectaddpt(_local(c), c->w->img->r.min);
+}
+
+/*
+ * A scroll view's parts, for its rectangle r (outer, with its 1 px
+ * frame): the visible content, and the vertical bar, horizontal bar
+ * and grow box (ZR when not shown). Bars share their edge lines with
+ * the frame and with each other, as in the mockups.
+ */
+void
+_scrollparts(Uxctl *c, Rectangle r, Rectangle *port, Rectangle *vb, Rectangle *hb, Rectangle *gb)
+{
+	int v, h, g, s;
+
+	s = UXscrollwidth;
+	v = (c->bars & UXvbar) != 0;
+	h = (c->bars & UXhbar) != 0;
+	g = (c->bars & UXgrowbox) != 0 && (v || h);
+	*port = insetrect(r, 1);
+	*vb = *hb = *gb = ZR;
+	if(v){
+		*vb = Rect(r.max.x-s, r.min.y, r.max.x, r.max.y - (h || g ? s-1 : 0));
+		port->max.x = r.max.x-s;
+	}
+	if(h){
+		*hb = Rect(r.min.x, r.max.y-s, r.max.x - (v || g ? s-1 : 0), r.max.y);
+		port->max.y = r.max.y-s;
+	}
+	if(g)
+		*gb = Rect(r.max.x-s, r.max.y-s, r.max.x, r.max.y);
+	port->min.y += c->header;
+	if(port->min.y > port->max.y)
+		port->min.y = port->max.y;
+	if(port->min.x > port->max.x)
+		port->min.x = port->max.x;
+}
+
+/* the part of c that shows: window-local, clipped by every scroll view it's in */
+Rectangle
+_vislocal(Uxctl *c)
+{
+	Rectangle r, port, vb, hb, gb;
+	Uxctl *p;
+
+	r = _local(c);
+	for(p = c->parent; p != nil; p = p->parent){
+		if(strcmp(p->t->name, "scroll-view") != 0)
+			continue;
+		_scrollparts(p, _local(p), &port, &vb, &hb, &gb);
+		if(!rectclip(&r, port))
+			return Rect(r.min.x, r.min.y, r.min.x, r.min.y);
+	}
+	return r;
+}
+
+Rectangle
+_vis(Uxctl *c)
+{
+	return rectaddpt(_vislocal(c), c->w->img->r.min);
+}
+
+/* clip drawing to r, within the control's own clip */
+static void
+clipto(Uxwin *w, Rectangle r)
+{
+	if(!rectclip(&r, w->clip))
+		r = Rect(w->clip.min.x, w->clip.min.y, w->clip.min.x, w->clip.min.y);
+	replclipr(w->img, 0, r);
+}
+
+static void
+unclip(Uxwin *w)
+{
+	replclipr(w->img, 0, w->clip);
 }
 
 static void
@@ -229,12 +336,12 @@ drawtext(Uxctl *c, Rectangle r)
 	in.min.x += UXfieldpad-1;
 	in.max.x -= UXfieldpad-1;
 	in.min.y += (c->state & UXmultiline) ? 2 : (Dy(in)-ht)/2;
-	replclipr(w->img, 0, insetrect(r, 1));
+	clipto(w, insetrect(r, 1));
 	if(c->state & UXsecret){
 		bullets(w, in.min, c->ntext, ht, fg);
 		if(focused)
 			draw(w->img, Rect(in.min.x + c->q0*7, in.min.y, in.min.x + c->q0*7 + 1, in.min.y+ht), _color(w, UXink), nil, ZP);
-		replclipr(w->img, 0, w->img->r);
+		unclip(w);
 		return;
 	}
 	/* one-line: keep the caret in view */
@@ -265,7 +372,7 @@ drawtext(Uxctl *c, Rectangle r)
 		x = runestringnbg(w->img, Pt(x, p.y), fg, ZP, f, c->text+q, 1,
 			q >= c->q0 && q < c->q1 && focused ? selbg : bg, ZP).x;
 	}
-	replclipr(w->img, 0, w->img->r);
+	unclip(w);
 }
 
 static void
@@ -301,10 +408,18 @@ static void
 drawlabel(Uxctl *c, Rectangle r)
 {
 	char *s;
+	Font *f;
+	ulong col;
+	int x;
 
 	s = _runestr(c->text, c->ntext);
-	string(c->w->img, Pt(r.min.x, r.min.y + (Dy(r)-c->w->sysfont->height)/2),
-		_color(c->w, (c->state & Cenabled) ? UXink : UXcoldisabled), ZP, c->w->sysfont, s);
+	f = (c->state & UXsmall) ? c->w->smallfont : c->w->sysfont;
+	col = (c->state & UXsmall) ? UXgrey5 : UXink;
+	x = r.min.x;
+	if(c->state & UXright)
+		x = r.max.x - stringwidth(f, s);
+	string(c->w->img, Pt(x, r.min.y + (Dy(r)-f->height)/2),
+		_color(c->w, (c->state & Cenabled) ? col : UXcoldisabled), ZP, f, s);
 	free(s);
 }
 
@@ -333,49 +448,132 @@ drawgroup(Uxctl *c, Rectangle r)
 	}
 }
 
+/* a list's header height: column titles, or a chooser's directory */
+int
+_listhead(Uxctl *c)
+{
+	if(c->ncols > 0 || (c->t == ctltypes[8] && c->dir))
+		return UXlistrowheight + 2;
+	return 0;
+}
+
+static int
+inscroll(Uxctl *c)
+{
+	return c->parent != nil && strcmp(c->parent->t->name, "scroll-view") == 0;
+}
+
+/* column i of item s (tab-separated), malloc'd */
+static char*
+column(char *s, int i)
+{
+	char *e;
+
+	for(; i > 0 && s != nil; i--){
+		s = strchr(s, '\t');
+		if(s != nil)
+			s++;
+	}
+	if(s == nil)
+		return estrdup("");
+	e = strchr(s, '\t');
+	if(e == nil)
+		return estrdup(s);
+	return smprint("%.*s", (int)(e-s), s);
+}
+
+static Image*	shade(Uxwin*);
+
 static void
 drawlist(Uxctl *c, Rectangle r)
 {
 	Uxwin *w;
-	Rectangle lr, in;
-	int i, y0, sel;
-	Font *f;
+	Rectangle lr, in, vis, hr;
+	int i, j, x, y0, sel, on, plain, hh;
+	Font *f, *sf;
+	Image *img;
+	char *t;
+	ulong fg;
 
 	w = c->w;
 	f = w->font;
+	plain = inscroll(c) && c->ncols > 0;	/* a folder window's list: the scroll view frames it */
+	vis = _vis(c);
 	fill(w, r, UXpaper);
-	frame(w, r, 1, UXink);
-	in = insetrect(r, 1);
-	y0 = in.min.y;
-	if(c->t == ctltypes[8] && c->dir){
-		/* the chooser's directory, as a header */
-		lr = Rect(in.min.x, y0, in.max.x, y0+UXlistrowheight);
-		fill(w, lr, UXcolface);
-		string(w->img, Pt(lr.min.x+UXlistpad, lr.min.y + (UXlistrowheight-f->height)/2),
-			_color(w, UXink), ZP, f, c->dir);
-		y0 += UXlistrowheight;
-		fill(w, Rect(in.min.x, y0, in.max.x, y0+1), UXcoldisabled);
-		y0++;
+	if(plain)
+		in = r;
+	else{
+		frame(w, r, 1, UXink);
+		in = insetrect(r, 1);
 	}
-	/* keep the first selected item in view */
-	for(i = 0; i < c->nitems; i++)
-		if(c->sel[i]){
-			if(i < c->top)
-				c->top = i;
-			while(y0 + (i-c->top+1)*UXlistrowheight > in.max.y && c->top < i)
-				c->top++;
-			break;
-		}
+	hh = _listhead(c);
+	y0 = in.min.y + hh;
+	if(!plain){
+		/* keep the first selected item in view */
+		for(i = 0; i < c->nitems; i++)
+			if(c->sel[i]){
+				if(i < c->top)
+					c->top = i;
+				while(y0 + (i-c->top+1)*UXlistrowheight > in.max.y && c->top < i)
+					c->top++;
+				break;
+			}
+	}else
+		c->top = 0;
+	clipto(w, Rect(in.min.x, plain ? vis.min.y + hh : y0, in.max.x, in.max.y));
 	for(i = c->top; i < c->nitems; i++){
 		lr = Rect(in.min.x, y0 + (i-c->top)*UXlistrowheight, in.max.x, y0 + (i-c->top+1)*UXlistrowheight);
 		if(lr.max.y > in.max.y)
 			break;
 		sel = c->sel[i];
+		on = sel && active(w);
 		if(sel)
-			fill(w, lr, active(w) ? UXcolselect : UXcoltrack);
-		string(w->img, Pt(lr.min.x+UXlistpad, lr.min.y + (UXlistrowheight-f->height)/2),
-			_color(w, sel && active(w) ? UXcolselecttext : UXink), ZP, f, c->items[i]);
+			fill(w, lr, on ? UXcolselect : UXcoltrack);
+		x = lr.min.x + UXlistpad;
+		if(c->ncols == 0){
+			string(w->img, Pt(x, lr.min.y + (UXlistrowheight-f->height)/2),
+				_color(w, on ? UXcolselecttext : UXink), ZP, f, c->items[i]);
+			continue;
+		}
+		for(j = 0; j < c->ncols; j++){
+			t = column(c->items[i], j);
+			fg = on ? UXcolselecttext : j == 0 ? UXink : UXgrey5;
+			if(j == 0 && c->ricons != nil && c->ricons[i] != nil){
+				img = _resicon(w, c->ricons[i], 1);
+				if(img != nil){
+					draw(w->img, Rect(x, lr.min.y, x+UXiconsmall, lr.min.y+UXiconsmall), img, nil, img->r.min);
+					if(sel)
+						draw(w->img, Rect(x, lr.min.y, x+UXiconsmall, lr.min.y+UXiconsmall), shade(w), img, img->r.min);
+				}
+				string(w->img, Pt(x+UXiconsmall+4, lr.min.y + (UXlistrowheight-f->height)/2),
+					_color(w, fg), ZP, f, t);
+			}else
+				string(w->img, Pt(x, lr.min.y + (UXlistrowheight-f->height)/2),
+					_color(w, fg), ZP, f, t);
+			free(t);
+			x += c->colw[j];
+		}
 	}
+	unclip(w);
+	if(hh == 0)
+		return;
+	/* the header: at the top of what shows, so it stays put while the rows scroll */
+	hr = Rect(in.min.x, plain ? vis.min.y : in.min.y, in.max.x, (plain ? vis.min.y : in.min.y) + hh);
+	if(c->ncols > 0){
+		fill(w, Rect(hr.min.x, hr.min.y, hr.max.x, hr.max.y-1), UXcolface);
+		x = hr.min.x + UXlistpad;
+		sf = w->smallfont != nil ? w->smallfont : f;
+		for(j = 0; j < c->ncols; j++){
+			string(w->img, Pt(x, hr.min.y + (hh-1-sf->height)/2), _color(w, UXgrey5), ZP, sf, c->cols[j]);
+			x += c->colw[j];
+		}
+	}else{
+		/* the chooser's directory */
+		fill(w, Rect(hr.min.x, hr.min.y, hr.max.x, hr.max.y-1), UXcolface);
+		string(w->img, Pt(hr.min.x+UXlistpad, hr.min.y + (hh-1-f->height)/2),
+			_color(w, UXink), ZP, f, c->dir);
+	}
+	fill(w, Rect(hr.min.x, hr.max.y-1, hr.max.x, hr.max.y), UXcoldisabled);
 }
 
 /* darkens a selected icon (assets/README.md, Finder: Selected), through the icon's mask */
@@ -385,6 +583,25 @@ shade(Uxwin *w)
 	if(w->col[nelem(palette)] == nil)
 		w->col[nelem(palette)] = allocimage(w->d, Rect(0,0,1,1), RGBA32, 1, setalpha(0x000033FF, 0x80));
 	return w->col[nelem(palette)];
+}
+
+/* grey3 on every other pixel, clear between: an open icon's hatching (assets/README.md, Finder: Open) */
+static Image*
+hatch(Uxwin *w)
+{
+	uchar px[2*2*4];
+
+	if(w->hatch == nil){
+		w->hatch = allocimage(w->d, Rect(0, 0, 2, 2), RGBA32, 1, DTransparent);
+		if(w->hatch == nil)
+			return nil;
+		memset(px, 0, sizeof px);
+		/* RGBA32 is r8g8b8a8: bytes a, b, g, r in memory */
+		px[0] = 0xFF; px[1] = 0xAA; px[2] = 0xAA; px[3] = 0xAA;	/* 0,0 */
+		px[12] = 0xFF; px[13] = 0xAA; px[14] = 0xAA; px[15] = 0xAA;	/* 1,1 */
+		loadimage(w->hatch, w->hatch->r, px, sizeof px);
+	}
+	return w->hatch;
 }
 
 /*
@@ -471,11 +688,11 @@ drawicons(Uxctl *c, Rectangle r)
 	w = c->w;
 	f = w->font;
 	desk = strcmp(w->kind, "desktop") == 0;
+	clipto(w, r);
 	if(desk)
 		deskbg(w, r);
 	else
 		fill(w, r, UXpaper);
-	replclipr(w->img, 0, r);
 	for(i = 0; i < c->nicons; i++){
 		ic = &c->icons[i];
 		/* pos is the icon's centre */
@@ -483,6 +700,8 @@ drawicons(Uxctl *c, Rectangle r)
 		ir = Rect(p.x-UXiconlarge/2, p.y-UXiconlarge/2, p.x+UXiconlarge/2, p.y+UXiconlarge/2);
 		if((img = _resicon(w, ic->icon, 0)) != nil){
 			draw(w->img, ir, img, nil, img->r.min);
+			if(ic->open && hatch(w) != nil)
+				draw(w->img, ir, hatch(w), img, img->r.min);
 			if(ic->sel)
 				draw(w->img, ir, shade(w), img, img->r.min);
 		}else{
@@ -509,57 +728,85 @@ drawicons(Uxctl *c, Rectangle r)
 	}
 	if(c->drag == Dband && Dx(c->band) > 0 && Dy(c->band) > 0)
 		frame(w, c->band, 1, desk ? UXpaper : UXgrey4);
-	replclipr(w->img, 0, w->img->r);
+	unclip(w);
+}
+
+/*
+ * A scroll bar (assets/README.md, Controls): a grey2 track, grey1 arrow
+ * boxes with outlined arrows, a paper thumb with grip lines. With
+ * nothing to scroll the track is paper and the arrows grey3; in an
+ * inactive window the bar is blank.
+ */
+static void
+drawbar(Uxwin *w, Rectangle b, int vert, int off, int see, int all)
+{
+	Rectangle a1, a2, th;
+	int sb, len, t, tl, live, k, cx;
+
+	if(Dx(b) <= 0 || Dy(b) <= 0)
+		return;
+	sb = UXscrollwidth;
+	len = vert ? Dy(b) : Dx(b);
+	t = _thumbat(len, off, see, all, &tl);
+	live = active(w) && tl > 0;
+	fill(w, b, live ? UXcoltrack : UXpaper);
+	frame(w, b, 1, UXink);
+	if(!active(w))
+		return;
+	if(vert){
+		a1 = Rect(b.min.x, b.min.y, b.max.x, b.min.y+sb);
+		a2 = Rect(b.min.x, b.max.y-sb, b.max.x, b.max.y);
+	}else{
+		a1 = Rect(b.min.x, b.min.y, b.min.x+sb, b.max.y);
+		a2 = Rect(b.max.x-sb, b.min.y, b.max.x, b.max.y);
+	}
+	fill(w, a1, UXcolface);
+	fill(w, a2, UXcolface);
+	frame(w, a1, 1, UXink);
+	frame(w, a2, 1, UXink);
+	glyph2in(w, vert ? "arrow-up" : "arrow-left", a1, live ? UXink : UXgrey3, live ? UXpaper : UXcolface);
+	glyph2in(w, vert ? "arrow-down" : "arrow-right", a2, live ? UXink : UXgrey3, live ? UXpaper : UXcolface);
+	if(!live)
+		return;
+	if(vert)
+		th = Rect(b.min.x, b.min.y+t, b.max.x, b.min.y+t+tl);
+	else
+		th = Rect(b.min.x+t, b.min.y, b.min.x+t+tl, b.max.y);
+	fill(w, th, UXpaper);
+	frame(w, th, 1, UXink);
+	if(vert)
+		glyphin(w, "thumbgrip", th, _color(w, UXgrey4));
+	else{
+		cx = th.min.x + Dx(th)/2;
+		for(k = 0; k < 3; k++)
+			fill(w, Rect(cx-2+2*k, th.min.y+4, cx-1+2*k, th.max.y-4), UXgrey4);
+	}
 }
 
 static void
 drawscroll(Uxctl *c, Rectangle r)
 {
 	Uxwin *w;
-	Rectangle bar, up, down, track, th;
-	int h, ch, canscroll;
-	ulong arrow;
+	Rectangle port, vb, hb, gb;
 
 	w = c->w;
+	_scrollparts(c, r, &port, &vb, &hb, &gb);
+	/* the frame, around the header too; the header itself is the app's */
 	frame(w, r, 1, UXink);
-	bar = Rect(r.max.x-UXscrollwidth, r.min.y, r.max.x, r.max.y);
-	fill(w, insetrect(bar, 1), UXpaper);
-	frame(w, bar, 1, UXink);
-	if(!active(w))
-		return;	/* inactive windows show a blank bar */
-	ch = Dy(c->extent);
-	canscroll = ch > Dy(r);
-	up = Rect(bar.min.x, bar.min.y, bar.max.x, bar.min.y+UXscrollwidth);
-	down = Rect(bar.min.x, bar.max.y-UXscrollwidth, bar.max.x, bar.max.y);
-	track = Rect(bar.min.x+1, up.max.y, bar.max.x-1, down.min.y);
-	arrow = canscroll ? UXink : UXcoldisabled;
-	fill(w, insetrect(up, 1), UXcolface);
-	fill(w, insetrect(down, 1), UXcolface);
-	frame(w, up, 1, UXink);
-	frame(w, down, 1, UXink);
-	glyphin(w, "arrow-up", up, _color(w, arrow));
-	glyphin(w, "arrow-down", down, _color(w, arrow));
-	if(!canscroll)
-		return;
-	fill(w, track, UXcoltrack);
-	h = Dy(track);
-	th = track;
-	th.min.y = track.min.y + (vlong)h*(c->origin.y - c->extent.min.y)/ch;
-	th.max.y = th.min.y + (vlong)h*Dy(r)/ch;
-	if(th.max.y - th.min.y < UXscrollthumbmin)
-		th.max.y = th.min.y + UXscrollthumbmin;
-	if(th.max.y > track.max.y){
-		th.min.y -= th.max.y - track.max.y;
-		th.max.y = track.max.y;
+	fill(w, port, UXpaper);
+	if(c->header >= 3){
+		/* the header ends in a double rule, as a folder window's info bar */
+		fill(w, Rect(port.min.x, port.min.y-3, port.max.x, port.min.y-2), UXink);
+		fill(w, Rect(port.min.x, port.min.y-1, port.max.x, port.min.y), UXink);
 	}
-	if(th.min.y < track.min.y)
-		th.min.y = track.min.y;
-	th.min.x--;
-	th.max.x++;
-	fill(w, th, UXpaper);
-	fill(w, Rect(th.min.x, th.min.y-1, th.max.x, th.min.y), UXink);
-	fill(w, Rect(th.min.x, th.max.y, th.max.x, th.max.y+1), UXink);
-	glyphin(w, "thumbgrip", th, _color(w, UXink));
+	drawbar(w, vb, 1, c->origin.y - c->extent.min.y, Dy(port), Dy(c->extent));
+	drawbar(w, hb, 0, c->origin.x - c->extent.min.x, Dx(port), Dx(c->extent));
+	if(Dx(gb) > 0){
+		fill(w, gb, UXcolface);
+		frame(w, gb, 1, UXink);
+		if(active(w))
+			glyph(w, "grow", addpt(gb.min, Pt(2, 2)), _color(w, UXgrey5));
+	}
 }
 
 void
@@ -568,10 +815,26 @@ _drawctl(Uxctl *c)
 	Rectangle r;
 	char *n;
 
-	if(!(c->state & Cvisible) || c->w->img == nil)
+	Uxctl *p;
+	Uxwin *w;
+
+	w = c->w;
+	if(!(c->state & Cvisible) || w->img == nil)
 		return;
 	r = _abs(c);
 	n = c->t->name;
+	/* inside a scroll view, only what shows of it */
+	w->clip = w->img->r;
+	for(p = c->parent; p != nil; p = p->parent)
+		if(strcmp(p->t->name, "scroll-view") == 0){
+			w->clip = _vis(c);
+			if(Dx(w->clip) <= 0 || Dy(w->clip) <= 0){
+				w->clip = w->img->r;
+				return;
+			}
+			break;
+		}
+	replclipr(w->img, 0, w->clip);
 	if(strcmp(n, "button") == 0)
 		drawbutton(c, r);
 	else if(strcmp(n, "text-field") == 0)
@@ -588,6 +851,10 @@ _drawctl(Uxctl *c)
 		drawicons(c, r);
 	else if(strcmp(n, "scroll-view") == 0)
 		drawscroll(c, r);
+	if(!eqrect(w->clip, w->img->r)){
+		w->clip = w->img->r;
+		replclipr(w->img, 0, w->clip);
+	}
 }
 
 void
@@ -600,6 +867,7 @@ _redraw(Uxwin *w)
 	if(w->img == nil)
 		return;
 	r = w->img->r;
+	w->clip = r;
 	fill(w, r, winbg(w));
 	if(strcmp(w->kind, "dialog") == 0 || strcmp(w->kind, "alert") == 0){
 		/* rio's border is the teal band; libux draws the ink frame inside it */

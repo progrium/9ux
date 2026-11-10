@@ -180,6 +180,9 @@ All in [`metrics.ndb`](metrics.ndb); `gen/uxstyle.h` has them as
 - **Scroll bar:** grey2 track, grey1 arrow boxes with outlined arrows,
   a paper thumb with grip lines. With nothing to scroll, the track is
   paper and the arrows grey3. In an inactive window it is blank.
+  Folder windows always show theirs (both bars and the grow box, which
+  meet the window's frame), whether or not there's anything to scroll.
+  libux sizes the thumb to the part that shows, at least 16 px.
 - **List:** paper rows 16 px tall; a grey1 header in the small font
   with a grey3 rule; the selected row navy with paper text (grey2 when
   the window is inactive).
@@ -199,6 +202,11 @@ All in [`metrics.ndb`](metrics.ndb); `gen/uxstyle.h` has them as
   with a grey3 checkerboard (the `plan9` disk in the desktop mockup).
 - Volumes stack down the right edge of the desktop from the top; the
   Trash sits at the bottom right.
+- **Folder windows:** an info bar under the title bar in the small font,
+  grey5: the item count 8 px from the left, the folder's size 8 px from
+  the vertical bar, over a double ink rule (rows 20 and 22). List view
+  has the list header (Name, Kind, Size) in its place, and the vertical
+  bar only.
 
 ## Icons
 
@@ -343,7 +351,7 @@ through it.
 
 ## Still to do
 
-- Finder list view columns, Get Info window, and the `FileChooser`
+- Get Info window, and the `FileChooser`
   layout.
 - An about box and the system menu's contents.
 - Icon variants for more document types as uxmeta's associations grow.
@@ -351,5 +359,6 @@ through it.
   large font set against the metrics.
 - An original 9/UX bitmap system font, if Lucida Sans Bold doesn't hold
   up.
-- Check every mockup against the real thing under `h9 --gfx` once S2 and
-  S3 draw.
+- Check the app and alert mockups against the real thing as the
+  desktop one is (`test/finder/mockup_test.zig` draws the desktop
+  mockup's scene; its golden is `test/finder/golden/desktop.png`).

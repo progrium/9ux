@@ -99,6 +99,7 @@ Reading returns the current settings, one per line:
 ```text
 mode on
 cmdkey mod4
+clock on
 ```
 
 Commands:
@@ -107,7 +108,8 @@ Commands:
 |---|---|
 | `mode on` / `mode off` | Turn 9/UX presentation and interception on or off |
 | `cmdkey key` | Set the Command key: `mod4` (default), `alt`, `ctl`, or `none` (no shortcuts) |
-| `chrome [winid] on` / `chrome [winid] off` | Turn classic chrome on or off for a window (default: the fid's own window). See [Window chrome](#window-chrome) |
+| `clock on` / `clock off` / `clock at text...` | Show the menu bar's clock (day and time, such as `Tue 09:41`, the default), hide it, or freeze it at `text` (the rest of the line) for screenshots and tests |
+| `chrome [winid] on` / `chrome [winid] edge` / `chrome [winid] off` | Turn classic chrome on or off for a window (default: the fid's own window); `edge` leaves the border to the window's app. See [Window chrome](#window-chrome) |
 
 **Mode off** is stock rio: no menu bar strip, no shortcut
 interception, and a claimed desktop window is hidden (as with rio's
@@ -369,6 +371,13 @@ have.
   changed or the window is deleted. Any fid may set it for any window,
   as with `wctl`. Setting it on the desktop window fails with `bad
   value`. A change queues a `chrome` event.
+- `chrome [winid] edge` is `on`, except that rio leaves the left, right
+  and bottom rows of the window's border to its app instead of painting
+  them paper, so the app can draw out to the frame (libux puts its
+  scroll bars and grow box against the frame there, as the mockups
+  do). The top border rows are still the title bar's. An app that asks
+  for `edge` draws over the whole border: in mode off, rio's own border
+  covers those rows again.
 - **The window's rectangle doesn't change.** The chrome sits outside
   it: the title bar (20 pixels in 1.2) above, the frame and shadow
   around. `/dev/wctl`, `rect` events and `windows` all keep reporting

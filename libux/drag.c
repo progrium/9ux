@@ -657,14 +657,7 @@ targetof(Uxctl *c)
 static Rectangle
 localrect(Uxctl *c)
 {
-	Rectangle r;
-	Uxctl *p;
-
-	r = c->r;
-	for(p = c->parent; p != nil; p = p->parent)
-		if(strcmp(p->t->name, "scroll-view") == 0)
-			r = rectsubpt(r, p->origin);
-	return r;
+	return _local(c);
 }
 
 /* the topmost drop target in w at pt; uxlk held */
@@ -681,7 +674,7 @@ dropat(Uxwin *w, Point pt, Target **tp)
 			continue;
 		if((t = targetof(c)) == nil)
 			continue;
-		if(ptinrect(pt, localrect(c))){
+		if(ptinrect(pt, _vislocal(c))){
 			*tp = t;
 			return c;
 		}

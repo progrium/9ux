@@ -114,7 +114,9 @@ pub fn finderWin(s: *Session, sel: []const u8, buf: []u8) ![]const u8 {
 pub fn itemAt(s: *Session, win: []const u8, label: []const u8) !harness.Point {
     const r = try two(s, "cat /tmp/f/windows/{s}/rect", .{win});
     const rmax = try two(s, "awk '{{print $3, $4}}' /tmp/f/windows/{s}/rect", .{win});
-    const cv = try two(s, "awk '{{print $2, $3}}' /tmp/f/windows/{s}/controls/icons/rect", .{win});
+    // The icon view's top, and the window's drawable width: a folder
+    // window's scroll view is that outset by 1; the desktop's icon view is it.
+    const cv = try two(s, "c=/tmp/f/windows/{s}/controls; awk '{{print $2}}' $c/icons/rect; if(test -e $c/scroll) awk '{{print $3-1}}' $c/scroll/rect; if not awk '{{print $3}}' $c/icons/rect", .{win});
     const border = @divTrunc((rmax.x - r.x) - cv.y, 2);
     const p = try two(s, "grep 'label={s} ' /tmp/f/windows/{s}/controls/icons/items | sed 's/.*pos=([0-9]+),([0-9]+).*/\\1 \\2/'", .{ label, win });
     return pt(r.x + border + p.x, r.y + border + cv.x + p.y);
@@ -140,7 +142,7 @@ pub fn barTitles(s: *Session) ![8]i32 {
     var first: i32 = -1;
     var last: i32 = -100;
     var x: i32 = 32;
-    while (x < 1024) : (x += 1) {
+    while (x < 1024 - 100) : (x += 1) { // the clock is at the right
         var ink = false;
         var y: i32 = 2;
         while (y < bar_h - 2) : (y += 1) {

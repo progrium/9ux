@@ -231,7 +231,7 @@ echo close > $g/ctl
 test=list
 echo invoke bylist win^'='^`{basename $f} > $a/menus/view/ctl
 sleep 0.3
-has $f/controls/list/items '^c\.txt +document' '^docs +folder'
+has $f/controls/list/items '^c\.txt	(text|file)	' '^docs	folder	--$'
 has $a/menus/view/items '^item bylist .*check=on'
 waitfor $ws 'view=list'
 echo invoke byicon win^'='^`{basename $f} > $a/menus/view/ctl

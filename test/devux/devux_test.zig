@@ -27,7 +27,7 @@ fn barTitles(s: *Session) ![8]i32 {
     var first: i32 = -1;
     var last: i32 = -100;
     var x: i32 = 32;
-    while (x < 1024) : (x += 1) {
+    while (x < 1024 - 100) : (x += 1) { // the clock is at the right
         var ink = false;
         var y: i32 = 2;
         while (y < bar_h - 2) : (y += 1) {
@@ -126,7 +126,7 @@ test "version and ctl" {
     try std.testing.expectEqualStrings("devux 1.2\nfeature focus\nfeature desktop\nfeature menubar\nfeature drag\nfeature chrome\n", v);
     const c = try s.readFile("/dev/ux/ctl");
     defer gpa.free(c);
-    try std.testing.expectEqualStrings("mode on\ncmdkey mod4\n", c);
+    try std.testing.expectEqualStrings("mode on\ncmdkey mod4\nclock on\n", c);
 }
 
 test "focus events and the menu bar follow the focused window" {
@@ -305,7 +305,7 @@ test "mode off is stock rio: no bar, desktop hidden" {
     }
     const c = try s.readFile("/dev/ux/ctl");
     defer gpa.free(c);
-    try std.testing.expectEqualStrings("mode off\ncmdkey mod4\n", c);
+    try std.testing.expectEqualStrings("mode off\ncmdkey mod4\nclock on\n", c);
 }
 
 test "classic chrome: title bar, move by title, zoom, and the close box" {

@@ -56,7 +56,9 @@ fn itemAt(s: *harness.Session, win: []const u8, label: []const u8) !harness.Poin
     var b: [512]u8 = undefined;
     const r = try two(s, try std.fmt.bufPrint(&b, "cat /tmp/f/windows/{s}/rect", .{win}));
     const rmax = try two(s, try std.fmt.bufPrint(&b, "awk '{{print $3, $4}}' /tmp/f/windows/{s}/rect", .{win}));
-    const cv = try two(s, try std.fmt.bufPrint(&b, "awk '{{print $2, $3}}' /tmp/f/windows/{s}/controls/icons/rect", .{win}));
+    // The icon view's top, and the window's drawable width: a folder
+    // window's scroll view is that outset by 1; the desktop's icon view is it.
+    const cv = try two(s, try std.fmt.bufPrint(&b, "c=/tmp/f/windows/{s}/controls; awk '{{print $2}}' $c/icons/rect; if(test -e $c/scroll) awk '{{print $3-1}}' $c/scroll/rect; if not awk '{{print $3}}' $c/icons/rect", .{win}));
     const top = cv.x;
     const cw = cv.y;
     const border = @divTrunc((rmax.x - r.x) - cw, 2);

@@ -105,6 +105,7 @@ struct Icon {
 	char	*icon;
 	Point	pt;
 	int	sel;
+	int	open;	/* its window is open: drawn hatched */
 };
 
 struct Uxctl {
@@ -133,6 +134,14 @@ struct Uxctl {
 	int	nicons;
 	Point	origin;	/* scroll-view */
 	Rectangle	extent;
+	int	bars;	/* scroll-view: UXvbar, UXhbar, UXgrowbox */
+	int	header;	/* scroll-view: rows at the top that don't scroll, left of the bar */
+	int	sbpart;	/* scroll-view: the part being tracked (Sb* in ctl.c) */
+	Point	sborg;	/* scroll-view: the origin when a thumb drag began */
+	char	**cols;	/* list: column titles, nil for none */
+	int	*colw;	/* list: column widths */
+	int	ncols;
+	char	**ricons;	/* list: a small icon per item, or nil */
 	char	*dir;	/* file-chooser */
 	char	*name;
 	Uxctl	*inner;	/* file-chooser's list */
@@ -167,15 +176,22 @@ struct Uxwin {
 	Image	*img;
 	Font	*font;	/* body role */
 	Font	*sysfont;	/* system role */
+	Font	*smallfont;	/* small role */
 	Mousectl	*mc;
 	Keyboardctl	*kc;
 	int	dirty;
 	int	main;	/* the app's own rio window */
 	Mouse	lastm;
 	int	wctlfd;	/* a dialog's wctl, or -1 */
+	int	edge;	/* we draw out to rio's frame: chrome edge, in 9/UX mode */
+	int	edgeok;	/* rio took chrome edge for this window */
+	Image	*edgeimg;	/* the main window's image when edge: over the border too */
 	int	winnamefd;	/* a dialog's winname, or -1 */
 	Image	*col[24];
 	Image	*glyph[32];
+	Image	*glyphw[32];	/* the glyphs' white layers */
+	Image	*hatch;	/* grey3 every other pixel, for open icons */
+	Rectangle	clip;	/* where the control being drawn may draw */
 };
 
 struct Item {
@@ -273,6 +289,7 @@ struct App {
 	int	rebar;	/* register with the bar again */
 	int	barreader;
 	int	evreader;
+	int	riooff;	/* rio's 9/UX mode is off: it paints its own border */
 	int	responding;	/* the responder is answering a batch */
 };
 
@@ -335,6 +352,9 @@ char*	_listsel(Uxctl*, int);
 void	_iconsel(Uxctl*, int);
 void	_iconopen(Uxctl*, char*, int);
 void	_setorigin(Uxctl*, Point, int);
+Point	_clampedorigin(Uxctl*, Point);
+int	_thumbat(int, int, int, int, int*);
+void	_clamporigin(Uxctl*, int);
 void	_chooserload(Uxctl*);
 
 /* win.c */
@@ -354,6 +374,11 @@ int	_dialogwin(Uxwin*, Rectangle);
 /* draw.c */
 void	_drawctl(Uxctl*);
 Rectangle	_abs(Uxctl*);
+Rectangle	_local(Uxctl*);
+Rectangle	_vis(Uxctl*);
+Rectangle	_vislocal(Uxctl*);
+void	_scrollparts(Uxctl*, Rectangle, Rectangle*, Rectangle*, Rectangle*, Rectangle*);
+int	_listhead(Uxctl*);
 Image*	_color(Uxwin*, ulong);
 void	_winfonts(Uxwin*);
 
@@ -364,6 +389,9 @@ void	_menuregister(void);
 char*	_menuitems(Uxmenu*);
 void	_menuwin(Uxwin*, int);
 void	_chrome(Uxwin*);
+void	_edgeimage(Uxwin*);
+void	_riomode(int);
+Rectangle	_riorect(Uxwin*);
 
 /* res.c */
 Image*	_resicon(Uxwin*, char*, int);

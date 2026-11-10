@@ -216,15 +216,35 @@ Finder follows uxmeta's `changes` stream, so an edit to the ndb file by
 hand, or by another program, moves icons at once; a resync reloads
 every position. Items without a position go in the first free cell.
 
+### Folder windows
+
+As in the desktop mockup (`assets/mockups/desktop.png`): a libux scroll
+view fills the window out to rio's frame, so both scroll bars and the
+grow box are always there, live when there's more than shows and blank
+(paper track, grey arrows) when there isn't. In icon view an info bar
+sits above the icons, under the title bar: the item count (and how
+many are selected) at the left, the size of the folder's files at the
+right, over a double rule. List view has Name, Kind and Size columns
+with 16 px icons under a header that stays put while the rows scroll,
+and only the vertical bar; the info bar comes back there only to say
+the folder can't be read or its volume is offline. Folders and volumes
+whose windows are open are hatched. `test/finder/mockup_test.zig`
+draws the mockup's scene for real, with a golden image.
+
 ### Limits
 
 - Mouse events carry no modifiers, so there is no shift-click to extend
   a selection; use the rubber band or Select All.
-- Icon views don't scroll; items past the window's edge are out of
-  reach until the window is made bigger or cleaned up.
+- Icon views scroll only right and down: an icon dragged past the
+  window's top or left edge is out of reach until the window is
+  cleaned up.
+- 9P has no way to ask a file server for its free space, so the info
+  bar's right side shows the size of the folder's files ("12 K in
+  folder") where the mockup shows "4.1 G free".
 - An external edit to a window's geometry takes effect the next time it
   opens, not live.
-- List view is rows of text in the icon view, not a table control.
+- List view rows can't be dragged, and its columns can't be resized
+  or clicked to sort (use View > by Name and so on).
 
 ## Building and testing
 

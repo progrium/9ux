@@ -72,6 +72,8 @@ enum {
 	UXsecret	= 1<<1,
 	UXsensitive	= 1<<2,
 	UXreadonly	= 1<<3,
+	UXsmall	= 1<<4,	/* label: the small font in grey, as in a window's info bar */
+	UXright	= 1<<5,	/* label: right-aligned */
 };
 
 /* app */
@@ -99,6 +101,7 @@ Uxctl*	uxbutton(Uxwin*, char *id, char *label, Rectangle r);
 Uxctl*	uxtextfield(Uxwin*, char *id, char *label, Rectangle r, int flags);
 Uxctl*	uxcheckbox(Uxwin*, char *id, char *label, Rectangle r);
 Uxctl*	uxlabel(Uxwin*, char *id, char *text, Rectangle r);
+void	uxlabelstyle(Uxctl*, int flags);	/* UXsmall, UXright */
 Uxctl*	uxgroup(Uxwin*, char *id, char *label, Rectangle r);
 Uxctl*	uxlist(Uxwin*, char *id, Rectangle r);
 Uxctl*	uxiconview(Uxwin*, char *id, Rectangle r);
@@ -117,8 +120,14 @@ void	uxenable(Uxctl*, int);
 void	uxshow(Uxctl*, int);
 void	uxfocus(Uxctl*);
 
-/* lists */
+/*
+ * lists: an item may hold tab-separated columns; with columns set, the
+ * list draws a header with their titles and widths, and no frame
+ * inside a scroll view (the folder window look)
+ */
 void	uxsetitems(Uxctl*, char **items, int n);
+void	uxsetcolumns(Uxctl*, char **titles, int *widths, int n);
+void	uxsetitemicons(Uxctl*, char **icons, int n);	/* a 16 px icon per item */
 int	uxgetsel(Uxctl*, int **sel);	/* malloc'd array */
 
 /* icon views */
@@ -128,8 +137,25 @@ void	uxiconclear(Uxctl*);
 void	uxiconset(Uxctl*, char *itemid, char *label, char *icon, Point pt);	/* nil label or icon: unchanged */
 int	uxicongetsel(Uxctl*, char ***ids);	/* malloc'd array of malloc'd IDs */
 void	uxiconselect(Uxctl*, char **ids, int n);
+void	uxiconopen(Uxctl*, char *itemid, int open);	/* its window is open: hatch it */
 
-/* scroll views */
+/*
+ * scroll views: children are laid out in content coordinates (the
+ * window-local place they'd have with the origin at 0,0) and drawn
+ * moved by the origin, clipped to the view. uxscrollbars picks the bars
+ * (shown whether or not there's anything to scroll, as in a classic
+ * folder window; vertical only by default) and a header: that many
+ * pixels at the top stay put, left of the vertical bar, for the app's
+ * own controls. A view whose rectangle is its window's, outset by 1,
+ * puts the bars against the window's frame.
+ */
+enum {
+	UXvbar	= 1<<0,
+	UXhbar	= 1<<1,
+	UXgrowbox	= 1<<2,	/* the grow box, which resizes the window */
+};
+void	uxscrollbars(Uxctl*, int bars, int header);
+Rectangle	uxscrollport(Uxctl*);	/* the visible content, window-local */
 void	uxsetextent(Uxctl*, Rectangle);
 void	uxsetorigin(Uxctl*, Point);
 Point	uxgetorigin(Uxctl*);
