@@ -3,21 +3,8 @@
 Gaps found while building 9/UX on h9 (pinned in `scripts/pins.sh`). Each
 entry says who found it, what happens, the workaround in this repo, and
 what h9 would need. The h9 stream (H in [workplan.md](workplan.md))
-takes them upstream.
-
-## DMEXCL isn't enforced on the host-tree root
-
-- **Found by:** S5 (uxmeta), at H9_REV b27cacd, native backend.
-- **What happens:** a file created with `DMEXCL` shows the `l` mode bit,
-  but a second `open` of it succeeds while the first is still open. On
-  9front's own file servers the second open fails with "file in use".
-- **Workaround:** uxmeta's single-writer lock also creates a `/srv`
-  entry with `ORCLOSE`, which devsrv refuses to create twice and removes
-  when the holder exits (`uxmeta/layer.c`, `metalock`).
-- **h9 would need:** exclusive-use files in the host-tree file server
-  (refuse a second open of a `DMEXCL` file while one is open in the
-  machine), or a documented statement that it doesn't, so programs don't
-  rely on it.
+takes them upstream; entries it has dealt with move to "Resolved" at
+the end.
 
 ## isoroot trees lack the kernel's mount points
 
@@ -95,52 +82,41 @@ takes them upstream.
 - **h9 would need:** to be looked at if it happens again; record the
   run here.
 
-## --gfx on X11 crashes when /dev/mouse is bound before /dev/draw
+## Resolved
 
-- **Found by:** S3 (libux), at H9_REV b27cacd, Linux x86\_64, h9 built
-  with `-Dgfx=x11` (which needs `libxt-dev` for `X11/IntrinsicP.h`), under
-  Xvfb, native backend.
-- **What happens:** `h9 --backend native --gfx rio` segfaults at start in
-  drawterm's `gui-x11/x11.c` `setcursor`, called from `mouseattach` while
-  the namespace is bound, because `xdisplay` is still 0: `/dev/mouse` is
-  attached before `/dev/draw` has opened the display.
-- **Workaround:** a local `if(xdisplay == 0) return;` at the top of
-  `setcursor` in the h9 checkout; then rio and libux apps draw under Xvfb
-  (screenshots with `import -window root`). Nothing in this repo depends
-  on it: the GUI tests use the headless backend.
-- **h9 would need:** `setcursor` (and anything else `mouseattach` calls)
-  to wait for or skip a display that isn't open yet, in the X11 backend.
+Fixed in h9 by [progrium/hyper9#153](https://github.com/progrium/hyper9/pull/153)
+(pinned here from that branch's head until it merges), or found not to be
+a gap.
 
-
-## Writing `stop` to /proc/N/ctl never returns
-
-- **Found by:** S4 (uxd), at H9_REV b27cacd, native backend.
-- **What happens:** `sleep 100 & echo stop >/proc/$apid/ctl` blocks the
-  `echo` forever (until h9's timeout hangs everything up). On 9front the
-  write returns once the target has stopped, and `start` resumes it.
-- **Workaround:** uxd's test for an app that stops answering uses an app
-  tree served by `srvfs` with a pipe in it, so one read waits inside the
-  app, instead of stopping the app's process (`uxd/test/stall.rc`).
-- **h9 would need:** `stop`, `start` and `waitstop` in `/proc/N/ctl`, or
-  an error from the write saying they aren't supported.
-
-## Occasional faults on fresh heap pages under load
-
-- **Found by:** S2 (rio) and S9, at H9_REV b27cacd, Linux x86\_64,
-  native backend, during GUI test runs.
-- **What happens:** now and then rio dies with `sys: trap: fault write
-  addr=0x47a5fc pc=0x231cf5` (S9 saw `addr=0x47a604`, the same heap
-  page), the pc in libc's `blocksetsize`; in the same run, `echo` in the
-  test's rc failed three times with "write error: Bad address". It
-  couldn't be reproduced on purpose: the same test passed 9 times in a
-  row afterwards, and 4 runs with rio's pool set to
-  `POOL_PARANOIA|POOL_ANTAGONISM|POOL_DEBUGGING` found no heap
-  corruption, so rio writing past a block is unlikely. A guess, not
-  confirmed: a freshly grown data-segment page is sometimes not mapped
-  yet when guest code touches it. A two-process `RFMEM` sbrk stress test
-  didn't reproduce the fault in 20 runs, but did hit "virtual memory
-  allocation failed" at only about 64 MB, which may be related.
-- **Workaround:** none; a rerun passes.
-- **h9 would need:** brk/segment growth that's visible to every process
-  sharing the segment before the call returns, and a larger limit on a
-  process's memory than about 64 MB (or a way to set it).
+- **Occasional faults on fresh heap pages under load** (S2, S9). The
+  guess was right. When one process of an `RFMEM` group grew the shared
+  data segment, the native backend only queued the new mapping for the
+  other processes' stubs. It carried the mapping out when each next
+  entered h9. A libthread proc that stayed in user mode and touched
+  memory another proc's malloc had just got faulted (`sys: trap: fault
+  write` in `blocksetsize`). h9 now reruns a fault when mappings changed
+  while the guest ran. Its fixture `tests/fixtures/rfmem/rfgrow.c`
+  failed on every run before and passes 20/20 after. It also grows past
+  400 MB: a process's memory is limited only by the machine's
+  `--memory` (1 GB by default), and the "about 64 MB" limit didn't
+  reproduce. The "write error: Bad address" from rc's `echo` in the same
+  run wasn't reproduced or explained (it's the host's EFAULT string); if
+  it comes back with the new pin, record the run here.
+- **DMEXCL isn't enforced** (S5). h9's overlays (the root, `/tmp`,
+  ephemeral paths) now refuse a second open of a `DMEXCL` file with
+  "file is locked", as ramfs does, until the first is closed. Host
+  directories (`#U`, such as the cwd or `--writable` paths) can't keep
+  the bit, so a `DMEXCL` create there is an ordinary file (documented in
+  h9's MANUAL.md). uxmeta's `/srv` lock stays: it works on either.
+- **--gfx on X11 crashes when /dev/mouse is bound before /dev/draw**
+  (S3). h9's X11 cursor calls now wait for the screen to open, without
+  touching the vendored backend. `h9 --gfx rio` under Xvfb crashed at
+  once before and runs after. The local `setcursor` patch isn't needed
+  any more.
+- **Writing `stop` to /proc/N/ctl never returns** (S4). Not a gap.
+  `stop`, `start`, `startstop` and `waitstop` are implemented, and `stop`
+  returns once the target stops (checked against a spinning process).
+  Like 9front, a process stops only when it next leaves the kernel, so
+  against `sleep 100` the write waits out the sleep, on 9front too.
+  uxd's srvfs-based stall test is still the right way to test an app
+  that stops answering.
