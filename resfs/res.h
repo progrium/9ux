@@ -99,6 +99,26 @@ int	rescursorimage(Res *r, Rbuf *out, char *err, int nerr);
 extern u32int macpal4[16];
 extern u32int macpal8[256];
 
+/* token.c */
+int	restokenize(char *s, char **tok, int max);
+int	resunesc(char *s);
+int	reshexval(int c);
+char	*resattr(char **tok, int n, char *key);
+int	resutfrune(char *s, long *r);
+int	utf2macroman(Rbuf *b, char *s, int glyphs);
+
+/* encode.c */
+int	hasencoder(uchar type[4]);
+int	restextenc(uchar type[4], char **lines, int n, Rbuf *out, char *err, int nerr, int *errline);
+
+/* image.c */
+int	resreadimage(uchar *buf, u32int n, int *w, int *h, u32int **px, char *err, int nerr);
+int	resiconenc(uchar type[4], int w, int h, u32int *px, u32int *bw, Rbuf *out, char *err, int nerr);
+int	rescursenc(int w, int h, u32int *px, int hotx, int hoty, Rbuf *out, char *err, int nerr);
+
+/* reswrite.c */
+int	reswrite(Res *res, int n, int mapattr, Rbuf *out, char *err, int nerr);
+
 /* text.c */
 int	istexttype(Res *r);
 int	restext(Res *r, Rbuf *out, char *err, int nerr);

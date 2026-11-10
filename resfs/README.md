@@ -26,6 +26,8 @@ be fuzzed on the host as well as tested inside h9.
 | `icon.c`, `text.c` | decoders to image(6), `/dev/cursor` form, and text |
 | `macroman.c`, `rbuf.c` | MacRoman to UTF-8; output buffers, escaping and quoting |
 | `resfs.c` | the 9P server (9front only) |
+| `rescomp.c` | compiles resource source text to `.rsrc`, and back with `-d` |
+| `token.c`, `encode.c`, `image.c`, `reswrite.c` | reading text forms and image(6), encoding resources, writing resource files |
 | `rescat.c` | prints what resfs would serve, for tests and inspection |
 | `test/` | `mkfixtures.py` makes fixtures and goldens from scratch; `cases` lists them |
 | `fuzz/` | libFuzzer target, and a mutation driver for hosts without libFuzzer |

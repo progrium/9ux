@@ -3,4 +3,4 @@
 # golden cases through rescat, then the 9P server; run from ../ as mk test.
 # The host runs the same cases with make test (run.sh).
 test:V:
-	rc run.rc ../$O.rescat && rc server.rc ../$O.resfs
+	rc run.rc ../$O.rescat && rc comp.rc ../$O.rescat ../$O.rescomp && rc server.rc ../$O.resfs

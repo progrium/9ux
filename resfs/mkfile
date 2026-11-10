@@ -1,6 +1,6 @@
 </$objtype/mkfile
 
-TARG=resfs rescat
+TARG=resfs rescat rescomp
 OFILES=\
 	res.$O\
 	rbuf.$O\
@@ -8,11 +8,15 @@ OFILES=\
 	icon.$O\
 	text.$O\
 	resload.$O\
+	token.$O\
+	encode.$O\
+	image.$O\
+	reswrite.$O\
 
 HFILES=res.h rescompat.h
 BIN=/$objtype/bin
 
 default:V: all
 
-# mk test builds both programs, then runs test/mkfile's test
+# mk test builds the programs, then runs test/mkfile's test
 </sys/src/cmd/mkmany
