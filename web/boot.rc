@@ -10,12 +10,14 @@
 # with session.rc as its -i command. Lines on the console that start
 # "9ux: " are progress the page shows over the screen.
 #
-#	rc boot.rc [-d]
+#	rc boot.rc [-d] [-s]
 #
-# -d (the page's ?debug) has session.rc print what it started.
-debug=()
-if(~ $1 -d){
-	debug=-d
+# -d (the page's ?debug) has session.rc print what it started; -s (a
+# small screen, such as a phone's) has it leave the home folder closed,
+# since its window would cover the desktop.
+flags=()
+while(~ $1 -d -s){
+	flags=($flags $1)
 	shift
 }
 user=glenda
@@ -50,4 +52,4 @@ for(f in /mnt/ux/register /mnt/meta/ctl)
 		echo boot.rc: no $f >[1=2]
 
 say starting rio
-exec /9ux/rio/8.out -u -i 'rc /9ux/web/session.rc '$"debug
+exec /9ux/rio/8.out -u -i 'rc /9ux/web/session.rc '$"flags

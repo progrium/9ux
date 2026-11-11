@@ -5,7 +5,17 @@
 # /mnt/plumb, and opens the home volume. The sample app isn't started:
 # it's in the Applications volume, for a double-click.
 rfork e
-debug=$1
+# boot.rc's flags: -d prints what's running, -s leaves the home folder
+# closed on a small screen.
+debug=()
+small=()
+for(a in $*)
+	switch($a){
+	case -d
+		debug=-d
+	case -s
+		small=-s
+	}
 fn say { echo 9ux: $* >/dev/cons; if(~ $debug -d) date -n >/dev/cons }
 t=/tmp/9ux
 
@@ -21,16 +31,19 @@ window -m -r 40 60 560 400 rc /9ux/web/desktop.rc
 for(i in `{seq 1 300})
 	if(! ls -p /mnt/ux/apps | grep -s '^desktop-')
 		sleep 0.1
-# Open the home volume, as a double-click on it would.
+# Open the home volume, as a double-click on it would, unless the
+# screen is small.
 f=/mnt/ux/apps/`{ls -p /mnt/ux/apps | grep '^desktop-' | sed 1q}
 d=$f/windows/1/controls/icons
 for(i in `{seq 1 100})
 	if(! grep -s 'label=home ' $d/items)
 		sleep 0.1
-echo open `{sed -n 's/^item ([^ ]+) label=home .*/\1/p' $d/items} >$d/ctl
-for(i in `{seq 1 100})
-	if(! test -e $f/windows/2)
-		sleep 0.1
+if(~ $#small 0){
+	echo open `{sed -n 's/^item ([^ ]+) label=home .*/\1/p' $d/items} >$d/ctl
+	for(i in `{seq 1 100})
+		if(! test -e $f/windows/2)
+			sleep 0.1
+}
 
 say ready
 

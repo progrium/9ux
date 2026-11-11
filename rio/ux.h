@@ -149,6 +149,7 @@ void		uxpost(int, char*, ...);
 int		uxisdesktop(Window*);
 int		uxdesktopid(void);
 Rectangle	uxdeskrect(void);
+Rectangle	uxfitrect(Rectangle);
 void		uxresized(void);
 int		uxrefuse(Window*, Window*, int);
 Window*	uxwin(int);
