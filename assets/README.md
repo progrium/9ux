@@ -5,8 +5,8 @@ controls, icons, cursors and desktop patterns. rio (S2), libux (S3) and
 Desktop (S7b) draw toward the mockups here, and everything they draw
 comes from the sources in this directory.
 
-Every graphic here is original to 9/UX; the mark's pixel Glenda is by
-Dan Fessler. None is derived from Apple
+Every graphic here is original to 9/UX, except the mark's pixel Glenda,
+which is by Dan Fessler. None is derived from Apple
 artwork, and 9/UX ships no Apple resources; people can import their own
 `.rsrc` files through resfs. The fonts are ones 9front already ships.
 
