@@ -5,7 +5,8 @@ controls, icons, cursors and desktop patterns. rio (S2), libux (S3) and
 Desktop (S7b) draw toward the mockups here, and everything they draw
 comes from the sources in this directory.
 
-Every graphic here is original to 9/UX. None is derived from Apple
+Every graphic here is original to 9/UX, except the mark's pixel Glenda,
+which is by Dan Fessler. None is derived from Apple
 artwork, and 9/UX ships no Apple resources; people can import their own
 `.rsrc` files through resfs. The fonts are ones 9front already ships.
 
@@ -224,7 +225,7 @@ non-`.` pixel, and each colour renders by its `bit` attribute.
 | `app`, `app-rc`, `app-editor` | generic application, rc window, text editor |
 | `trash`, `trash-full` | the Trash: an open wire basket, empty and with paper in it |
 | `alert-stop`, `alert-note`, `alert-caution` | alert icons for libux `Dialog` |
-| `mark` | the 9/UX mark, a pixel Glenda: the system menu and the about box |
+| `mark` | the 9/UX mark, a pixel Glenda by Dan Fessler: the system menu and the about box |
 
 Drawing new icons:
 

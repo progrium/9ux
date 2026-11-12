@@ -1,5 +1,5 @@
 # 9/UX mark: a pixel-art Glenda, the Plan 9 bunny (the character is
-# Renee French's), drawn by Jeff for 9/UX. Each 'size N' block is an
+# Renee French's), pixel art by Dan Fessler. Each 'size N' block is an
 # N-by-N grid of palette letters; '.' is transparent.
 name mark
 title 9/UX mark (Glenda)
