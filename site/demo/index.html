@@ -88,7 +88,9 @@ async function main() {
   m.addEventListener('snarf', (e) => print(`[the clipboard refused: ${JSON.stringify(e.text)}]\n`));
   say('Loading 9/UX… (about 17 MB, once)');
   canvas.focus();
-  const code = await m.run(['rc', '/9ux/web/boot.rc', ...(params.has('debug') ? ['-d'] : [])]).catch((e) => { print(`${e.message}\n`); return null; });
+  // A phone's screen, or one this small: no folder window at the start.
+  const small = canvas.clientWidth < 640 || canvas.clientHeight < 480;
+  const code = await m.run(['rc', '/9ux/web/boot.rc', ...(params.has('debug') ? ['-d'] : []), ...(small ? ['-s'] : [])]).catch((e) => { print(`${e.message}\n`); return null; });
   say(`9/UX stopped${code !== null ? ` (${code || 'exit 0'})` : ''}. <a href="" target="_self">Start it again</a>`);
 }
 main().catch((e) => say(`Couldn't start the demo: ${e.message}`));

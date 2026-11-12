@@ -177,6 +177,8 @@ shift(int *minp, int *maxp, int min, int max)
 Rectangle
 rectonscreen(Rectangle r)
 {
+	if(uxmode)	/* 9/UX: below the menu bar, and no bigger than the room */
+		return uxfitrect(r);
 	shift(&r.min.x, &r.max.x, screen->r.min.x, screen->r.max.x);
 	shift(&r.min.y, &r.max.y, screen->r.min.y, screen->r.max.y);
 	return r;

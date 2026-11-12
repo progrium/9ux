@@ -421,10 +421,12 @@ uxchromeat(Point p)
 	return best;
 }
 
+static Rectangle roomrect(void);
+
 static void
 zoom(Window *w, Chrome *c)
 {
-	Rectangle r, d;
+	Rectangle r;
 	Image *i;
 
 	if(c->zoomed){
@@ -433,9 +435,7 @@ zoom(Window *w, Chrome *c)
 	}else{
 		c->unzoomed = w->screenr;
 		/* the outer box fills the desktop, with room for the shadow */
-		d = uxdeskrect();
-		d.max = subpt(d.max, Pt(UXwindowshadow, UXwindowshadow));
-		r = Rect(d.min.x+1, d.min.y+T-Borderwidth, d.max.x-1, d.max.y-1);
+		r = roomrect();
 		c->zoomed = 1;
 	}
 	i = allocwindow(wscreen, r, Refbackup, DNofill);
@@ -444,6 +444,52 @@ zoom(Window *w, Chrome *c)
 	incref(w);
 	wsendctlmesg(w, Reshaped, r, i);
 	wclose(w);
+}
+
+/*
+ * The room a window has in 9/UX mode: what a zoomed window fills, below
+ * the menu bar with its title bar and shadow on screen.
+ */
+static Rectangle
+roomrect(void)
+{
+	Rectangle d;
+
+	d = uxdeskrect();
+	d.max = subpt(d.max, Pt(UXwindowshadow, UXwindowshadow));
+	return Rect(d.min.x+1, d.min.y+T-Borderwidth, d.max.x-1, d.max.y-1);
+}
+
+static void
+fitspan(int *min, int *max, int lo, int hi)
+{
+	if(*max-*min > hi-lo)
+		*max = *min + (hi-lo);
+	if(*max > hi){
+		*min -= *max-hi;
+		*max = hi;
+	}
+	if(*min < lo){
+		*max += lo-*min;
+		*min = lo;
+	}
+}
+
+/*
+ * A window's rectangle from wctl (new, resize, move) in 9/UX mode: no
+ * bigger than the room below the menu bar, and moved into it, so a
+ * window asked for on a small screen (a phone's) never opens larger
+ * than the screen or under the menu bar.
+ */
+Rectangle
+uxfitrect(Rectangle r)
+{
+	Rectangle d;
+
+	d = roomrect();
+	fitspan(&r.min.x, &r.max.x, d.min.x, d.max.x);
+	fitspan(&r.min.y, &r.max.y, d.min.y, d.max.y);
+	return r;
 }
 
 /* track a press in a box; returns 1 if released inside it */
