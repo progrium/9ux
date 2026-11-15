@@ -10,8 +10,8 @@
      out. The screen fills the window. While h9 loads, a full-window
      terminal shows the boot: the page fetching the repository's files
      (one GitHub API call for the tree, then each file from
-     raw.githubusercontent.com) and putting them in the machine's tree at
-     /9ux/web/home/NAME, then the session's progress. boot.rc's -v makes
+     raw.githubusercontent.com, a period apiece) and putting them in the
+     machine's tree at /9ux/web/home/NAME, then the session's progress. boot.rc's -v makes
      the folder a volume on the desktop, and opens it if the screen is
      big enough.
 
@@ -76,8 +76,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // progress; "9ux: ready" ends the boot and shows the desktop.
 let pending = '';
 let booted = false;
+// While the page draws its line of periods, the guest's lines wait.
+let held = false;
 const print = (s) => {
   pending += s;
+  if (held) return;
   let i;
   while ((i = pending.indexOf('\n')) >= 0) {
     const l = pending.slice(0, i);
@@ -117,29 +120,33 @@ async function fetchRepo(m) {
   line(`${all} files, ${kb(files.reduce((a, e) => a + e.size, 0))}${files.length < all ? ` (${all - files.length} too big, left out)` : ''}${t.truncated ? ' (truncated by GitHub)' : ''}`, 'ok');
 
   const raw = `https://raw.githubusercontent.com/${repo}/${encodeURIComponent(ref)}/`;
-  const width = String(files.length).length;
-  let done = 0, failed = 0, next = 0;
+  let failed = 0, next = 0;
+  const bad = [];
+  // One period per file, on one growing line, so the boot log above
+  // stays in view; a failed file's period is red, and listed after.
+  held = true;
+  write('  ');
   const one = async (e) => {
-    let msg;
     try {
       const f = await fetch(raw + e.path.split('/').map(encodeURIComponent).join('/'));
       if (!f.ok) throw new Error(`HTTP ${f.status}`);
       const b = await f.arrayBuffer();
       m._put(`${into}/${e.path}`, b, e.mode === '100755' ? 0o755 : 0o644);
-      msg = [kb(b.byteLength), null];
+      write('.');
     } catch (err) {
       failed++;
-      msg = [err.message, 'bad'];
+      bad.push(`  ${e.path}: ${err.message}`);
+      write('.', 'bad');
     }
-    done++;
-    write(`  [${String(done).padStart(width)}/${files.length}] `, 'dim');
-    write(`${e.path}  `);
-    line(msg[0], msg[1] ?? 'dim');
   };
   // Eight at a time.
   await Promise.all(Array.from({ length: Math.min(8, files.length) }, async () => {
     while (next < files.length) await one(files[next++]);
   }));
+  line();
+  held = false;
+  print('');
+  bad.forEach((l) => line(l, 'bad'));
   const got = files.length - failed;
   line(dots(`  ${name}`) + `${got} files OK${failed ? `, ${failed} failed` : ''}`, failed ? 'bad' : 'ok');
   return `${got} files from github.com/${repo}`;
