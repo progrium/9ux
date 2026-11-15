@@ -83,11 +83,11 @@ enum {
 	UXdialogtextx	= 64,
 	UXiconlarge	= 32,
 	UXiconsmall	= 16,
-	UXiconviewcellw	= 76,
+	UXiconviewcellw	= 92,
 	UXiconviewcellh	= 60,
 	UXiconviewlabelgap	= 3,
 	UXiconviewlabelpad	= 2,
-	UXiconviewlabelmax	= 76,
+	UXiconviewlabelmax	= 88,
 	UXdesktopmargin	= 12,
 	UXdesktopcellh	= 64,
 };
