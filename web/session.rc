@@ -30,7 +30,7 @@ t=/tmp/9ux
 echo 'type is text
 data matches ''.*\.(txt|md|jsx|js|ts|css|html|svg|json|xml|go|c|h|rc|sh|yml|yaml|toml)''
 plumb to edit
-plumb client window -m -r 260 120 900 560 acme -c 1' >$t/lib/plumbing
+plumb client window -m -r 260 120 900 560 /9ux/web/apps/Acme' >$t/lib/plumbing
 plumber -p $t/lib/plumbing
 
 say starting Desktop
@@ -78,6 +78,10 @@ if(~ $debug -d){
 	while(! ps | grep -s ' acme$')
 		sleep 0.5
 	echo debug: acme
+	# Its window, with chrome on (apps/Acme).
+	sleep 1
+	cat /dev/ux/windows
+	echo debug: windows
 	echo open `{sed -n 's/^item ([^ ]+) label=Applications .*/\1/p' $d/items} >$d/ctl
 	w=()
 	for(i in `{seq 1 100})

@@ -1,3 +1,6 @@
 #!/bin/rc
-# An rc shell, in the window Desktop opens for it.
+# An rc shell, in the window Desktop opens for it, with 9/UX chrome
+# (devux's chrome ctl): a title bar, frame and shadow, as libux apps
+# have. It stays on for whatever runs in the window.
+echo chrome on >/dev/ux/ctl >[2]/dev/null
 exec rc -i

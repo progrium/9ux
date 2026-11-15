@@ -2,7 +2,8 @@
 // the built demo directory, opens its page, and waits for the session to
 // say it's ready (web/session.rc: Desktop registered with uxd and showing
 // the home volume's window). Then it double-clicks README.txt in that
-// window and checks that acme opened it, through the plumber, and that
+// window and checks that acme opened it, through the plumber, with 9/UX
+// chrome on its window, and that
 // opening Sample in the Applications volume (which session.rc's -d does
 // through Desktop's files) launches the sample app. The Pages workflow
 // runs it before deploying.
@@ -74,6 +75,11 @@ try {
     await page.waitForTimeout(80);
     await page.mouse.click(box.x + 284, box.y + 98);
     await page.waitForFunction(() => /\bacme\n/.test(document.getElementById('log').textContent), null, { timeout: 60_000 });
+  });
+  // apps/Acme, which the plumbing starts, turns 9/UX chrome on.
+  await step("acme's window has 9/UX chrome", async () => {
+    await page.waitForFunction(() => /debug: windows\n/.test(document.getElementById('log').textContent), null, { timeout: 60_000 });
+    if (!/^window win=\d+ .*label=acme state=\S*chrome/m.test(await log())) throw new Error('no acme window with chrome in /dev/ux/windows');
   });
   await step('opening Sample in Applications launches the sample app', () =>
     page.waitForFunction(() => /debug: sample\n/.test(document.getElementById('log').textContent), null, { timeout: 60_000 }));

@@ -12,6 +12,9 @@
 
      ?embed leaves out the header, for the project page's iframe.
      ?debug prints what the session started, below the screen.
+     ?memory=SIZE is h9's --memory (such as 96M), and ?jit=off runs h86's
+     interpreter alone (?jit=on runs the JIT). WebKit gets 128M and no JIT
+     unless these say otherwise.
      ?scale=N draws N device pixels per screen pixel (default 1 CSS pixel). -->
 <style>
   html, body { margin: 0; height: 100%; background: #fff; color: #000; }
@@ -79,9 +82,19 @@ async function main() {
   }
   const canvas = document.getElementById('screen');
   const scale = Number(params.get('scale') ?? 1);
+  // WebKit (Safari, and every browser on iOS): iPhones closed the tab
+  // early in the boot with h9's defaults, so there the guest gets less
+  // memory and the JIT is off. The interpreter boots about as fast.
+  const ua = navigator.userAgent;
+  const webkit = /AppleWebKit/.test(ua) && !/Chrome\/|Chromium\//.test(ua);
+  const jit = params.get('jit') ?? (webkit ? 'off' : 'on');
+  const memory = params.get('memory') ?? (webkit ? '128M' : undefined);
   const m = await createMachine({
     root: 'root.h9a',
-    memory: params.get('memory') ?? undefined,
+    memory,
+    // jit off: h86's interpreter alone, no wasm compiled at run time (a
+    // threshold the JIT never reaches).
+    env: jit === 'off' ? { H9_JIT_HOT: '4294967295' } : undefined,
     gfx: { canvas, scale },
     terminal: { write: (b) => print(dec.decode(b, { stream: true })) },
   });
