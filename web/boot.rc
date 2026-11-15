@@ -10,16 +10,29 @@
 # with session.rc as its -i command. Lines on the console that start
 # "9ux: " are progress the page shows over the screen.
 #
-#	rc boot.rc [-d] [-s]
+#	rc boot.rc [-d] [-s] [-v name]
 #
 # -d (the page's ?debug) has session.rc print what it started; -s (a
 # small screen, such as a phone's) has it leave the home folder closed,
 # since its window would cover the desktop.
+#
+# -v name adds a volume for the folder $home/name, which the page fills
+# while this runs (site/progrium.html puts a GitHub repository's files
+# at /9ux/web/home/name), and session.rc opens it in place of home. The
+# page writes /9ux/web/fetched, a line of status, when it's done.
 flags=()
-while(~ $1 -d -s){
-	flags=($flags $1)
+vol=()
+while(~ $1 -d -s -v){
+	if(~ $1 -v){
+		vol=$2
+		shift
+	}
+	if not
+		flags=($flags $1)
 	shift
 }
+if(~ $#vol 1)
+	flags=($flags -v $vol)
 user=glenda
 home=/usr/glenda
 workspace=demo
@@ -39,12 +52,24 @@ mkdir -p $t/sys $t/apps $t/user $t/lib
 
 /9ux/uxd/8.out -m /mnt/ux -g $t/grants
 
-echo 'ext=.txt type=text
-type=text open=edit icon=doc-text desc="Plain text"' >$t/sys/base.ndb
+{
+	for(e in .txt .md .jsx .js .ts .css .html .svg .json .xml .go .c .h .rc .sh .yml .yaml .toml)
+		echo 'ext='$e' type=text'
+	echo 'type=text open=edit icon=doc-text desc="Plain text"'
+} >$t/sys/base.ndb
 # Two volumes on the desktop: the home folder, and Applications, whose
 # programs (web/apps) Desktop launches on a double-click.
 echo 'volume=home path='$home' icon=disk desktop=yes
 volume=Applications path=/9ux/web/apps icon=disk desktop=yes' >$t/user/meta.ndb
+# -v: a third volume, once the page has filled its folder.
+if(~ $#vol 1){
+	say fetching $vol
+	while(! test -e /9ux/web/fetched)
+		sleep 0.1
+	say $vol^: `{cat /9ux/web/fetched}
+	mkdir -p $home/$vol
+	echo 'volume='$vol' path='$home/$vol' icon=disk-remote desktop=yes' >>$t/user/meta.ndb
+}
 /9ux/uxmeta/8.out -s uxmeta.$user -m /mnt/meta -d $t/sys -a $t/apps -u $t/user -w $workspace -i 500
 
 for(f in /mnt/ux/register /mnt/meta/ctl)

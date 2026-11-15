@@ -1,6 +1,6 @@
 Welcome to 9/UX, running in your browser.
 
-This is 9front's own userland and the 9/UX desktop, compiled for 386 and run by h9 on the v86 emulator, inside your browser tab. Nothing leaves the tab: the files are an archive in memory, and what you change goes away when you close it.
+This is 9front's own userland and the 9/UX desktop, compiled for 386 and run by h9 on its own 386 emulator, inside your browser tab. Nothing leaves the tab: the files are an archive in memory, and what you change goes away when you close it.
 
 Some things to try:
 

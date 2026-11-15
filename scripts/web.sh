@@ -4,7 +4,8 @@
 #
 #   scripts/web.sh [OUT]    build it into OUT (default .local/web/demo)
 #
-# The browser host runs 9front's 386 programs on v86, so this:
+# The browser host runs 9front's 386 programs on h86, h9's own 386 CPU
+# compiled to wasm, so this:
 #
 #  1. builds h9's browser host at H9_WEB_REV (scripts/pins.sh) into
 #     .local/web/hyper9, with the release's 386 ISO unpacked into a root
@@ -17,6 +18,9 @@
 #     holds (its src/web/root.list), what web/root.list adds, and the
 #     9/UX tree at /9ux (the binaries, resources and web/*.rc);
 #  4. copies h9's page runtime, the archive, and site/demo/ into OUT.
+#
+# site/progrium.html runs the same build from demo/, with a GitHub
+# repository's files added at runtime.
 #
 # H9_WEB_SRC=/path/to/hyper9 uses that checkout as it is instead of
 # cloning one. Needs Zig (scripts/zig.sh) and, on Linux x86_64 without
@@ -51,7 +55,6 @@ root386="$src/.local/9front/root386"
 (
 	cd "$src"
 	. scripts/env.sh
-	scripts/fetch.sh v86 >/dev/null
 	if [ ! -x "$root386/386/bin/rc" ]; then
 		scripts/fetch.sh iso386 >/dev/null
 		. scripts/pins.sh
@@ -107,7 +110,7 @@ list="$local/root.list"
 rm -rf "$out"
 mkdir -p "$out"
 w="$src/zig-out/web"
-cp "$w/h9-web.js" "$w/worker.js" "$w/wasi-mem.js" "$w/h9.wasm" "$w/v86.wasm" "$w/LICENSE.v86" "$out/"
+cp "$w/h9-web.js" "$w/worker.js" "$w/wasi-mem.js" "$w/h9.wasm" "$out/"
 cp "$src/LICENSE" "$out/LICENSE.h9"
 cp "$src/third_party/drawterm/LICENSE" "$out/LICENSE.drawterm"
 cp "$local/root.h9a" "$out/"

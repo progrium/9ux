@@ -9,19 +9,26 @@ rfork e
 # closed on a small screen.
 debug=()
 small=()
-for(a in $*)
-	switch($a){
+vol=home
+while(! ~ $#* 0){
+	switch($1){
 	case -d
 		debug=-d
 	case -s
 		small=-s
+	case -v
+		vol=$2
+		shift
 	}
+	shift
+}
 fn say { echo 9ux: $* >/dev/cons; if(~ $debug -d) date -n >/dev/cons }
 t=/tmp/9ux
 
-# Text files open in acme, which the plumber starts if it isn't running.
+# Text files open in acme, which the plumber starts if it isn't running:
+# the suffixes boot.rc gives the text type.
 echo 'type is text
-data matches ''.*\.txt''
+data matches ''.*\.(txt|md|jsx|js|ts|css|html|svg|json|xml|go|c|h|rc|sh|yml|yaml|toml)''
 plumb to edit
 plumb client window -m -r 260 120 900 560 acme -c 1' >$t/lib/plumbing
 plumber -p $t/lib/plumbing
@@ -31,15 +38,15 @@ window -m -r 40 60 560 400 rc /9ux/web/desktop.rc
 for(i in `{seq 1 300})
 	if(! ls -p /mnt/ux/apps | grep -s '^desktop-')
 		sleep 0.1
-# Open the home volume, as a double-click on it would, unless the
-# screen is small.
+# Open the home volume (or boot.rc's -v volume), as a double-click on it
+# would, unless the screen is small.
 f=/mnt/ux/apps/`{ls -p /mnt/ux/apps | grep '^desktop-' | sed 1q}
 d=$f/windows/1/controls/icons
 for(i in `{seq 1 100})
-	if(! grep -s 'label=home ' $d/items)
+	if(! grep -s 'label='$vol' ' $d/items)
 		sleep 0.1
 if(~ $#small 0){
-	echo open `{sed -n 's/^item ([^ ]+) label=home .*/\1/p' $d/items} >$d/ctl
+	echo open `{sed -n 's/^item ([^ ]+) label='$vol' .*/\1/p' $d/items} >$d/ctl
 	for(i in `{seq 1 100})
 		if(! test -e $f/windows/2)
 			sleep 0.1
@@ -57,6 +64,17 @@ if(~ $debug -d){
 	ps
 	ls -l /srv /mnt/ux/apps
 	cat /mnt/meta/layers /tmp/9ux/*.err
+	# boot.rc's -v volume (test/web/progrium.mjs): the window open on it,
+	# and what's in it.
+	if(! ~ $vol home){
+		echo debug: volume $vol
+		for(w in $f/windows/*/title){
+			cat $w
+			echo
+		}
+		ls -p $home/$vol
+		echo debug: volume listed
+	}
 	while(! ps | grep -s ' acme$')
 		sleep 0.5
 	echo debug: acme

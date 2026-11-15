@@ -6,7 +6,7 @@
 <title>9/UX live demo</title>
 <link rel="icon" href="data:,">
 <!-- The live demo: 9/UX on h9's browser host. scripts/web.sh copies this
-     page next to h9's runtime (h9-web.js, worker.js, h9.wasm, v86.wasm)
+     page next to h9's runtime (h9-web.js, worker.js, wasi-mem.js, h9.wasm)
      and the demo's root archive (root.h9a). The guest runs
      /9ux/web/boot.rc (web/boot.rc in the repository).
 
@@ -35,7 +35,7 @@
 <header>
   <b>9/UX</b>
   <span class="grow">rio in 9/UX mode, Desktop and the libux sample, compiled for 386 and run by
-    <a href="https://github.com/progrium/hyper9">h9</a> on v86 in this tab.
+    <a href="https://github.com/progrium/hyper9">h9</a> in this tab.
     Click the screen to type; right-click (or Ctrl-click) for button 3, Alt-click for button 2.</span>
   <button id="restart">restart</button>
   <a href="../">back to the project page</a>
@@ -86,7 +86,7 @@ async function main() {
     terminal: { write: (b) => print(dec.decode(b, { stream: true })) },
   });
   m.addEventListener('snarf', (e) => print(`[the clipboard refused: ${JSON.stringify(e.text)}]\n`));
-  say('Loading 9/UX… (about 17 MB, once)');
+  say('Loading 9/UX… (about 23 MB, once)');
   canvas.focus();
   // A phone's screen, or one this small: no folder window at the start.
   const small = canvas.clientWidth < 640 || canvas.clientHeight < 480;
