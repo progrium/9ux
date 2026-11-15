@@ -17,6 +17,9 @@
 #include <9p.h>
 #include "dat.h"
 #include "fns.h"
+#include <pool.h>
+
+extern void (*__assert)(char*);	/* libc's hook for assert */
 
 char *user;
 ulong starttime;
@@ -253,6 +256,42 @@ qtok(char *t)
 	return s;
 }
 
+/*
+ * A failed assertion or a corrupt heap kills only the proc it happens
+ * in. If that's the main proc, the lib9p procs live on, keeping the
+ * /srv entries and the mount, and every client waits forever on
+ * requests nobody serves. So take every proc of uxd down with it
+ * (they're one note group): the mount hangs up and clients see errors.
+ */
+static void
+die(char *msg)
+{
+	fprint(2, "uxd %d: %s\n", getpid(), msg);
+	postnote(PNGROUP, getpid(), "kill");
+	abort();
+}
+
+static void
+dieassert(char *s)
+{
+	char buf[ERRMAX+32];
+
+	snprint(buf, sizeof buf, "%s: assertion failed", s);
+	die(buf);
+}
+
+static void
+diepanic(Pool*, char *fmt, ...)
+{
+	char buf[256];
+	va_list arg;
+
+	va_start(arg, fmt);
+	vseprint(buf, buf+sizeof buf, fmt, arg);
+	va_end(arg);
+	die(buf);
+}
+
 static void
 usage(void)
 {
@@ -288,6 +327,8 @@ threadmain(int argc, char **argv)
 		usage();
 
 	rfork(RFNOTEG);
+	__assert = dieassert;
+	mainmem->panic = diepanic;
 	quotefmtinstall();
 	fmtinstall('F', fcallfmt);
 	user = getuser();

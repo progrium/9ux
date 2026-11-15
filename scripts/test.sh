@@ -38,6 +38,20 @@ done
 
 h9() { "$top/scripts/h9.sh" "$@"; }
 
+# A unit run that hangs (a server that broke and holds a mount its test
+# then waits on forever) fails after this many seconds instead of
+# running into the CI job's timeout.
+# (macOS has no timeout(1) unless coreutils is installed; without it,
+# no limit.)
+unit_timeout=${UNIT_TIMEOUT:-600}
+limit() {
+	if command -v timeout >/dev/null; then
+		timeout -k 10 "$unit_timeout" "$@"
+	else
+		"$@"
+	fi
+}
+
 failed=
 passed=
 note() { printf '\n=== %s\n' "$*"; }
@@ -75,8 +89,10 @@ for layer in $layers; do
 			case $d in test/harness) continue ;; esac
 			grep -q '^test\|mkone\|mkmany' "$mf" || continue
 			note "unit: mk test in $d"
-			h9 --rc "cd $d && mk test"
-			result "unit:$d" $?
+			limit "$top/scripts/h9.sh" --rc "cd $d && mk test"
+			st=$?
+			[ $st -eq 124 ] && echo "test.sh: unit:$d still running after ${unit_timeout}s; killed" >&2
+			result "unit:$d" $st
 		done
 		;;
 	system)
