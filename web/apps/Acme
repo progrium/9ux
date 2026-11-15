@@ -1,3 +1,5 @@
 #!/bin/rc
-# acme, in the window Desktop opens for it.
+# acme, in the window Desktop opens for it, with 9/UX chrome (see
+# Shell). session.rc's plumbing rule starts it this way too.
+echo chrome on >/dev/ux/ctl >[2]/dev/null
 exec acme -c 1
