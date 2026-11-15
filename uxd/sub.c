@@ -29,7 +29,13 @@ enqueue(Sub *s, char *msg, ulong n)
 	s->q[s->nq++] = msg;
 }
 
-/* answer as many blocked reads as there are messages for */
+static void subfree(Sub*);
+
+/*
+ * answer as many blocked reads as there are messages for. A reply can
+ * switch threads (dat.h), and the last read's fid can be clunked and
+ * freed meanwhile, so s is held busy until the loop is done.
+ */
 static void
 serve(Sub *s)
 {
@@ -39,7 +45,8 @@ serve(Sub *s)
 	long n, len;
 	int i;
 
-	while(s->nrq > 0 && s->nq > 0){
+	s->busy++;
+	while(!s->closed && s->nrq > 0 && s->nq > 0){
 		r = s->rq[0];
 		s->nrq--;
 		memmove(s->rq, s->rq+1, s->nrq*sizeof s->rq[0]);
@@ -67,6 +74,8 @@ serve(Sub *s)
 		op->freeme = buf;
 		reply(op, nil);
 	}
+	if(--s->busy == 0 && s->closed)
+		subfree(s);
 }
 
 void
@@ -74,18 +83,32 @@ postevent(char *fmt, ...)
 {
 	va_list arg;
 	char *body;
-	Sub *s;
+	Sub *s, **all;
 	ulong n;
+	int i, ns;
 
 	va_start(arg, fmt);
 	body = vsmprint(fmt, arg);
 	va_end(arg);
 	n = ++seq;
+	ns = 0;
+	for(s = subs; s != nil; s = s->next)
+		ns++;
+	/* queue it everywhere, then serve: serving can change the list */
+	all = emalloc9p((ns+1)*sizeof all[0]);
+	ns = 0;
 	for(s = subs; s != nil; s = s->next){
 		enqueue(s, smprint("%lud %s\n", n, body), n);
-		serve(s);
+		s->busy++;
+		all[ns++] = s;
 	}
 	free(body);
+	for(i = 0; i < ns; i++)
+		serve(all[i]);
+	for(i = 0; i < ns; i++)
+		if(--all[i]->busy == 0 && all[i]->closed)
+			subfree(all[i]);
+	free(all);
 }
 
 Sub*
@@ -132,20 +155,30 @@ subread(Sub *s, Op *op)
 	serve(s);
 }
 
+static void
+subfree(Sub *s)
+{
+	int i;
+
+	for(i = 0; i < s->nq; i++)
+		free(s->q[i]);
+	/* reads still blocked hold the fid, so there are none */
+	free(s->rq);
+	free(s);
+}
+
+/* the events fid is gone */
 void
 freesub(Sub *s)
 {
 	Sub **l;
-	int i;
 
 	for(l = &subs; *l != nil; l = &(*l)->next)
 		if(*l == s){
 			*l = s->next;
 			break;
 		}
-	for(i = 0; i < s->nq; i++)
-		free(s->q[i]);
-	/* reads still blocked hold the fid, so there are none */
-	free(s->rq);
-	free(s);
+	s->closed = 1;
+	if(s->busy == 0)
+		subfree(s);
 }

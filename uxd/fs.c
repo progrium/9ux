@@ -362,6 +362,11 @@ fswalk(Op *op)
 	if(f->q == Qpass && !owned){
 		/* need a fid of our own on the app for this place */
 		a = f->app;
+		if(a->gone){
+			freefx(f);
+			reply(op, "gone");
+			return;
+		}
 		nf = newfid(a->c);
 		if((m = twalk(a->c, base >= 0 ? base : a->rootfid, nf, 0, nil, op)) == nil){
 			freefx(f);

@@ -93,7 +93,16 @@ newconn(int fd)
 	return c;
 }
 
-static void
+/* keep c (not its app) while the caller may switch threads */
+Conn*
+connhold(Conn *c)
+{
+	if(c != nil)
+		c->ref++;
+	return c;
+}
+
+void
 connfree(Conn *c)
 {
 	if(--c->ref > 0)
@@ -466,10 +475,28 @@ tstat(Conn *c, ulong fid, Op *op)
 /*
  * Read a whole small file below fid (path relative to it, "" for fid
  * itself) into a NUL-terminated string. Used for version, state and
- * ctl help. Returns nil with op->err set.
+ * ctl help. Returns nil with op->err set. The app may go away while
+ * this waits on it, so it holds c until it's done.
  */
+static char *readapp1(Conn*, ulong, char*, Op*);
+
 char*
 readapp(Conn *c, ulong fid, char *path, Op *op)
+{
+	char *s;
+
+	if(c == nil){
+		seterr(op, "gone");
+		return nil;
+	}
+	connhold(c);
+	s = readapp1(c, fid, path, op);
+	connfree(c);
+	return s;
+}
+
+static char*
+readapp1(Conn *c, ulong fid, char *path, Op *op)
 {
 	char *names[MAXWELEM], *p, *s;
 	ulong nf;

@@ -4,10 +4,16 @@
  * Concurrency model. lib9p's server procs (one per posted service) do
  * nothing but hand each request to the main proc over reqchan. Every
  * request then runs as its own thread in the main proc, so all of
- * uxd's state is touched by one proc and needs no locks: threads only
- * switch when one blocks on a channel. Talking to an app's server goes
- * through a Conn, whose reader and writer procs do the blocking I/O,
- * so a stalled app stalls only the requests waiting on it.
+ * uxd's state is touched by one proc and needs no locks. Threads
+ * switch at channel operations, and not only blocking ones: libthread
+ * gives up the proc after every send or receive, and a reply can send
+ * (the last reference to a fid goes to fidthread). So code that loops
+ * over shared state, or replies while it holds on to some, must expect
+ * it to have changed, or been freed, when the reply returns.
+ *
+ * Talking to an app's server goes through a Conn, whose reader and
+ * writer procs do the blocking I/O, so a stalled app stalls only the
+ * requests waiting on it.
  */
 
 typedef struct App App;
@@ -143,6 +149,8 @@ struct Sub {
 	int	nq;
 	Req	**rq;		/* blocked reads */
 	int	nrq;
+	int	busy;		/* being served: free when done */
+	int	closed;		/* its fid is gone */
 };
 
 /* a registration: one open of register */

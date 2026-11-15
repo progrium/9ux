@@ -14,6 +14,8 @@ char*	winlist(void);
 /* conn.c */
 Conn*	newconn(int);
 void	closeconn(Conn*);
+Conn*	connhold(Conn*);
+void	connfree(Conn*);
 void	dispatch(Msg*);
 void	freemsg(Msg*);
 Msg*	rpc(Conn*, Fcall*, Op*);
