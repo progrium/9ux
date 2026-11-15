@@ -1,8 +1,9 @@
 # Publishes the project page (site/) to GitHub Pages, with screenshots
 # from docs/images/, the design mockups from assets/mockups/, and the
 # live demo in demo/: 9/UX built from this commit for 386 and run in the
-# page by h9's browser host (scripts/web.sh, site/demo/). The demo's
-# browser test (test/web/demo.mjs) gates the deploy.
+# page by h9's browser host (scripts/web.sh, site/demo/), and
+# progrium.html, the demo with a GitHub repository on the desktop. Their
+# browser tests (test/web/demo.mjs, test/web/progrium.mjs) gate the deploy.
 #
 # Runs when the page, the demo, or anything the demo builds from
 # changes on main, or by hand.
@@ -67,13 +68,12 @@ jobs:
             !.local/hyper9/.local/9front
           key: h9-${{ runner.os }}-${{ hashFiles('scripts/pins.sh', 'scripts/h9.sh', 'scripts/zig.sh') }}
 
-      # h9's browser host at H9_WEB_REV: the 386 ISO and v86.wasm, which
-      # change only with the pin.
+      # h9's browser host at H9_WEB_REV: the 386 ISO, which changes only
+      # with the pin.
       - uses: actions/cache@v4
         with:
           path: |
             .local/web/hyper9/.local/9front/*.386.iso
-            .local/web/hyper9/.local/v86
             .local/web/hyper9/.local/cache/zig
           key: pages-web-${{ hashFiles('scripts/pins.sh') }}
 
@@ -93,13 +93,14 @@ jobs:
           npm install --no-save --no-package-lock playwright@1.63.0
           npx playwright install --with-deps chromium
           node test/web/demo.mjs .local/web/demo .local/web/demo-test.png
+          node test/web/progrium.mjs .local/web/demo .local/web/progrium-test.png
 
       - name: Upload the demo's screenshot
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: demo-screenshot
-          path: .local/web/demo-test.png
+          path: .local/web/*-test.png
           if-no-files-found: ignore
 
       - name: Assemble the site

@@ -61,10 +61,10 @@ metric=dialog.textx         value=64   # alert text column
 # Desktop (drawn by desktop through libux IconView)
 metric=icon.large           value=32
 metric=icon.small           value=16
-metric=iconview.cellw       value=76
+metric=iconview.cellw       value=92
 metric=iconview.cellh       value=60
 metric=iconview.labelgap    value=3
 metric=iconview.labelpad    value=2    # plate padding around a label
-metric=iconview.labelmax    value=76   # elide past this width: the cell's width, so "Applications" (75) fits
+metric=iconview.labelmax    value=88   # elide past this width: the cell less the plate's padding, so a 14-letter name such as "newsletter.jsx" (87) fits
 metric=desktop.margin       value=12
 metric=desktop.cellh        value=64

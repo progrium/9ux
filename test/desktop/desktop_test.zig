@@ -105,11 +105,12 @@ test "desktop: the desktop, a folder window, moving and selecting icons" {
     try waitTree(s, items, try std.fmt.bufPrint(&wb, "label=notes.txt icon=doc-text pos={d},{d}", .{ np.x + 100, np.y + 40 }));
     try s.waitRc("grep -s 'item=.*/vol/notes.txt x=' $work/f/user/workspace/gui.ndb", 10_000);
 
-    // A rubber band from the empty margin left of docs, across to
+    // A rubber band from the empty margin left of docs (outside its
+    // cell, iconview.cellw/2 = 46 either side), across to
     // below notes.txt, selects all three items.
     const docs = try itemAt(s, fw, "docs");
     const ws = try itemAt(s, fw, "notes.txt");
-    s.drag(pt(docs.x - 44, docs.y - 10), pt(ws.x + 60, ws.y + 60), .left);
+    s.drag(pt(docs.x - 48, docs.y - 10), pt(ws.x + 60, ws.y + 60), .left);
     var sb: [128]u8 = undefined;
     try waitTree(s, try std.fmt.bufPrint(&sb, "windows/{s}/controls/icons/selection", .{fw}), "^i[0-9]+ i[0-9]+ i[0-9]+$");
     s.saveScreen("desktop-folder");

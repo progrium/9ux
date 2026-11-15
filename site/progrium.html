@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>progrium.xyz on 9/UX</title>
+<link rel="icon" href="data:,">
+<!-- The live demo (demo/, scripts/web.sh) with a GitHub repository on the
+     desktop: github.com/progrium/progrium.xyz at main, its dotfiles left
+     out. The screen fills the window. While h9 loads, a full-window
+     terminal shows the boot: the page fetching the repository's files
+     (one GitHub API call for the tree, then each file from
+     raw.githubusercontent.com) and putting them in the machine's tree at
+     /9ux/web/home/NAME, then the session's progress. boot.rc's -v makes
+     the folder a volume on the desktop, and opens it if the screen is
+     big enough.
+
+     ?repo=OWNER/NAME and ?ref=REF pick another repository or branch.
+     ?debug has the session print what it started (test/web/progrium.mjs).
+     ?scale=N draws N device pixels per screen pixel (default 1 CSS pixel). -->
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
+  #screen { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; background: #5f8f8f; }
+  #term { position: fixed; inset: 0; margin: 0; padding: 12px 16px; box-sizing: border-box; overflow: auto;
+    background: #000; color: #bbb; font: 14px/1.35 ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace;
+    white-space: pre-wrap; word-break: break-all; transition: opacity .4s; }
+  #term.done { opacity: 0; pointer-events: none; }
+  #term::after { content: "_"; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { visibility: hidden; } }
+  #term .hi { color: #fff; }
+  #term .ok { color: #5f5; }
+  #term .bad { color: #f55; }
+  #term .dim { color: #777; }
+  #term a { color: #8cf; }
+</style>
+</head>
+<body>
+<canvas id="screen" tabindex="0" aria-label="the 9/UX desktop"></canvas>
+<pre id="term" aria-live="polite"></pre>
+<script type="module">
+const params = new URLSearchParams(location.search);
+const repo = params.get('repo') ?? 'progrium/progrium.xyz';
+const ref = params.get('ref') ?? 'main';
+const name = repo.split('/').pop();
+// The folder the page fills, which boot.rc binds at /usr/glenda, and the
+// file that tells boot.rc it's done.
+const into = `/9ux/web/home/${name}`;
+const marker = '/9ux/web/fetched';
+// Limits, so a big repository can't take the tab down.
+const maxFile = 8 << 20, maxTotal = 64 << 20, maxFiles = 2000;
+
+const term = document.getElementById('term');
+const canvas = document.getElementById('screen');
+const dec = new TextDecoder();
+
+// The terminal: write appends text, in a class for its color.
+const write = (s, cls) => {
+  const near = term.scrollHeight - term.scrollTop - term.clientHeight < 40;
+  if (cls) {
+    const span = document.createElement('span');
+    span.className = cls;
+    span.textContent = s;
+    term.append(span);
+  } else term.append(s);
+  if (near) term.scrollTop = term.scrollHeight;
+};
+const line = (s = '', cls) => write(s + '\n', cls);
+const dots = (label, w = 22) => `${label} ${'.'.repeat(Math.max(2, w - label.length))} `;
+const kb = (n) => (n < 1024 ? `${n} B` : n < 1 << 20 ? `${(n / 1024).toFixed(1)} KB` : `${(n / (1 << 20)).toFixed(1)} MB`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// The guest's console. "9ux: " lines are boot.rc's and session.rc's
+// progress; "9ux: ready" ends the boot and shows the desktop.
+let pending = '';
+let booted = false;
+const print = (s) => {
+  pending += s;
+  let i;
+  while ((i = pending.indexOf('\n')) >= 0) {
+    const l = pending.slice(0, i);
+    pending = pending.slice(i + 1);
+    const p = l.match(/^9ux: (.*)/);
+    if (!p) { line(l, 'dim'); continue; }
+    if (p[1] === 'ready') {
+      line(dots('9/UX') + 'ready', 'ok');
+      booted = true;
+      term.classList.add('done');
+      canvas.focus();
+    } else line(`  ${p[1]}`);
+  }
+};
+
+// The repository's files into the machine's tree: the tree from the
+// GitHub API (one call; 60 an hour per address without a token), and
+// each file from raw.githubusercontent.com, which isn't rate limited.
+// Both send Access-Control-Allow-Origin: *; codeload, where tarballs
+// come from, doesn't.
+async function fetchRepo(m) {
+  line(`Fetching github.com/${repo} (${ref})`, 'hi');
+  write('  tree ');
+  const r = await fetch(`https://api.github.com/repos/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`,
+    { headers: { Accept: 'application/vnd.github+json' } });
+  if (!r.ok) {
+    const limited = (r.status === 403 || r.status === 429) && r.headers.get('x-ratelimit-remaining') === '0';
+    throw new Error(`HTTP ${r.status}${limited ? ": GitHub's API limit for this address (60 an hour); try again later" : ''}`);
+  }
+  const t = await r.json();
+  // No dotfiles or dot directories, no links or submodules.
+  const hidden = (p) => p.split('/').some((c) => c.startsWith('.'));
+  let files = t.tree.filter((e) => e.type === 'blob' && e.mode !== '120000' && !hidden(e.path));
+  const all = files.length;
+  let total = 0;
+  files = files.filter((e) => e.size <= maxFile && (total + e.size <= maxTotal) && (total += e.size, true)).slice(0, maxFiles);
+  line(`${all} files, ${kb(files.reduce((a, e) => a + e.size, 0))}${files.length < all ? ` (${all - files.length} too big, left out)` : ''}${t.truncated ? ' (truncated by GitHub)' : ''}`, 'ok');
+
+  const raw = `https://raw.githubusercontent.com/${repo}/${encodeURIComponent(ref)}/`;
+  const width = String(files.length).length;
+  let done = 0, failed = 0, next = 0;
+  const one = async (e) => {
+    let msg;
+    try {
+      const f = await fetch(raw + e.path.split('/').map(encodeURIComponent).join('/'));
+      if (!f.ok) throw new Error(`HTTP ${f.status}`);
+      const b = await f.arrayBuffer();
+      m._put(`${into}/${e.path}`, b, e.mode === '100755' ? 0o755 : 0o644);
+      msg = [kb(b.byteLength), null];
+    } catch (err) {
+      failed++;
+      msg = [err.message, 'bad'];
+    }
+    done++;
+    write(`  [${String(done).padStart(width)}/${files.length}] `, 'dim');
+    write(`${e.path}  `);
+    line(msg[0], msg[1] ?? 'dim');
+  };
+  // Eight at a time.
+  await Promise.all(Array.from({ length: Math.min(8, files.length) }, async () => {
+    while (next < files.length) await one(files[next++]);
+  }));
+  const got = files.length - failed;
+  line(dots(`  ${name}`) + `${got} files OK${failed ? `, ${failed} failed` : ''}`, failed ? 'bad' : 'ok');
+  return `${got} files from github.com/${repo}`;
+}
+
+async function main() {
+  line('h9 BIOS, 9/UX edition', 'hi');
+  line('9front\'s 386 programs on h86, h9\'s own CPU, in WebAssembly in this tab', 'dim');
+  line();
+  const { createMachine, haveJSPI } = await import('./demo/h9-web.js');
+  write(dots('JS Promise Integration'));
+  line(haveJSPI ? 'OK' : 'missing', haveJSPI ? 'ok' : 'bad');
+  const offscreen = typeof OffscreenCanvas !== 'undefined';
+  write(dots('OffscreenCanvas'));
+  line(offscreen ? 'OK' : 'missing', offscreen ? 'ok' : 'bad');
+  if (!haveJSPI || !offscreen) {
+    line();
+    line('This needs Chrome or Edge 137 or later.', 'bad');
+    term.insertAdjacentHTML('beforeend', '<a href="./">Back to the project page</a>\n');
+    return;
+  }
+  const scale = Number(params.get('scale') ?? 1);
+  write(dots('Screen'));
+  line(`${canvas.clientWidth}x${canvas.clientHeight}${devicePixelRatio !== 1 ? ` at ${devicePixelRatio}x` : ''}`);
+  write(dots('Host threads'));
+  line(String(navigator.hardwareConcurrency ?? '?'));
+  line();
+
+  const m = await createMachine({
+    root: 'demo/root.h9a',
+    memory: params.get('memory') ?? undefined,
+    gfx: { canvas, scale },
+    terminal: { write: (b) => print(dec.decode(b, { stream: true })) },
+  });
+  m.addEventListener('snarf', (e) => print(`[the clipboard refused: ${JSON.stringify(e.text)}]\n`));
+  // A phone's screen, or one this small: no folder window at the start.
+  const small = canvas.clientWidth < 640 || canvas.clientHeight < 480;
+  // The machine loads its archive while the page fetches; boot.rc waits
+  // for the marker before it adds the volume.
+  line('Loading 9/UX in the background (about 23 MB, once)', 'hi');
+  line();
+  const running = m.run(['rc', '/9ux/web/boot.rc', ...(params.has('debug') ? ['-d'] : []), ...(small ? ['-s'] : []), '-v', name]);
+  let status;
+  try {
+    status = await fetchRepo(m);
+  } catch (e) {
+    line(e.message, 'bad');
+    line(`  ${name} will be empty`, 'bad');
+    status = `couldn't fetch github.com/${repo}: ${e.message}`;
+  }
+  m._put(marker, status + '\n');
+  line();
+  line('Booting 9/UX', 'hi');
+  const code = await running.catch((e) => { line(e.message, 'bad'); return null; });
+  term.classList.remove('done');
+  line();
+  line(`9/UX stopped${code !== null ? ` (${code || 'exit 0'})` : ''}.`, booted ? 'hi' : 'bad');
+  term.insertAdjacentHTML('beforeend', '<a href="" target="_self">Start it again</a>\n');
+}
+main().catch((e) => { term.classList.remove('done'); line(`Couldn't start: ${e.message}`, 'bad'); });
+</script>
+</body>
+</html>
