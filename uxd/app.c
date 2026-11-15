@@ -125,13 +125,24 @@ delwin(App *a, int win)
 	return -1;
 }
 
-/* end a registration: the app closed it, hung up, or uxd is done with it */
+/*
+ * end a registration: the app closed it, hung up, or uxd is done with it.
+ *
+ * Every channel operation can switch threads (libthread's alt ends in
+ * _sched), and closeconn, postevent and reply all do some: a reply
+ * that drops a fid's last reference sends it to fidthread. So all of
+ * the registration's state is taken apart before the first of them,
+ * and regclosed, run meanwhile for the register fid, finds nothing
+ * left to undo.
+ */
 void
 unregister(App *a)
 {
 	App **l;
 	Reg *g;
-	Req *r;
+	Req **rq;
+	Op *op;
+	int i, nrq, regref;
 
 	if(a->gone)
 		return;
@@ -141,6 +152,25 @@ unregister(App *a)
 			*l = a->next;
 			break;
 		}
+	rq = nil;
+	nrq = 0;
+	regref = 0;
+	if((g = a->reg) != nil){
+		a->reg = nil;
+		g->app = nil;
+		g->ended = 1;
+		rq = g->rq;
+		nrq = g->nrq;
+		g->rq = nil;
+		g->nrq = 0;
+		regref = 1;
+		/* they're answered below; a flush meanwhile must not touch g */
+		for(i = 0; i < nrq; i++){
+			op = rq[i]->aux;
+			op->cancel = nil;
+			op->waiton = nil;
+		}
+	}
 	while(a->nwin > 0)
 		delwin(a, a->win[a->nwin-1]);
 	postevent("unregister app=%s", a->id);
@@ -149,17 +179,13 @@ unregister(App *a)
 		closeconn(a->c);
 		a->c = nil;
 	}
-	if((g = a->reg) != nil){
-		a->reg = nil;
-		g->ended = 1;
-		while(g->nrq > 0){
-			r = g->rq[--g->nrq];
-			((Op*)r->aux)->cancel = nil;
-			r->ofcall.count = 0;
-			reply(r->aux, nil);
-		}
-		appdecref(a);	/* the registration's reference */
+	for(i = 0; i < nrq; i++){
+		rq[i]->ofcall.count = 0;
+		reply(rq[i]->aux, nil);
 	}
+	free(rq);
+	if(regref)
+		appdecref(a);	/* the registration's reference */
 	appdecref(a);	/* the apps list's */
 }
 
@@ -175,13 +201,9 @@ regclosed(Reg *g)
 {
 	App *a;
 
-	if((a = g->app) != nil){
-		g->app = nil;
-		if(!a->gone && a->reg == g)
-			unregister(a);
-		else if(!g->ended)
-			appdecref(a);
-	}
+	/* if it ended, unregister took g's reference on the app */
+	if((a = g->app) != nil && !g->ended)
+		unregister(a);
 	free(g->rq);
 	free(g);
 }

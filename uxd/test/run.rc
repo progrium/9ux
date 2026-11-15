@@ -1,12 +1,70 @@
 #!/bin/rc
 # Run uxd's tests: cd uxd; mk test
+# (or from uxd, rc test/run.rc test/stall.rc ... for some of them)
+#
+# Each test runs in a note group of its own under a watchdog, so a uxd
+# that dies doesn't hang the run. uxd takes all its procs down when an
+# assertion or malloc's checks fail, so the test's requests fail. But
+# a fault leaves the proc Broken (or, under h9, just gone) while the
+# lib9p procs keep /srv/uxd.$user and /mnt/ux, and the test's next
+# request waits forever. The watchdog fails the test when it sees a
+# Broken uxd, or when the test runs past $limit seconds; then it kills
+# what the test started and the run goes on.
 rfork e
+O=`{sed -n 's/^O=//p' /$objtype/mkfile}
+limit=60
 st=()
-for(t in test/tree.rc test/policy.rc test/grants.rc test/register.rc test/stall.rc test/restart.rc){
-	rc $t
-	if(! ~ $status '')
+sf=/tmp/uxdtest.$pid
+
+# the pids of Broken uxd procs
+fn broken {
+	ps | awk '$NF == "uxd" && $(NF-1) == "Broken" { print $2 }'
+}
+
+# kill a test that went wrong, and everything of its that may be left
+fn reap {
+	echo kill >/proc/$1/notepg >[2]/dev/null
+	for(p in `{broken}){
+		echo '	uxd '^$p^' stack:'
+		echo 'lstk()' | acid $p >[2]/dev/null | sed -n '/^[a-z_].*\+0x/p' | sed 20q | sed 's/^/	/'
+	}
+	slay uxd | rc >[2]/dev/null
+	slay $O.fakeapp | rc >[2]/dev/null
+	rm -f /srv/uxd.$user /srv/uxd.$user.admin >[2]/dev/null
+	unmount /mnt/ux >[2]/dev/null
+	status=()
+}
+
+tests=$*
+if(~ $#tests 0)
+	tests=(test/tree.rc test/policy.rc test/grants.rc test/register.rc test/stall.rc test/restart.rc)
+for(t in $tests){
+	rm -f $sf
+	@{
+		rfork s
+		rc $t
+		if(~ $status '')
+			echo ok >$sf
+	} &
+	tp=$apid
+	deadline=`{echo `{date -n}^+^$limit | hoc}
+	why=()
+	while(test -e /proc/$tp/status && ~ $#why 0){
+		sleep 0.2
+		b=`{broken}
+		if(! ~ $#b 0)
+			why='uxd broke (pid '^$"b^')'
+		if not if(test `{date -n} -gt $deadline)
+			why='still running after '^$limit^'s'
+	}
+	if(! ~ $#why 0){
+		echo FAIL $t: $why
+		reap $tp
+	}
+	if(! test -e $sf)
 		st=($st $t)
 }
+rm -f $sf
 if(! ~ $#st 0){
 	echo failed: $st
 	exit fail
