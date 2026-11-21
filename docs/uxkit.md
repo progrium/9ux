@@ -211,6 +211,7 @@ Attributes for `new` and `config`:
 | `columns=list` | list | titles and widths, `Name:200,Size:80` (`uxsetcolumns`) |
 | `drop=types ops=list` | all | a drop target (`uxdroptypes`) |
 | `mouse=off/buttons/motion` | canvas | which pointer events to send ([§8](#8-canvas-custom-drawing)) |
+| `tag=text` | all | an author-chosen word copied as `tag=` into every event about the control, so a client can route events by its own vocabulary (`tag=greet`) instead of by path |
 
 Lists and icon views hold many items, so their items are written as
 files, not attributes. In the author view `items` is writable the way
@@ -260,10 +261,40 @@ the next section.
 ## 7. Events and requests
 
 Events are ux.md's events, on the same per-open streams, with `resync`
-first, bounded queues, `lost` and `gone`. A client follows its app the
-way any script does: open `events`, read the `resync`, read the state
-it needs, then act on events. Events it caused itself carry `via=ctl`,
-so it can skip its own echoes.
+first and `gone` at the end. A client follows its app the way any
+script does: open `events`, read the `resync`, read the state it needs,
+then act on events. Events it caused itself carry `via=ctl`, so it can
+skip its own echoes.
+
+### The author stream doesn't lose clicks
+
+ux.md's queues are lossy on purpose: a slow reader gets `lost n=N` and
+rereads the snapshots. That is right for a script watching an app,
+because state can be reread. It is wrong for the app itself, because
+an `activate` or an `action` is not state: a click that falls out of
+the queue can't be reread from anywhere. Inferno's Tk had exactly this
+flaw (its `send` dropped messages when a channel's buffer was full).
+
+So author-view `events` files keep two kinds of message apart:
+
+- **State events** (`value`, `select`, `state`, `label`, `rect`,
+  `title`, `focus`, `origin`, `extent`, `items`, canvas motion) are
+  **coalesced**: a new one replaces a queued one of the same name about
+  the same object. Since events carry the new state, not a delta, the
+  reader loses nothing it needs, and this part of the queue can never
+  hold more than a few messages per object.
+- **Action events** (`activate`, `submit`, `open`, `action`, `choose`,
+  `cancel`, `new`, `delete`, the request events below, canvas button
+  presses and keys) are **never dropped**. They queue in order, up to a
+  generous cap (4096 per subscription). A client that falls that far
+  behind is stuck, not slow; only then does it get `lost`, and uxkit
+  treats it as not answering (see the table below).
+
+Order is kept: a coalesced event moves to the position of the newest
+one, so a reader never sees a value change after the `activate` that
+depended on it. The UI thread still never waits on a client, which is
+ux.md's rule for every stream. Public-view streams through uxd stay
+exactly as ux.md says.
 
 C apps get some things as handler calls that have no ux.md event,
 because the app is asked and decides: a close box, Quit, a dialog's
@@ -395,8 +426,10 @@ Most of uxkit is libux as it is. The changes:
    author subscription is open.
 4. **Item and image writes.** `items` writable for list and icon view,
    and the new `canvas` type with `image`, `mouse` and `key` events.
-5. **Coalesced events.** A queue operation that replaces a queued event
-   of the same kind and object instead of appending, for canvas motion.
+5. **The author queue policy.** A queue operation that replaces a
+   queued event of the same name and object instead of appending, used
+   for state events and canvas motion, and a larger cap for action
+   events on author subscriptions ([§7](#the-author-stream-doesnt-lose-clicks)).
 
 uxkit itself is then a short program: parse flags, `uxinit`, make the
 pipe, `uxserveauthor`, fork and exec the client, `uxmain`.
@@ -445,13 +478,29 @@ events (which readers already ignore when unknown) and new features.
   for notes, not for an editor. Larger text could reuse acme-style
   `body`, `addr` and `data` files on a `text-view` type. Worth doing
   only if a real client needs it.
+- **Widgets from other programs.** Tk's composites were awkward because
+  its primitives were closed C. Here a control is already a directory
+  with a fixed file shape, so a new control type could in principle be
+  a separate server that a window mounts in its `controls/`. That needs
+  a way to give it a rectangle of the window to draw in, which is the
+  same problem as the canvas's draw passthrough.
+- **A wiretap.** Inferno's `#τ/tkevents` showed every Tk command as it
+  ran, and was the main debugging tool. uxkit could serve a `trace`
+  stream in the author view that echoes each author command and its
+  result. `-D` tracing the 9P traffic covers some of this already.
 - **Name.** `uxkit` and `/mnt/kit` are placeholders.
 
 ## 15. Prior art
 
 - **Inferno's Tk** (`tk(2)`, `wmlib`): a program sends Tk commands as
-  strings and receives named events on channels. uxkit uses files for
-  both, and keeps one widget set shared with C apps.
+  strings and receives named events on channels. uxkit keeps that text
+  protocol but carries it over 9P, so `echo` and `cat` work and the UI
+  can be scripted from another namespace. It takes Tk's lesson of
+  keeping the toolkit off the screen and input (libux draws in rio
+  windows, rio owns input, and headless runs are the same tree), fixes
+  its lossy event channels ([§7](#the-author-stream-doesnt-lose-clicks)),
+  borrows its author-chosen event routing as `tag=`, and keeps one
+  widget set shared with C apps.
 - **acme**: windows are directories with `ctl`, `addr`, `data`, `body`
   and `event` files, and `win` wraps a command in a window. uxkit's
   wrapper and author view follow that model for controls.
