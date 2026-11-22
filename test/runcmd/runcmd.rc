@@ -1,0 +1,7 @@
+#!/bin/rc
+# Run Command from the tree, with resfs and the system resources from
+# the tree too, publishing its UI tree at /srv/ux.$user.runcmd.
+cd /mnt/term/cwd/apps/runcmd
+O=`{sed -n 's/^O=//p' /$objtype/mkfile}
+resfs=../../resfs/$O.resfs uxsysres=../../assets/gen/system.rsrc uxpublic=1 \
+	exec ./$O.out >[2]$work/runcmd.err

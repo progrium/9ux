@@ -147,6 +147,8 @@ _tfedit(Uxctl *c, char *cmd)
 	char *s;
 	long n;
 
+	if(c != nil && c->t == &_constype)
+		return _consedit(c, cmd);
 	if(c == nil || strcmp(c->t->name, "text-field") != 0)
 		return "not found: no text field has focus";
 	if(strcmp(cmd, "selectall") == 0){
@@ -1404,6 +1406,7 @@ Ctltype *ctltypes[] = {
 	&icontype,
 	&scrolltype,
 	&choosertype,	/* 8 */
+	&_constype,	/* 9: cons.c */
 	nil,
 };
 
@@ -1455,6 +1458,8 @@ _ctlread(Uxctl *c, char *file)
 	}
 	if(strcmp(file, "rect") == 0)
 		return smprint("%d %d %d %d\n", c->r.min.x, c->r.min.y, c->r.max.x, c->r.max.y);
+	if(c->t->read != nil && (s = c->t->read(c, file)) != nil)
+		return s;
 	if(strcmp(file, "parent") == 0)
 		return smprint("%s\n", c->parent ? c->parent->id : "");
 	if(strcmp(file, "ctl") == 0)

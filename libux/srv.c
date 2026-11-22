@@ -390,7 +390,7 @@ fsclone(Fid *old, Fid *new)
 static char*
 version(void)
 {
-	return estrdup("ux 1.0\nfeature menus\nfeature value-write\n");
+	return estrdup("ux 1.0\nfeature menus\nfeature value-write\nfeature console\n");
 }
 
 static char*

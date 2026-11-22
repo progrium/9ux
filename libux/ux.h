@@ -41,6 +41,7 @@ enum {
 	UXfront,	/* window became the app's current window */
 	UXdrop,		/* dropped on a drop target (Uxev.text type, .action op, .pt, .drag) */
 	UXdragend,	/* our drag ended: Uxev.text the op the target did, nil if cancelled */
+	UXinterrupt,	/* console: Delete typed, or ctl interrupt */
 };
 
 /* how an event came about; Uxev.via */
@@ -162,6 +163,23 @@ Point	uxgetorigin(Uxctl*);
 
 /* file chooser */
 char*	uxchooserdir(Uxctl*);		/* malloc'd */
+
+/*
+ * consoles: a shell window's text, output with typed input after it.
+ * What's typed is sent, a line at a time, as UXsubmit with Uxev.text
+ * the line and its newline (^D sends what's typed without one, so an
+ * empty Uxev.text is end of file); Delete is UXinterrupt. In raw mode
+ * every key is sent as typed and nothing is shown. Put a console in a
+ * scroll view (vertical bar, and the grow box if wanted) and it fits
+ * the view's width, grows with its text, sets the view's extent, and
+ * keeps the end in view; its rect's width and height are its own.
+ * Edit commands (uxedit) work on it: output can be copied, not cut.
+ */
+Uxctl*	uxconsole(Uxwin*, char *id, Rectangle r);
+void	uxconswrite(Uxctl*, char *s, long n);	/* output, before what's typed; \b erases */
+void	uxconsraw(Uxctl*, int);
+void	uxconsclear(Uxctl*);	/* drop the output but its last line (the prompt); keep what's typed */
+int	uxconsfont(Uxctl*, char *font);	/* the body font otherwise; -1 if it can't be opened */
 
 /* menus, shown in rio's menu bar through /dev/ux and served under menus/ */
 Uxmenu*	uxmenu(char *id, char *title);

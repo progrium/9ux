@@ -47,6 +47,10 @@ the end-to-end demo, and the open issues. What works today:
   **clipd** is a typed clipboard kept in step with rio's snarf.
 - **Drag and drop** between Desktop windows, onto volumes, and into an
   app's text field, brokered by rio.
+- **Run Command**: rc in a 9/UX window, after A/UX's CommandShell: the
+  proportional body font, a classic scroll bar and grow box, and File,
+  Edit and Shell menus (Interrupt is ◇-period, or Delete). rc gets the window's
+  own `/dev/cons`, as with vt(1).
 
 Still to do by hand before tagging: CPU-server (`rcpu`, drawterm)
 sessions and 16- and 8-bit screens on real hardware. Classic `ICN#`
@@ -65,6 +69,7 @@ and framebuffer in QEMU.
 | [`clipd/`](clipd/) | Typed clipboard | Several representations of one copy, synced with snarf | `/mnt/clip` ([clip.md](docs/protocols/clip.md)) |
 | [`desktop/`](desktop/) | Desktop | Spatial desktop, folder windows, file operations, launching via plumber | A libux app with its own UI tree |
 | [`apps/sample/`](apps/sample/) | Sample app | A libux app showing every control, and a drop target | A libux app |
+| [`apps/runcmd/`](apps/runcmd/) | Run Command | An rc shell window, after A/UX's CommandShell | A libux app; serves rc's `/dev/cons` |
 
 `rio/` is stock 9front rio at release 11952 (see [`rio/UPSTREAM`](rio/UPSTREAM)),
 with 9/UX's changes on top as separate commits so the fork's diff is

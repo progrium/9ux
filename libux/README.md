@@ -59,7 +59,7 @@ Link with `libux.a$O` and `-I` this directory (see
 [apps/sample/mkfile](../apps/sample/mkfile)). [ux.h](ux.h) is the whole
 API: windows (`uxwindow`, `uxdialog`), controls (`uxbutton`,
 `uxtextfield`, `uxcheckbox`, `uxlabel`, `uxgroup`, `uxlist`,
-`uxiconview`, `uxscrollview`, `uxfilechooser`), menus (`uxmenu`,
+`uxiconview`, `uxscrollview`, `uxfilechooser`, `uxconsole`), menus (`uxmenu`,
 `uxitem`, `uxaction`), and getters and setters. Every function may be
 called from any thread; handlers run on the UI thread with no lock held.
 
@@ -196,7 +196,9 @@ selected icon, and an alert with a DITL icon.
 
 Done: the app model, all eleven control types of ux.md (`Window`,
 `Dialog`, `Menu`, `Button`, `TextField`, `Checkbox`, `Label`, `Group`,
-`List`, `ScrollView`, `IconView`, `FileChooser`), uxd registration,
+`List`, `ScrollView`, `IconView`, `FileChooser`), and `console`, a shell
+window's text ([cons.c](cons.c), used by
+[Run Command](../apps/runcmd/runcmd.c)), uxd registration,
 menu bar registration, the sample app, and menus, dialogs, alerts,
 strings and icons from resources (S10).
 

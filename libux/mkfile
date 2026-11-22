@@ -5,6 +5,7 @@ OFILES=\
 	app.$O\
 	cmd.$O\
 	clip.$O\
+	cons.$O\
 	ctl.$O\
 	draw.$O\
 	drag.$O\
