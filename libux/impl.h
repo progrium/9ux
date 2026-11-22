@@ -152,6 +152,15 @@ struct Uxctl {
 	Point	dragp;	/* where the button went down */
 	Point	dragl;	/* the pointer at the last move */
 	Rectangle	band;	/* the rubber band, screen coordinates */
+	int	qh;	/* console: the output point; what's after it is typed */
+	int	qa;	/* console: where a selection drag began */
+	int	*line;	/* console: where each wrapped line starts */
+	int	nline;
+	int	lfrom;	/* console: wrap again from here */
+	int	lw;	/* console: the width it was wrapped to */
+	int	raw;	/* console: keys go straight to the app */
+	int	follow;	/* console: show the end at the next layout */
+	Font	*cfont;	/* console: its own font, or nil for the body font */
 };
 
 struct Uxwin {
@@ -402,6 +411,12 @@ void	_resfreewin(Uxwin*);
 long	_clipput(char*);
 char*	_clipget(void);
 char*	_tfedit(Uxctl*, char*);	/* ctl.c */
+
+/* cons.c */
+extern Ctltype	_constype;
+void	_conslayout(Uxctl*);
+void	_drawcons(Uxctl*, Rectangle);
+char*	_consedit(Uxctl*, char*);
 
 /* drag.c */
 int	_dragstart(Uxdrag*, Uxctl*);

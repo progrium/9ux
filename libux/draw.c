@@ -851,6 +851,8 @@ _drawctl(Uxctl *c)
 		drawicons(c, r);
 	else if(strcmp(n, "scroll-view") == 0)
 		drawscroll(c, r);
+	else if(c->t == &_constype)
+		_drawcons(c, r);
 	if(!eqrect(w->clip, w->img->r)){
 		w->clip = w->img->r;
 		replclipr(w->img, 0, w->clip);
@@ -866,6 +868,10 @@ _redraw(Uxwin *w)
 	w->dirty = 0;
 	if(w->img == nil)
 		return;
+	/* consoles first: they size themselves, and their scroll views, to their text */
+	for(i = 0; i < w->nctl; i++)
+		if(w->ctl[i]->t == &_constype && !w->ctl[i]->dead)
+			_conslayout(w->ctl[i]);
 	r = w->img->r;
 	w->clip = r;
 	fill(w, r, winbg(w));

@@ -1,0 +1,27 @@
+</$objtype/mkfile
+
+TARG=runcmd
+OFILES=runcmd.$O
+HFILES=../../libux/ux.h
+BIN=/$objtype/bin
+LIB=../../libux/libux.a$O
+CFLAGS=$CFLAGS -I../../libux
+CLEANFILES=runcmd.rsrc
+
+</sys/src/cmd/mkone
+
+# the app's resources, next to its binary (uxres looks there)
+default:V: runcmd.rsrc
+all:V: runcmd.rsrc
+
+runcmd.rsrc: runcmd.res ../../resfs/$O.rescomp
+	../../resfs/$O.rescomp -o $target runcmd.res
+
+../../resfs/$O.rescomp:
+	cd ../../resfs && mk $O.rescomp
+
+$LIB:
+	cd ../../libux && mk
+
+# tested by test/runcmd (the GUI harness)
+test:V: all

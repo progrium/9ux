@@ -247,6 +247,33 @@ Events: `dir`, `value`, `choose` (`path=`), `cancel`.
 Paths in a file chooser are in the **app's** namespace. A client in a
 different namespace must not assume they name the same files for it.
 
+**`console`** (feature `console`): a shell window's text, as in Run
+Command. What the app writes is output; what's typed goes after it,
+and is sent to the app a line at a time, when it ends in a newline.
+
+| File | Content |
+|---|---|
+| `value` | The whole text: output and what's typed, raw |
+| `input` | What's typed and not yet sent |
+| `selection` | `q0 q1`, rune offsets |
+
+| Verb | Right | Meaning |
+|---|---|---|
+| `insert text` | edit | Type `text` at the end of the input, as pasting would: whatever ends in a newline is sent |
+| `interrupt` | activate | As Delete: the app interrupts what's running |
+| `select q0 q1` | activate | Set the selection |
+| `focus` | activate | Give the console keyboard focus |
+| `clear` | edit | Drop the output but its last line (the prompt) |
+
+Events: `submit` (`n=` the bytes sent), `interrupt`, `select`, `clear`.
+What's sent isn't in the event; it goes only to the app. In raw mode
+(the app's choice, as when a program writes `rawon` to `consctl`) every
+key is sent as typed and nothing is shown.
+
+A console whose parent is a scroll view fits the view's width, grows
+with its text and sets the view's `extent`, keeping the end in view
+while it's shown there, so the view's vertical bar is the console's.
+
 ### Menus
 
 An app's menus are served under `menus/`, mirroring what libux
@@ -489,6 +516,7 @@ the version of whichever it opened. Feature names in 1.0:
 |---|---|---|
 | `menus` | app | The `menus/` directory is served |
 | `value-write` | app | `value` files accept writes |
+| `console` | app | The `console` control type |
 | `grants` | uxd | The `grants/` directory and token attaches |
 
 ## Examples in rc
