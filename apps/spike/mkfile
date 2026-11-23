@@ -1,0 +1,13 @@
+</$objtype/mkfile
+
+TARG=spike
+OFILES=spike.$O
+HFILES=../../libux/ux.h
+BIN=/$objtype/bin
+LIB=../../libux/libux.a$O
+CFLAGS=$CFLAGS -I../../libux
+
+</sys/src/cmd/mkone
+
+$LIB:
+	cd ../../libux && mk

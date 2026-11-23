@@ -175,6 +175,18 @@ char*	uxchooserdir(Uxctl*);		/* malloc'd */
  * keeps the end in view; its rect's width and height are its own.
  * Edit commands (uxedit) work on it: output can be copied, not cut.
  */
+/*
+ * Spike: uitree's portable style words and flexbox layout, and its
+ * div, svg and styled-text elements. A window with a root style is
+ * laid out on every redraw; its controls' rectangles come from the
+ * layout. Errors as uitree spells them, in errstr.
+ */
+int	uxwinstyle(Uxwin*, char *words);
+int	uxstyle(Uxctl*, char *words);
+Uxctl*	uxdiv(Uxwin*, char *id);
+Uxctl*	uxsvg(Uxwin*, char *id, char *src);	/* SVG text, or a file */
+Uxctl*	uxstyledtext(Uxwin*, char *id, char *text, char *runs);
+
 Uxctl*	uxconsole(Uxwin*, char *id, Rectangle r);
 void	uxconswrite(Uxctl*, char *s, long n);	/* output, before what's typed; \b erases */
 void	uxconsraw(Uxctl*, int);

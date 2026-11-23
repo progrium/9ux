@@ -9,6 +9,9 @@ OFILES=\
 	ctl.$O\
 	draw.$O\
 	drag.$O\
+	flex.$O\
+	stext.$O\
+	svg.$O\
 	ev.$O\
 	menu.$O\
 	obj.$O\

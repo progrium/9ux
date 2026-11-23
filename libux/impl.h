@@ -24,6 +24,44 @@ typedef struct Msg Msg;
 typedef struct Cmd Cmd;
 typedef struct Note Note;
 typedef struct Action Action;
+typedef struct Uxstyle Uxstyle;
+typedef struct Uxlen Uxlen;
+
+/* spike: uitree style words (flex.c) */
+enum {
+	Lnone,
+	Lpx,
+	Lpct,
+};
+
+struct Uxlen {
+	int	kind;
+	int	v;
+};
+
+enum { Dcol, Drow };
+enum { Astretch, Astart, Acenter, Aend };
+enum { Jstart, Jcenter, Jend, Jbetween };
+
+struct Uxstyle {
+	int	set;
+	int	dir;
+	int	grow, shrink, basis0;
+	int	align, justify;
+	int	gap;
+	int	pad[4], mar[4];	/* top right bottom left */
+	Uxlen	w, h, minw, minh, maxw, maxh;
+	int	abs;
+	int	inset[4];	/* top right bottom left, with hasinset bits */
+	int	hasinset;
+	ulong	bg, fg, bordercol;
+	int	hasbg, hasfg, hasbordercol;
+	int	border;
+	int	textsize;	/* 0 xs .. 5 3xl, -1 unset */
+	int	bold;	/* -1 unset */
+	int	textalign;	/* -1 unset, 0 left, 1 center, 2 right */
+	int	truncate;
+};
 
 enum {
 	Oapp,
@@ -161,6 +199,15 @@ struct Uxctl {
 	int	raw;	/* console: keys go straight to the app */
 	int	follow;	/* console: show the end at the next layout */
 	Font	*cfont;	/* console: its own font, or nil for the body font */
+
+	/* spike: uitree layout, svg and styled-text */
+	Uxstyle	*st;	/* style words, or nil */
+	char	*svgsrc;	/* svg: the document */
+	void	*svg;	/* svg: parsed (svg.c) */
+	Image	*svgimg;	/* svg: drawn at its last size */
+	ulong	svgfg;	/* svg: in this currentColor */
+	char	*stext;	/* styled-text: the text */
+	char	*runs;	/* styled-text: the runs */
 };
 
 struct Uxwin {
@@ -201,6 +248,7 @@ struct Uxwin {
 	Image	*glyphw[32];	/* the glyphs' white layers */
 	Image	*hatch;	/* grey3 every other pixel, for open icons */
 	Rectangle	clip;	/* where the control being drawn may draw */
+	Uxstyle	*st;	/* spike: a root style: lay the window out by flexbox */
 };
 
 struct Item {
@@ -420,6 +468,23 @@ char*	_consedit(Uxctl*, char*);
 
 /* drag.c */
 int	_dragstart(Uxdrag*, Uxctl*);
+
+/* flex.c, svg.c, stext.c: the spike */
+extern Ctltype	_divtype, _svgtype, _stexttype;
+int	_parsecolor(char*, ulong*);
+void	_styledefault(Uxstyle*);
+char*	_parsestyle(Uxstyle*, char*);
+void	_flexlayout(Uxwin*);
+Point	_flexnatural(Uxwin*, int);
+Font*	_stylefont(Uxwin*, Uxstyle*, int);
+Font*	_font(Uxwin*, int, int, int);
+Image*	_anycolor(Uxwin*, ulong);
+void	_drawdiv(Uxctl*, Rectangle);
+Point	_svgsize(Uxctl*);
+void	_drawsvg(Uxctl*, Rectangle);
+void	_svgfree(Uxctl*);
+Point	_stextsize(Uxctl*, int);
+void	_drawstext(Uxctl*, Rectangle);
 
 /* reg.c */
 void	_register(void);

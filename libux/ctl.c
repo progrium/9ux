@@ -1407,6 +1407,9 @@ Ctltype *ctltypes[] = {
 	&scrolltype,
 	&choosertype,	/* 8 */
 	&_constype,	/* 9: cons.c */
+	&_divtype,	/* 10: flex.c, the spike */
+	&_svgtype,	/* 11: svg.c */
+	&_stexttype,	/* 12: stext.c */
 	nil,
 };
 

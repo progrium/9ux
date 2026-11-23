@@ -418,8 +418,19 @@ drawlabel(Uxctl *c, Rectangle r)
 	x = r.min.x;
 	if(c->state & UXright)
 		x = r.max.x - stringwidth(f, s);
+	if(c->st != nil && c->st->set){	/* spike: style words */
+		f = _stylefont(c->w, c->st, 1);
+		if(c->st->hasfg)
+			col = c->st->fg;
+		if(c->st->textalign == 1)
+			x = r.min.x + (Dx(r) - stringwidth(f, s))/2;
+		else if(c->st->textalign == 2)
+			x = r.max.x - stringwidth(f, s);
+		else
+			x = r.min.x;
+	}
 	string(c->w->img, Pt(x, r.min.y + (Dy(r)-f->height)/2),
-		_color(c->w, (c->state & Cenabled) ? col : UXcoldisabled), ZP, f, s);
+		_anycolor(c->w, (c->state & Cenabled) ? col : UXcoldisabled), ZP, f, s);
 	free(s);
 }
 
@@ -853,6 +864,12 @@ _drawctl(Uxctl *c)
 		drawscroll(c, r);
 	else if(c->t == &_constype)
 		_drawcons(c, r);
+	else if(c->t == &_divtype)
+		_drawdiv(c, r);
+	else if(c->t == &_svgtype)
+		_drawsvg(c, r);
+	else if(c->t == &_stexttype)
+		_drawstext(c, r);
 	if(!eqrect(w->clip, w->img->r)){
 		w->clip = w->img->r;
 		replclipr(w->img, 0, w->clip);
@@ -864,10 +881,14 @@ _redraw(Uxwin *w)
 {
 	Rectangle r;
 	int i;
+	vlong t0;
 
 	w->dirty = 0;
 	if(w->img == nil)
 		return;
+	t0 = nsec();
+	/* spike: a window with a root style is laid out by flexbox */
+	_flexlayout(w);
 	/* consoles first: they size themselves, and their scroll views, to their text */
 	for(i = 0; i < w->nctl; i++)
 		if(w->ctl[i]->t == &_constype && !w->ctl[i]->dead)
@@ -883,6 +904,18 @@ _redraw(Uxwin *w)
 		_drawctl(w->ctl[i]);
 	_resdraw(w);
 	flushimage(w->d, 1);
+	{
+		static int dbg = -1;
+		char *e;
+
+		if(dbg < 0){
+			e = getenv("uxspikedebug");
+			dbg = e != nil;
+			free(e);
+		}
+		if(dbg)	/* spike: how long a whole-window redraw takes */
+			fprint(2, "redraw %lldµs\n", (nsec()-t0)/1000);
+	}
 }
 
 void
