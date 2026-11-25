@@ -323,14 +323,33 @@ Desktop, the mockup, Run Command, resources, the spike and the e2e
 drag and demo. uxd's own suites keep testing ux.md apps through
 fakeapp.
 
-Not done: a text field's selection (uitree's `input` has none), the
-file chooser's verbs (no spec yet), and the spike controls' props and
-style words (their nodes exist, the drawing layer lays them out).
+Then the rest of step 4:
+
+- **Spec extensions, for upstream.** libux's catalog is uitree's specs
+  plus [libux/types/](../libux/types/README.md), which
+  `libux/gencatalog.sh` lays over them: a `selection` prop on `input`
+  and `textarea` (rune offsets `Q0 Q1`; set it and a cut, copy or paste
+  takes it), and a `file-chooser` type (`dir`, `value`, `items`; verbs
+  `cd`, `choose`, `cancel`; events `change dir=`, `choose value=`,
+  `cancel`).
+- **The spike's controls** carry their props both ways: select and
+  radio-group `items` and `value` (item keys from 1), slider `min`,
+  `max`, `step` and `value`, switch `value` on/off, tabs as `tab`
+  children with `value` naming one, svg `src`, styled-text `text` and
+  `runs`, canvas `ops`. Their style words (`h-flex gap=6`, a window's
+  root style) are the node's style; a script's change relays them out,
+  and words the drawing layer refuses are put back.
+- **srv.c is gone.** libux no longer has the ux.md server, its event
+  subscriptions or its ctl queue; the tree is the only thing an app
+  serves. uxd still speaks ux.md to apps that do (fakeapp).
+- **The UI loop's stack.** `uxmain` runs the loop on a 64K thread: with
+  threadmain's 8K default, drawing the spike's controls overflowed it
+  and took a proc down at random, which the new controls suite caught.
 
 ## Next, if this goes ahead
 
 1. Give hover-card and the layout and feedback types their own look.
 2. The transfer layer (drag and drop) in uitree terms, the last skipped
    script.
-3. Retire `libux/srv.c` (the ux.md server) and ux.md's app half once
-   nothing reads it.
+3. Send libux/types upstream to uitree.
+4. ux.md's app half, once uxd has no ux.md apps left to serve.

@@ -61,7 +61,7 @@ register1(void)
 {
 	char name[128], path[160], buf[128], *t, *id;
 	Fmt f;
-	int fd, sfd, n, i;
+	int fd, n, i;
 	ulong n0, n1;
 
 	n0 = truerand();
@@ -71,8 +71,7 @@ register1(void)
 	fd = open("/mnt/ux/register", ORDWR);
 	if(fd < 0)
 		return -1;
-	sfd = ux.post != nil ? ux.post(name) : _newsrv(name);
-	if(sfd < 0){
+	if(ux.post == nil || ux.post(name) < 0){
 		close(fd);
 		return -1;
 	}
@@ -92,10 +91,7 @@ register1(void)
 	n = write(fd, t, strlen(t));
 	free(t);
 	/* uxd has taken it, or it is no use */
-	if(ux.post != nil)
-		remove(path);
-	else
-		close(sfd);
+	remove(path);
 	if(n < 0){
 		fprint(2, "libux: register: %r\n");
 		close(fd);
@@ -172,7 +168,7 @@ _register(void)
 		free(s);
 		snprint(name, sizeof name, "ux.%s.%s", ux.user, ux.name);
 		/* the entry stays while the app runs */
-		if((ux.post != nil ? ux.post(name) : _newsrv(name)) < 0)
+		if(ux.post == nil || ux.post(name) < 0)
 			fprint(2, "libux: can't post /srv/%s: %r\n", name);
 		return;
 	}

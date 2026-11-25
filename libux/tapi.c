@@ -43,7 +43,16 @@ enum {
 	Kscroll,
 	Kchooser,
 	Kcons,
-	Kother,	/* the spike's: drawn, but not synced */
+	/* the spike's (flex.c, svg.c, stext.c, widget.c) */
+	Kdiv,
+	Ksvg,
+	Kstext,
+	Kselect,
+	Kradios,
+	Kslider,
+	Kswitch,
+	Ktabs,
+	Kcanvas,
 };
 
 /* an icon view's icon, as its items file shows it */
@@ -70,6 +79,11 @@ struct Cc {
 	int	origin;	/* Kscroll: the y origin the node had */
 	Rectangle	r;	/* the API's rectangle, window-local */
 	int	raw;	/* Kcons: keys aren't echoed */
+	char	*data;	/* what the control shows from the node's main data prop */
+	char	*data2;	/* and a second one (styled-text's runs) */
+	char	*style;	/* the style words the control has, if it's laid out by them */
+	char	*sel;	/* Ktext: the selection the node had */
+	int	range[3];	/* Kslider: min max step */
 	Cc	*next;
 };
 
@@ -80,6 +94,7 @@ struct Cw {
 	Uxfn	*fn;
 	void	*arg;
 	char	*title;
+	char	*style;	/* the root's style words, once the app set some */
 	int	focus;	/* the node the control has focus for */
 	Cw	*next;
 };
@@ -104,7 +119,15 @@ static char *ntype[] = {
 [Kscroll]	"scroll",
 [Kchooser]	"file-chooser",
 [Kcons]	"console",
-[Kother]	"div",
+[Kdiv]	"div",
+[Ksvg]	"svg",
+[Kstext]	"styled-text",
+[Kselect]	"select",
+[Kradios]	"radio-group",
+[Kslider]	"slider",
+[Kswitch]	"switch",
+[Ktabs]	"tabs",
+[Kcanvas]	"canvas",
 };
 
 /* the prop that holds what a kind shows as its label */
@@ -119,7 +142,15 @@ static char *labelprop[] = {
 [Kscroll]	nil,
 [Kchooser]	nil,
 [Kcons]	nil,
-[Kother]	nil,
+[Kdiv]	nil,
+[Ksvg]	nil,
+[Kstext]	nil,
+[Kselect]	"placeholder",
+[Kradios]	nil,
+[Kslider]	nil,
+[Kswitch]	"label",
+[Ktabs]	nil,
+[Kcanvas]	nil,
 };
 
 static Cc	*ccs;
@@ -144,6 +175,11 @@ static void	hook(char*, char*, char*, char*, char*);
 static void	actioncall(char*, char*, char*);
 static void	menusync(void);
 static void	consappend(Node*, char*, long);
+static int	ischoice(int);
+static void	choiceprops(Cc*, Node*);
+static char*	choicevalue(Cc*);
+static int	choiceof(Cc*, char*);
+static char*	tablabels(Node*);
 static void	defclose(Uxev*, void*);
 void	uxwinclose(Uxwin*);
 static char*	verb(Node*, Tok*, int);
@@ -228,6 +264,10 @@ purge(void)
 			free(c->win);
 			free(c->label);
 			free(c->value);
+			free(c->data);
+			free(c->data2);
+			free(c->style);
+			free(c->sel);
 			freeic(c);
 			free(c);
 			continue;
@@ -648,6 +688,76 @@ viaword(int via)
 static void	iconitems(Cc*, Node*);
 void	_dxlistsel(Uxctl*, int*, int);
 
+void	_dxtextsel(Uxctl*, int*, int*);
+char*	_dxitems(Uxctl*);
+char*	_dxrun(Uxctl*, char*);
+extern Uxfn	*_chooserhook;
+
+/* a text field's selection prop, from the control; model held */
+static void
+textsel(Cc *c, Node *n)
+{
+	char buf[32];
+	int q0, q1;
+
+	_dxtextsel(c->c, &q0, &q1);
+	snprint(buf, sizeof buf, "%d %d", q0, q1);
+	setprop(n, "selection", buf, 0);
+	setstr(&c->sel, buf);
+}
+
+/* a chooser's dir and items props, from the control; model held */
+static void
+chooserprops(Cc *c, Node *n)
+{
+	char *s;
+
+	s = uxchooserdir(c->c);
+	setprop(n, "dir", s, 0);
+	setstr(&c->data, s);
+	free(s);
+	s = _dxitems(c->c);
+	setprop(n, "items", s, 0);
+	free(s);
+}
+
+/* a chooser went to another directory (ctl.c), on the UI thread */
+static void
+chooserdir(Uxev *e, void*)
+{
+	Cc *c;
+	Node *n;
+	char *a, *q;
+
+	lockmodel();
+	if((c = ccbyctl(e->ctl)) != nil && (n = nodebyid(c->node)) != nil){
+		chooserprops(c, n);
+		q = quoteval(c->data);
+		a = smprint("dir=%s via=%s", q, viaword(e->via));
+		inapi++;
+		emitnode("change", winofnode(n), n, a, 1);
+		inapi--;
+		free(a);
+		free(q);
+		sweep();
+	}
+	unlockmodel();
+}
+
+/* a line for the drawing layer's own verbs, its args quoted */
+static char*
+dxline(char *verb, char *arg)
+{
+	char *q, *s;
+
+	if(arg == nil)
+		return estrdup(verb);
+	q = quotestrdup(arg);
+	s = smprint("%s %s", verb, q);
+	free(q);
+	return s;
+}
+
 /* a list's selection as its value: item keys, from 1, space-separated */
 static char*
 listvalue(Cc *c)
@@ -690,12 +800,19 @@ capictlev(Uxev *e, void *arg)
 	case UXvalue:
 		name = "change";
 		state = 1;
+		if(ischoice(c->kind)){
+			choiceprops(c, n);
+			fmtprint(&f, "value=%s ", c->value[0] != 0 ? c->value : "''");
+			break;
+		}
 		v = uxgetvalue(c->c);
 		setstr(&c->value, v);
 		setprop(n, c->kind == Klabel ? "text" : "value", v, 0);
 		if(c->kind == Kcheck)
 			fmtprint(&f, "value=%s ", v);
 		free(v);
+		if(c->kind == Ktext)
+			textsel(c, n);
 		break;
 	case UXselection:
 		name = "select";
@@ -774,9 +891,10 @@ capictlev(Uxev *e, void *arg)
 	case UXchoose:
 		name = "choose";
 		if(e->text != nil){
-			setprop(n, "value", e->text, 0);
-			if((q = quoteval(e->text)) != nil && strchr(q, ' ') == nil)
-				fmtprint(&f, "value=%s ", q);
+			v = utfrrune(e->text, '/') != nil ? utfrrune(e->text, '/')+1 : e->text;
+			setprop(n, "value", v, 0);
+			q = quoteval(v);
+			fmtprint(&f, "value=%s ", q);
 			free(q);
 		}
 		break;
@@ -896,6 +1014,7 @@ uxinit(char *name, char *title)
 	debugwins = winrects;
 	verbhook = verb;
 	_actionhook = actionev;
+	_chooserhook = chooserdir;
 	drawing = 1;
 	treeserve(nil, nil);
 	uxpublish(treepost);
@@ -1047,11 +1166,12 @@ uxwinclose(Uxwin *w)
 static void
 setgeom(Node *n, Rectangle r)
 {
-	Cc *pc;
+	Cc *pc, *c;
 
 	free(n->style);
-	if(eqrect(r, ZR)){	/* laid out by its style words (spike) */
-		n->style = estrdup("");
+	if(eqrect(r, ZR)){	/* laid out by its style words (spike), which it keeps */
+		c = ccbynode(n->id);
+		n->style = estrdup(c != nil && c->style != nil ? c->style : "");
 		return;
 	}
 	if(n->parent != nil && (pc = ccbynode(n->parent->id)) != nil)
@@ -1113,59 +1233,382 @@ nodeof(Uxctl *c, Cc **ccp)
 	return nodebyid(cc->node);
 }
 
-/* the spike's controls (flex.c, svg.c, stext.c, widget.c), as nodes */
+/*
+ * The spike's controls (flex.c, svg.c, stext.c, widget.c), as nodes.
+ * They're laid out by their style words (uxstyle), which are the node's
+ * style; their props follow uitree's specs.
+ */
+
+static Uxctl*
+adoptx(Uxwin *w, Uxctl *c, int kind, char *a, char *b)
+{
+	Node *n;
+	Cc *cc;
+
+	c = adopt(w, c, kind, nil, ZR, nil);
+	lockmodel();
+	if((n = nodeof(c, &cc)) != nil){
+		cc->style = estrdup("");
+		switch(kind){
+		case Ksvg:
+			setprop(n, "src", a != nil ? a : "", 0);
+			setstr(&cc->data, a != nil ? a : "");
+			break;
+		case Kstext:
+			setprop(n, "text", a != nil ? a : "", 0);
+			setprop(n, "runs", b != nil ? b : "", 0);
+			setstr(&cc->data, a != nil ? a : "");
+			setstr(&cc->data2, b != nil ? b : "");
+			break;
+		case Kselect:
+			if(a != nil && a[0] != 0)
+				setprop(n, "placeholder", a, 0);
+			setstr(&cc->label, a);
+			break;
+		case Kradios:
+			if(a != nil)
+				setprop(n, "dir", a, 0);
+			break;
+		case Kswitch:
+			setprop(n, "label", a != nil ? a : "", 0);
+			setstr(&cc->label, a != nil ? a : "");
+			break;
+		case Kcanvas:
+			setprop(n, "ops", "", 0);
+			setstr(&cc->data, "");
+			break;
+		}
+		if(kind == Kselect || kind == Kradios || kind == Kslider || kind == Kswitch || kind == Ktabs)
+			choiceprops(cc, n);
+	}
+	unlockmodel();
+	return c;
+}
+
 Uxctl*
 uxdiv(Uxwin *w, char *id)
 {
-	return adopt(w, dxdiv(w, id), Kother, "div", ZR, nil);
+	return adoptx(w, dxdiv(w, id), Kdiv, nil, nil);
 }
 
 Uxctl*
 uxsvg(Uxwin *w, char *id, char *src)
 {
-	return adopt(w, dxsvg(w, id, src), Kother, "svg", ZR, nil);
+	return adoptx(w, dxsvg(w, id, src), Ksvg, src, nil);
 }
 
 Uxctl*
 uxstyledtext(Uxwin *w, char *id, char *text, char *runs)
 {
-	return adopt(w, dxstyledtext(w, id, text, runs), Kother, "styled-text", ZR, nil);
+	return adoptx(w, dxstyledtext(w, id, text, runs), Kstext, text, runs);
 }
 
 Uxctl*
 uxpopup(Uxwin *w, char *id, char *placeholder)
 {
-	return adopt(w, dxpopup(w, id, placeholder), Kother, "select", ZR, nil);
+	return adoptx(w, dxpopup(w, id, placeholder), Kselect, placeholder, nil);
 }
 
 Uxctl*
 uxradios(Uxwin *w, char *id, int row)
 {
-	return adopt(w, dxradios(w, id, row), Kother, "radio-group", ZR, nil);
+	return adoptx(w, dxradios(w, id, row), Kradios, row ? "row" : "col", nil);
 }
 
 Uxctl*
 uxslider(Uxwin *w, char *id, int min, int max, int step)
 {
-	return adopt(w, dxslider(w, id, min, max, step), Kother, "slider", ZR, nil);
+	Uxctl *c;
+	Node *n;
+	Cc *cc;
+	char buf[16];
+
+	c = adoptx(w, dxslider(w, id, min, max, step), Kslider, nil, nil);
+	lockmodel();
+	if((n = nodeof(c, &cc)) != nil){
+		cc->range[0] = min;
+		cc->range[1] = max;
+		cc->range[2] = step;
+		snprint(buf, sizeof buf, "%d", min);
+		setprop(n, "min", buf, 0);
+		snprint(buf, sizeof buf, "%d", max);
+		setprop(n, "max", buf, 0);
+		snprint(buf, sizeof buf, "%d", step);
+		setprop(n, "step", buf, 0);
+		choiceprops(cc, n);
+	}
+	unlockmodel();
+	return c;
 }
 
 Uxctl*
 uxswitch(Uxwin *w, char *id, char *label)
 {
-	return adopt(w, dxswitch(w, id, label), Kother, "switch", ZR, nil);
+	return adoptx(w, dxswitch(w, id, label), Kswitch, label, nil);
 }
 
 Uxctl*
 uxtabbar(Uxwin *w, char *id)
 {
-	return adopt(w, dxtabbar(w, id), Kother, "tabs", ZR, nil);
+	return adoptx(w, dxtabbar(w, id), Ktabs, nil, nil);
 }
 
 Uxctl*
 uxcanvas(Uxwin *w, char *id)
 {
-	return adopt(w, dxcanvas(w, id), Kother, "canvas", ZR, nil);
+	return adoptx(w, dxcanvas(w, id), Kcanvas, nil, nil);
+}
+
+/* a choice control's value, as its type's spec says, malloc'd */
+static char*
+choicevalue(Cc *c)
+{
+	int v;
+
+	v = uxchoice(c->c);
+	switch(c->kind){
+	case Kslider:
+		return smprint("%d", v);
+	case Kswitch:
+		return estrdup(v ? "on" : "off");
+	case Ktabs:
+		return v >= 0 ? smprint("tab-%d", v+1) : estrdup("");
+	}
+	return v >= 0 ? smprint("%d", v+1) : estrdup("");
+}
+
+/* and back */
+static int
+choiceof(Cc *c, char *v)
+{
+	switch(c->kind){
+	case Kslider:
+		return atoi(v);
+	case Kswitch:
+		return strcmp(v, "on") == 0;
+	case Ktabs:
+		return strncmp(v, "tab-", 4) == 0 ? atoi(v+4)-1 : -1;
+	}
+	return v[0] != 0 ? atoi(v)-1 : -1;
+}
+
+static int
+ischoice(int k)
+{
+	return k == Kselect || k == Kradios || k == Kslider || k == Kswitch || k == Ktabs;
+}
+
+/* the value prop from the control, model held */
+static void
+choiceprops(Cc *c, Node *n)
+{
+	char *v;
+
+	v = choicevalue(c);
+	setprop(n, "value", v, 0);
+	setstr(&c->value, v);
+	free(v);
+}
+
+static int	uxsetstyle1(Uxctl*, char*, int);
+
+int
+uxstyle(Uxctl *c, char *words)
+{
+	return uxsetstyle1(c, words, 0);
+}
+
+int
+uxsetstyle(Uxctl *c, char *words)
+{
+	return uxsetstyle1(c, words, 1);
+}
+
+/* style words, for a control laid out by them: the node's style too */
+static int
+uxsetstyle1(Uxctl *c, char *words, int replace)
+{
+	Node *n;
+	Cc *cc;
+	char *s;
+	int r;
+
+	r = replace ? dxsetstyle(c, words) : dxstyle(c, words);
+	if(r < 0)
+		return r;
+	lockmodel();
+	if((n = nodeof(c, &cc)) != nil){
+		if(replace || cc->style == nil || cc->style[0] == 0)
+			s = estrdup(words);
+		else
+			s = smprint("%s %s", cc->style, words);
+		free(cc->style);
+		cc->style = s;
+		free(n->style);
+		n->style = estrdup(s);
+	}
+	unlockmodel();
+	return r;
+}
+
+static int	uxwinsetstyle1(Uxwin*, char*, int);
+
+int
+uxwinstyle(Uxwin *w, char *words)
+{
+	return uxwinsetstyle1(w, words, 0);
+}
+
+int
+uxwinsetstyle(Uxwin *w, char *words)
+{
+	return uxwinsetstyle1(w, words, 1);
+}
+
+static int
+uxwinsetstyle1(Uxwin *w, char *words, int replace)
+{
+	Cw *cw;
+	Win *mw;
+	char *s;
+	int r;
+
+	r = replace ? dxwinsetstyle(w, words) : dxwinstyle(w, words);
+	if(r < 0)
+		return r;
+	lockmodel();
+	if((cw = cwbywin(w)) != nil && (mw = winbyname(cw->name)) != nil){
+		if(replace || cw->style == nil || cw->style[0] == 0)
+			s = estrdup(words);
+		else
+			s = smprint("%s %s", cw->style, words);
+		free(cw->style);
+		cw->style = s;
+		free(mw->root->style);
+		mw->root->style = estrdup(s);
+	}
+	unlockmodel();
+	return r;
+}
+
+void
+uxsetrange(Uxctl *c, int min, int max, int step)
+{
+	Node *n;
+	Cc *cc;
+	char buf[16];
+
+	dxsetrange(c, min, max, step);
+	lockmodel();
+	if((n = nodeof(c, &cc)) != nil){
+		cc->range[0] = min;
+		cc->range[1] = max;
+		cc->range[2] = step;
+		snprint(buf, sizeof buf, "%d", min);
+		setprop(n, "min", buf, 0);
+		snprint(buf, sizeof buf, "%d", max);
+		setprop(n, "max", buf, 0);
+		snprint(buf, sizeof buf, "%d", step);
+		setprop(n, "step", buf, 0);
+		choiceprops(cc, n);
+	}
+	unlockmodel();
+}
+
+void
+uxsetchoice(Uxctl *c, int v)
+{
+	Node *n;
+	Cc *cc;
+
+	dxsetchoice(c, v);
+	lockmodel();
+	if((n = nodeof(c, &cc)) != nil)
+		choiceprops(cc, n);
+	unlockmodel();
+}
+
+void
+uxsetsvg(Uxctl *c, char *src)
+{
+	Node *n;
+	Cc *cc;
+
+	dxsetsvg(c, src);
+	lockmodel();
+	if((n = nodeof(c, &cc)) != nil){
+		setprop(n, "src", src, 0);
+		setstr(&cc->data, src);
+	}
+	unlockmodel();
+}
+
+void
+uxsetstext(Uxctl *c, char *text, char *runs)
+{
+	Node *n;
+	Cc *cc;
+
+	dxsetstext(c, text, runs);
+	lockmodel();
+	if((n = nodeof(c, &cc)) != nil){
+		setprop(n, "text", text != nil ? text : "", 0);
+		setprop(n, "runs", runs != nil ? runs : "", 0);
+		setstr(&cc->data, text != nil ? text : "");
+		setstr(&cc->data2, runs != nil ? runs : "");
+	}
+	unlockmodel();
+}
+
+void
+uxsetops(Uxctl *c, char *ops)
+{
+	Node *n;
+	Cc *cc;
+
+	dxsetops(c, ops);
+	lockmodel();
+	if((n = nodeof(c, &cc)) != nil){
+		setprop(n, "ops", ops != nil ? ops : "", 0);
+		setstr(&cc->data, ops != nil ? ops : "");
+	}
+	unlockmodel();
+}
+
+/* the labels of a tabs node's tab children, a line each, malloc'd */
+static char*
+tablabels(Node *n)
+{
+	Fmt f;
+	char *l;
+	int i;
+
+	fmtstrinit(&f);
+	for(i = 0; i < n->nkid; i++){
+		l = getprop(n->kid[i], "label");
+		fmtprint(&f, "%s%s", i > 0 ? "\n" : "", l != nil ? l : "");
+	}
+	return fmtstrflush(&f);
+}
+
+/* tabs: a tab child per item, tab-1, tab-2...; the value names the chosen one */
+static void
+settabs(Cc *c, Node *n, char **items, int ni)
+{
+	Node *k;
+	char name[32];
+	int i;
+
+	while(n->nkid > 0)
+		delnode(n->kid[0]);
+	for(i = 0; i < ni; i++){
+		snprint(name, sizeof name, "tab-%d", i+1);
+		k = newnode(n, name, "tab");
+		setprop(k, "label", items[i], 0);
+	}
+	free(c->data);
+	c->data = tablabels(n);
+	choiceprops(c, n);
 }
 
 Uxctl*
@@ -1259,11 +1702,12 @@ uxfilechooser(Uxwin *w, char *id, char *dir, Rectangle r)
 {
 	Uxctl *c;
 	Node *n;
+	Cc *cc;
 
 	c = adopt(w, dxfilechooser(w, id, dir, r), Kchooser, nil, r, nil);
 	lockmodel();
-	if((n = nodeof(c, nil)) != nil){
-		setprop(n, "dir", dir != nil ? dir : ".", 0);
+	if((n = nodeof(c, &cc)) != nil){
+		chooserprops(cc, n);
 		setprop(n, "value", "", 0);
 	}
 	unlockmodel();
@@ -1489,17 +1933,25 @@ uxsetitems(Uxctl *c, char **items, int ni)
 	char *s;
 	int i;
 
+	Cc *cc;
+
+	dxsetitems(c, items, ni);
 	lockmodel();
-	if((n = nodeof(c, nil)) != nil){
+	if((n = nodeof(c, &cc)) != nil && cc->kind == Ktabs)
+		settabs(cc, n, items, ni);
+	else if(n != nil){
 		fmtstrinit(&f);
 		for(i = 0; i < ni; i++)
 			fmtprint(&f, "%s%d %s", i > 0 ? "\n" : "", i+1, items[i]);
 		s = fmtstrflush(&f);
 		setprop(n, "items", s, 0);
+		setstr(&cc->data, s);
 		free(s);
+		if(ischoice(cc->kind))
+			choiceprops(cc, n);
 	}
+	sweep();
 	unlockmodel();
-	dxsetitems(c, items, ni);
 }
 
 void
@@ -1888,6 +2340,40 @@ consverb(Cc *c, Tok *t, int nt)
 	return (char*)-1;
 }
 
+/* cd, choose and cancel: the drawing layer's own, which tell the handler */
+static char*
+chooserverb(Cc *c, Node *n, Tok *t, int nt)
+{
+	char *l, *e, *q, *a, *old;
+
+	if(strcmp(t[0].s, "cd") != 0 && strcmp(t[0].s, "choose") != 0 && strcmp(t[0].s, "cancel") != 0)
+		return (char*)-1;
+	if(strcmp(t[0].s, "cancel") == 0 ? nt != 1 : nt != 2)
+		return smprint("bad syntax: %s", strcmp(t[0].s, "cancel") == 0 ? "cancel" : "cd PATH or choose NAME");
+	l = dxline(t[0].s, nt > 1 ? t[1].s : nil);
+	old = estrdup(c->data != nil ? c->data : "");
+	e = _dxrun(c->c, l);
+	free(l);
+	if(e != nil){
+		free(old);
+		return smprint("%s: %s", e, nt > 1 ? t[1].s : t[0].s);
+	}
+	if(strcmp(t[0].s, "cd") == 0){
+		chooserprops(c, n);
+		if(strcmp(old, c->data) != 0){
+			q = quoteval(c->data);
+			a = smprint("dir=%s via=ctl", q);
+			inapi++;	/* the drawing layer tells no handler of a new directory */
+			emitnode("change", winofnode(n), n, a, 1);
+			inapi--;
+			free(a);
+			free(q);
+		}
+	}
+	free(old);
+	return nil;
+}
+
 static char*
 verb(Node *n, Tok *t, int nt)
 {
@@ -1899,6 +2385,8 @@ verb(Node *n, Tok *t, int nt)
 		return iconverb(c, n, t, nt);
 	if(c->kind == Kcons)
 		return consverb(c, t, nt);
+	if(c->kind == Kchooser)
+		return chooserverb(c, n, t, nt);
 	return (char*)-1;
 }
 
@@ -1906,6 +2394,73 @@ verb(Node *n, Tok *t, int nt)
  * 9P's changes, onto the controls: run by trender's sync, on the UI
  * thread with the model held.
  */
+/* a text field's selection, onto it */
+static void
+syncsel(Cc *c, char *v)
+{
+	char *l;
+	int q0, q1;
+
+	q0 = strtol(v, &l, 10);
+	if(l == v || *l != ' ')
+		return;
+	q1 = atoi(l);
+	l = smprint("select %d %d", q0, q1);
+	free(_dxrun(c->c, l));
+	free(l);
+}
+
+/* a choice control's items, value and range, onto it */
+static void
+syncchoice(Cc *c, Node *n)
+{
+	char *v, *s, **items;
+	int i, ni, r[3];
+
+	s = nil;
+	if(c->kind == Ktabs){
+		s = tablabels(n);
+		if(streq(s, c->data)){
+			free(s);
+			s = nil;
+		}
+	}else if(c->kind == Kselect || c->kind == Kradios){
+		v = getprop(n, "items");
+		if(v != nil && !streq(v, c->data))
+			s = estrdup(v);
+	}
+	if(s != nil){
+		/* the lines, without the select's and radios' "N " keys; on the heap, not the stack */
+		setstr(&c->data, s);
+		items = emalloc((strlen(s)/2+2)*sizeof(char*));
+		ni = s[0] != 0 ? getfields(s, items, strlen(s)/2+2, 0, "\n") : 0;
+		if(c->kind != Ktabs)
+			for(i = 0; i < ni; i++)
+				if(strchr(items[i], ' ') != nil)
+					items[i] = strchr(items[i], ' ')+1;
+		dxsetitems(c->c, items, ni);
+		free(items);
+		free(s);
+	}
+	if(c->kind == Kslider){
+		v = getprop(n, "min");
+		r[0] = v != nil ? atoi(v) : 0;
+		v = getprop(n, "max");
+		r[1] = v != nil ? atoi(v) : 100;
+		v = getprop(n, "step");
+		r[2] = v != nil ? atoi(v) : 1;
+		if(memcmp(r, c->range, sizeof r) != 0){
+			memmove(c->range, r, sizeof r);
+			dxsetrange(c->c, r[0], r[1], r[2]);
+		}
+	}
+	v = getprop(n, "value");
+	if(v != nil && !streq(v, c->value)){
+		dxsetchoice(c->c, choiceof(c, v));
+		choiceprops(c, n);
+	}
+}
+
 static void
 capisync1(void)
 {
@@ -1914,6 +2469,7 @@ capisync1(void)
 	Win *mw;
 	Node *n;
 	char *v;
+	char *v2, *l;
 	int off;
 
 	for(w = cws; w != nil; w = w->next){
@@ -1922,6 +2478,14 @@ capisync1(void)
 		if(w->title == nil || strcmp(w->title, mw->title) != 0){
 			setstr(&w->title, mw->title);
 			dxwinsettitle(w->w, mw->title);
+		}
+		if(w->style != nil && mw->root->style != nil && !streq(mw->root->style, w->style)){
+			if(dxwinsetstyle(w->w, mw->root->style) >= 0)
+				setstr(&w->style, mw->root->style);
+			else{
+				free(mw->root->style);
+				mw->root->style = estrdup(w->style);
+			}
 		}
 		if(mw->focus != w->focus){
 			w->focus = mw->focus;
@@ -1956,6 +2520,47 @@ capisync1(void)
 				v = "";
 			if(!streq(v, c->value != nil ? c->value : ""))
 				listsel(c, v);
+		}
+		if(c->kind == Ktext){
+			v = getprop(n, "selection");
+			if(v != nil && !streq(v, c->sel)){
+				setstr(&c->sel, v);
+				syncsel(c, v);
+			}
+		}
+		if(ischoice(c->kind))
+			syncchoice(c, n);
+		if(c->kind == Ksvg && (v = getprop(n, "src")) != nil && !streq(v, c->data)){
+			setstr(&c->data, v);
+			dxsetsvg(c->c, v);
+		}
+		if(c->kind == Kstext){
+			v = getprop(n, "text");
+			v2 = getprop(n, "runs");
+			if(!streq(v != nil ? v : "", c->data) || !streq(v2 != nil ? v2 : "", c->data2)){
+				setstr(&c->data, v != nil ? v : "");
+				setstr(&c->data2, v2 != nil ? v2 : "");
+				dxsetstext(c->c, c->data, c->data2);
+			}
+		}
+		if(c->kind == Kcanvas && (v = getprop(n, "ops")) != nil && !streq(v, c->data)){
+			setstr(&c->data, v);
+			dxsetops(c->c, v);
+		}
+		if(c->kind == Kchooser && (v = getprop(n, "dir")) != nil && !streq(v, c->data)){
+			l = dxline("cd", v);
+			free(_dxrun(c->c, l));
+			free(l);
+			chooserprops(c, n);
+		}
+		/* style words, for the controls laid out by them */
+		if(c->style != nil && n->style != nil && !streq(n->style, c->style)){
+			if(dxsetstyle(c->c, n->style) >= 0)
+				setstr(&c->style, n->style);
+			else{
+				free(n->style);
+				n->style = estrdup(c->style);
+			}
 		}
 		if(c->kind == Kscroll){
 			v = getprop(n, "origin");

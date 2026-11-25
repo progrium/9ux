@@ -1,11 +1,11 @@
 /*
  * libux: the 9/UX Toolbox.
  *
- * An app made with libux serves its controls as a 9P tree (see
- * docs/protocols/ux.md) while drawing them in rio windows. All state
- * lives in one model guarded by libux; the UI thread (the one that
- * calls uxmain) changes it and runs handlers, a separate 9P proc reads
- * it, and nothing a 9P client does can block the UI thread.
+ * An app made with libux serves its controls as a uitree node tree
+ * over 9P (docs/spike-uitree.md) while drawing them in rio windows.
+ * All state lives in that tree, guarded by libux; the UI thread (which
+ * uxmain starts) draws and runs handlers, 9P procs serve the tree, and
+ * nothing a 9P client does can block the UI thread.
  *
  * Every function here may be called from any thread or proc of the
  * app. Handlers run on the UI thread with no libux lock held, so they

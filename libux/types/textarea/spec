@@ -1,0 +1,20 @@
+type    textarea  tier=component  profile=form  since=1.0
+prop    value        bytes  file
+prop    placeholder  text  file
+prop    max-len      number
+prop    secret       bool
+prop    cleanable    bool
+prop    readonly     bool
+prop    rows         number
+prop    auto-grow    number
+prop    disabled     bool
+prop    controlled   bool
+word    secret cleanable readonly disabled controlled  kind=flag
+word    xs sm md lg  kind=size
+# 9ux: the selection, as rune offsets Q0 Q1 (Q0 = Q1: the caret)
+prop    selection    text  file
+event   change  kind=state
+event   submit  kind=action
+event   focus   kind=state
+event   blur    kind=state
+child   none

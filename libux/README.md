@@ -133,17 +133,17 @@ uxresalert(129, dlgev, nil);		/* ALRT 129 */
 
 | Proc | Does | Waits on |
 |---|---|---|
-| UI (the one calling `uxmain`) | input, drawing, running ctl commands, handlers | mouse, keyboard, resize, menu bar, its kick channel |
-| 9P (`uxsrv`, one per connection) | walks, opens, snapshots, reads of state files; queues ctl writes for the UI | the connection |
-| responder (`uxresponder`) | answers blocked `events` reads and finished ctl writes | its kick channel |
+| UI (`uxui`, a 64K-stack thread `uxmain` starts) | input, drawing, handlers | mouse, keyboard, resize, menu bar, its kick channel |
+| 9P ([tfs.c](tfs.c), one per connection) | the uitree tree: reads, writes, verbs, events | the connection |
+| responder ([tev.c](tev.c)) | answers blocked `events` reads | its kick channel |
 | menu bar reader | `/dev/ux/menubar/events` actions for this app | rio |
 | registration | `/mnt/ux/register` with uxd, re-registering if uxd restarts | uxd |
 
-One lock (`uxlk`, [impl.h](impl.h)) guards the model, and nobody holds
-it while waiting. The UI thread never writes to a 9P connection: replies
-go through the responder, so a client that stops reading can't stall the
-UI. Each open of an `events` file is its own subscription with a queue
-of 256 messages; overflow drops the queue and leaves `lost n=N`.
+Two locks: the tree's model lock ([tree.h](tree.h)) and the drawing
+layer's `uxlk` ([impl.h](impl.h)), always taken in that order, and
+nobody holds either while waiting. The UI loop runs on its own 64K
+stack, since drawing (layout, SVG, styled text) and handlers go deeper
+than `threadmain`'s default 8K.
 
 Windows: the first `uxwindow` is the rio window the app was started in.
 Further windows (`uxdialog`) are new rio windows, made by mounting
@@ -206,8 +206,10 @@ views (select, open, move, rename), scroll origins, menus and actions,
 a dialog window coming and going, quit, a stalled reader that keeps
 every click and the last of the moves, flush of a blocked read, menu
 registration, clicks and shortcuts against `test/fakes/fakedevux`, drag
-and drop and the clipboard, and the menus, strings and an alert coming
-from the sample's resources.
+and drop and the clipboard (copying a text field's selection), the
+menus, strings and an alert coming from the sample's resources, and
+(through [test/ctlapp.c](test/ctlapp.c)) the file chooser's props and
+verbs and the spike controls' props, values and style words.
 [test/libux/res_test.zig](../test/libux/res_test.zig) (the GUI harness,
 `scripts/test.sh gui`) checks what the resources draw against golden
 images: `icl8` icons from the app's and the system's resources, a
@@ -222,11 +224,16 @@ view, icon view, file chooser), and `console`, a shell window's text
 registration, menu bar registration, the sample app, and menus,
 dialogs, alerts, strings and icons from resources (S10).
 
-Not yet in the tree: a text field's selection (uitree's `input` has
-none, so scripts can only select all), list columns' layout, the file
-chooser's own verbs (it has no uitree spec yet), and the spike
-controls' props and style words (their nodes exist, laid out by the
-drawing layer).
+Beyond uitree's own types, libux's catalog adds two things of its own
+([types/](types/README.md)): a `selection` prop on `input` and
+`textarea` (rune offsets `Q0 Q1`), and a `file-chooser` type with `dir`,
+`value` and `items` and the verbs `cd`, `choose` and `cancel`. The
+spike's controls carry their props (select and radio-group `items` and
+`value`, slider `min`/`max`/`step`/`value`, switch `label`/`value`,
+tabs with a `tab` child per tab, svg `src`, styled-text `text` and
+`runs`, canvas `ops`) and their style words, both ways.
+
+Not yet in the tree: list columns' layout.
 
 Not yet:
 
@@ -239,5 +246,3 @@ Not yet:
   have no automated test until S0's harness can inject input.
 - Window `close` from rio's own close (deleting the window) isn't
   reported for dialogs yet; the dialog just goes away.
-- [srv.c](srv.c), the ux.md tree libux served before, is still built but
-  no longer posted.

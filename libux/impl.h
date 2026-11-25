@@ -3,7 +3,8 @@
  *
  * Locking: one QLock, uxlk, guards the whole model. The UI thread holds
  * it whenever it is not waiting for input or running app handlers; the
- * 9P proc and the responder proc take it briefly. Functions whose names
+ * tree (tapi.c) takes it, after the model lock, to drive the drawing
+ * layer. Functions whose names
  * start with _ expect it held. Handlers are never run with it held:
  * internal code queues them with _notify() and the UI thread runs them
  * after releasing the lock.
@@ -19,9 +20,6 @@ typedef struct Ctltype Ctltype;
 typedef struct Verb Verb;
 typedef struct Item Item;
 typedef struct Icon Icon;
-typedef struct Sub Sub;
-typedef struct Msg Msg;
-typedef struct Cmd Cmd;
 typedef struct Note Note;
 typedef struct Action Action;
 typedef struct Uxstyle Uxstyle;
@@ -108,9 +106,7 @@ enum {
 };
 
 enum {
-	Qlen	= 256,	/* event queue bound */
 	Maxvalue	= 1<<20,
-	Maxevvalue	= 1024,
 };
 
 struct Obj {
@@ -281,33 +277,6 @@ struct Action {
 	Action	*next;
 };
 
-struct Msg {
-	ulong	seq;
-	char	*s;	/* without seq or newline */
-	Msg	*next;
-};
-
-/* one open of an events file */
-struct Sub {
-	int	kind;	/* Oapp, Owin, Octl, Omenu */
-	ulong	oid;
-	int	winid;
-	Msg	*head, *tail;
-	int	n;
-	int	gone;
-	Req	*r;	/* pending read */
-	Sub	*next;
-};
-
-/* a ctl write, or value-file apply, waiting for the UI thread */
-struct Cmd {
-	Req	*r;	/* nil for a value apply */
-	ulong	oid;
-	int	file;
-	char	*buf;
-	Cmd	*next;
-	char	*err;	/* result */
-};
 
 /* a handler call waiting for the lock to be released */
 struct Note {
@@ -323,7 +292,6 @@ struct App {
 	char	*title;
 	char	*id;	/* from uxd, or nil */
 	char	*user;
-	ulong	seq;
 	Obj	**obj;
 	int	nobj;
 	Uxwin	**win;
@@ -333,12 +301,8 @@ struct App {
 	Action	*actions;
 	Uxfn	*fn;
 	void	*arg;
-	Sub	*subs;
-	Cmd	*cmdq, **cmdtail;
-	Cmd	*doneq;
 	Note	*notes, **notetail;
 	Channel	*uikick;	/* wake the UI thread */
-	Channel	*rkick;	/* wake the responder */
 	int	quit;
 	int	headless;
 	int	nextwinid;	/* headless window IDs */
@@ -354,7 +318,6 @@ struct App {
 	int	barreader;
 	int	evreader;
 	int	riooff;	/* rio's 9/UX mode is off: it paints its own border */
-	int	responding;	/* the responder is answering a batch */
 };
 
 extern QLock uxlk;
@@ -376,36 +339,20 @@ char*	estrdup(char*);
 void*	erealloc(void*, ulong);
 
 /* ev.c */
-void	_event(Obj*, char*, ...);
-Sub*	_subscribe(Obj*);
-void	_unsubscribe(Sub*);
-void	_gone(Obj*);
-void	_subflush(Req*);
-void	_subhangup(Srv*);
 void	_notify(Uxfn*, void*, Uxev*);
 void	_runnotes(void);
-char*	_via(int);
-int	_subfill(Sub*, Req*, char**);
-int	_subread(Sub*, Req*, char**);
-void	_startresponder(void);
-void	_flushdone(void);
 char*	_attr(char*, char*);
 char*	_quote(char*);
-
-/* srv.c */
-int	_newsrv(char*);
 
 /* cmd.c */
 char*	_runcmd(Obj*, int, char*);
 char*	_ctlhelp(Obj*);
-void	_docmds(void);
 
 /* ctl.c */
 extern Ctltype *ctltypes[];
 Uxctl*	_newctl(Uxwin*, char*, Ctltype*, char*, Rectangle);
 void	_ctlevent(Uxctl*, int, int);
 char*	_ctlread(Uxctl*, char*);
-int	_hasfile(Uxctl*, char*);
 char*	_settext(Uxctl*, char*, int);
 void	_setfocus(Uxwin*, Uxctl*, int);
 void	_activate(Uxctl*, int);

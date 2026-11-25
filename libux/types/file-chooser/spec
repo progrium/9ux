@@ -1,0 +1,17 @@
+type    file-chooser  tier=component  profile=desktop  since=1.0
+# 9ux: a directory's entries to choose from, as a Mac's Open dialog
+# lists them. items is "N name" per entry, a directory's name ending
+# in /; value is the name chosen last.
+prop    dir       text  file
+prop    value     text  file
+prop    items     data  file readonly
+prop    disabled  bool
+word    disabled  kind=flag
+verb    cd       PATH   class=activate
+verb    choose   NAME   class=activate
+verb    cancel          class=activate
+event   change   kind=state   attrs=dir
+event   choose   kind=action  attrs=value
+event   cancel   kind=action
+child   none
+file    items  format=items

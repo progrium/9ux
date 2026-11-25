@@ -1,6 +1,7 @@
 /*
- * Menus: served under menus/ (ux.md, Menus) and registered with rio's
- * menu bar through /dev/ux/menubar (devux.md, Menu bar). uxlk held
+ * Menus: the drawing layer's (the tree's menu/ is tapi.c's) and
+ * registered with rio's menu bar through /dev/ux/menubar (devux.md,
+ * Menu bar). uxlk held
  * unless noted.
  */
 #include <u.h>
@@ -264,11 +265,9 @@ Uxfn	*_actionhook;
 void
 _menuaction(char *action, int win, char *via)
 {
-	Uxmenu *m;
 	Action *a;
 	Uxev e;
-	char wbuf[16];
-	int i, j, v;
+	int v;
 
 	if(_actionhook != nil){
 		memset(&e, 0, sizeof e);
@@ -279,18 +278,6 @@ _menuaction(char *action, int win, char *via)
 		_notify(_actionhook, nil, &e);
 	}
 
-	m = nil;
-	for(i = 0; i < ux.nmenu && m == nil; i++)
-		for(j = 0; j < ux.menu[i]->nitem; j++)
-			if(!ux.menu[i]->item[j].sep && strcmp(ux.menu[i]->item[j].action, action) == 0){
-				m = ux.menu[i];
-				break;
-			}
-	snprint(wbuf, sizeof wbuf, "%d", win);
-	if(m != nil)
-		_event(m, "action", "id", action, "win", wbuf, "via", via, nil);
-	else
-		_event(nil, "action", "id", action, "win", wbuf, "via", via, nil);
 	if(strcmp(via, "key") == 0)
 		v = UXkey;
 	else if(strcmp(via, "ctl") == 0)
@@ -371,7 +358,6 @@ uxmenu(char *id, char *title)
 		_addobj(m, Omenu);
 		ux.menu = erealloc(ux.menu, (ux.nmenu+1)*sizeof(Uxmenu*));
 		ux.menu[ux.nmenu++] = m;
-		_event(nil, "new", "menu", id, nil);
 	}
 	free(m->title);
 	m->title = estrdup(title);
@@ -390,7 +376,6 @@ additem(Uxmenu *m, Item *it)
 	a = itemattrs(it);
 	bar("item %s %s%s\n", m->id, it->action, a);
 	free(a);
-	_event(m, "items", nil);
 }
 
 void
@@ -428,12 +413,11 @@ uxsep(Uxmenu *m, char *id)
 static void
 setitems(char *action, int what, int v)
 {
-	int i, j, ch;
+	int i, j;
 	Item *it;
 
 	qlock(&uxlk);
 	for(i = 0; i < ux.nmenu; i++){
-		ch = 0;
 		for(j = 0; j < ux.menu[i]->nitem; j++){
 			it = &ux.menu[i]->item[j];
 			if(it->sep || strcmp(it->action, action) != 0)
@@ -442,10 +426,7 @@ setitems(char *action, int what, int v)
 				it->enabled = v;
 			else
 				it->check = v;
-			ch = 1;
 		}
-		if(ch)
-			_event(ux.menu[i], "items", nil);
 	}
 	if(what == 0)
 		bar("set %s enabled=%s\n", action, v ? "on" : "off");

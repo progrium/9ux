@@ -49,3 +49,12 @@
 #undef uxswitch
 #undef uxtabbar
 #undef uxcanvas
+#undef uxstyle
+#undef uxsetstyle
+#undef uxwinstyle
+#undef uxwinsetstyle
+#undef uxsetrange
+#undef uxsetchoice
+#undef uxsetsvg
+#undef uxsetstext
+#undef uxsetops

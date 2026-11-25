@@ -54,3 +54,12 @@
 #define uxswitch	dxswitch
 #define uxtabbar	dxtabbar
 #define uxcanvas	dxcanvas
+#define uxstyle	dxstyle
+#define uxsetstyle	dxsetstyle
+#define uxwinstyle	dxwinstyle
+#define uxwinsetstyle	dxwinsetstyle
+#define uxsetrange	dxsetrange
+#define uxsetchoice	dxsetchoice
+#define uxsetsvg	dxsetsvg
+#define uxsetstext	dxsetstext
+#define uxsetops	dxsetops

@@ -79,15 +79,6 @@ note(Uxctl *c, int type, int via, char *text)
 	_notify(c->fn, c->arg, &e);
 }
 
-static void
-selevent(Uxctl *c)
-{
-	char a[16], b[16];
-
-	snprint(a, sizeof a, "%d", c->q0);
-	snprint(b, sizeof b, "%d", c->q1);
-	_event(c, "select", "q0", a, "q1", b, nil);
-}
 
 /* replace runes q0..q1 with n runes r; offsets after q1 move with the text */
 static void
@@ -187,7 +178,6 @@ sendinput(Uxctl *c, int eof, int via)
 	s = _runestr(c->text+c->qh, q-c->qh);
 	c->qh = q;
 	snprint(num, sizeof num, "%ld", strlen(s));
-	_event(c, "submit", "n", num, "via", _via(via), nil);
 	note(c, UXsubmit, via, s);
 	free(s);
 }
@@ -206,13 +196,11 @@ type(Uxctl *c, Rune *r, int n, int via)
 	c->q0 = c->q1;
 	c->follow = 1;
 	sendinput(c, 0, via);
-	selevent(c);
 }
 
 static void
 interrupt(Uxctl *c, int via)
 {
-	_event(c, "interrupt", "via", _via(via), nil);
 	note(c, UXinterrupt, via, nil);
 }
 
@@ -377,13 +365,11 @@ _conslayout(Uxctl *c)
 	if(Dy(c->r) != h){
 		c->r.max.y = c->r.min.y + h;
 		snprint(buf, sizeof buf, "%d,%d,%d,%d", c->r.min.x, c->r.min.y, c->r.max.x, c->r.max.y);
-		_event(c, "rect", "rect", buf, nil);
 	}
 	ext = Rect(0, 0, Dx(port), h);
 	if(!eqrect(ext, v->extent)){
 		v->extent = ext;
 		snprint(buf, sizeof buf, "%d,%d,%d,%d", ext.min.x, ext.min.y, ext.max.x, ext.max.y);
-		_event(v, "extent", "rect", buf, nil);
 	}
 	if(atend)
 		_setorigin(v, Pt(v->origin.x, ext.max.y - Dy(port)), UXui);
@@ -551,7 +537,6 @@ consmouse(Uxctl *c, Mouse *m)
 			c->lastitem = q;
 		}
 		c->w->dirty = 1;
-		selevent(c);
 		return 1;
 	}
 	if(m->buttons & 1){
@@ -561,7 +546,6 @@ consmouse(Uxctl *c, Mouse *m)
 			c->q0 = a;
 			c->q1 = b;
 			c->w->dirty = 1;
-			selevent(c);
 		}
 		return 1;
 	}
@@ -601,7 +585,6 @@ conskey(Uxctl *c, Rune r)
 	if(c->raw && !(c->state & UXreadonly)){
 		n = runetochar(buf, &r);
 		buf[n] = 0;
-		_event(c, "submit", "n", "1", "via", "ui", nil);
 		note(c, UXsubmit, UXui, buf);
 		return 1;
 	}
@@ -636,14 +619,12 @@ conskey(Uxctl *c, Rune r)
 			c->q0--;
 		c->q1 = c->q0;
 		c->w->dirty = 1;
-		selevent(c);
 		return 1;
 	case Kright:
 		if(c->q1 < c->ntext)
 			c->q1++;
 		c->q0 = c->q1;
 		c->w->dirty = 1;
-		selevent(c);
 		return 1;
 	case Kesc:
 		return 1;
@@ -676,7 +657,6 @@ conskey(Uxctl *c, Rune r)
 		}
 		replace(c, c->q0, c->q1, nil, 0);
 		c->follow = 1;
-		selevent(c);
 		return 1;
 	}
 	if(r == '\n'){
@@ -704,7 +684,6 @@ _consedit(Uxctl *c, char *cmd)
 		c->q0 = 0;
 		c->q1 = c->ntext;
 		c->w->dirty = 1;
-		selevent(c);
 		return nil;
 	}
 	if(strcmp(cmd, "copy") == 0 || strcmp(cmd, "cut") == 0){
@@ -718,7 +697,6 @@ _consedit(Uxctl *c, char *cmd)
 		/* only what's typed can be cut; output is copied */
 		if(cmd[1] == 'u' && c->q1 > c->q0 && c->q0 >= c->qh && !(c->state & UXreadonly)){
 			replace(c, c->q0, c->q1, nil, 0);
-			selevent(c);
 		}
 		return nil;
 	}
@@ -788,7 +766,6 @@ vselect(Uxctl *c, int, char **argv)
 	c->q0 = q0;
 	c->q1 = q1;
 	c->w->dirty = 1;
-	selevent(c);
 	return nil;
 }
 
@@ -810,7 +787,6 @@ vclear(Uxctl *c, int, char**)
 	replace(c, 0, q, nil, 0);
 	c->nline = 0;
 	c->follow = 1;
-	_event(c, "clear", nil);
 	return nil;
 }
 

@@ -63,6 +63,12 @@ same $m/name/value 'hello
 echo 'set name ''value=J, llo''' >$m/ctl
 same $m/name/value 'J, llo
 '
+# the selection, in runes (libux/types/input/spec)
+echo set name '''selection=1 3''' >$m/ctl
+same $m/name/selection '1 3
+'
+echo set name '''selection=7 7''' >$m/ctl
+want 'selection=''7 7''' $m/name/tree
 # long values go through the value file
 echo -n 'line one
 line two' >$m/notes/value

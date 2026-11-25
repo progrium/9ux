@@ -133,7 +133,6 @@ newsize(Uxwin *w, Rectangle old, Point oldsz)
 	if(!eqrect(old, w->r) || !eqpt(oldsz, sz)){
 		if(!eqrect(old, w->r)){
 			snprint(buf, sizeof buf, "%d,%d,%d,%d", w->r.min.x, w->r.min.y, w->r.max.x, w->r.max.y);
-			_event(w, "rect", "rect", buf, nil);
 		}
 		if(w->fn != nil){
 			memset(&e, 0, sizeof e);
@@ -356,7 +355,6 @@ _newwin(char *kind, char *title, Rectangle r)
 	ux.win = erealloc(ux.win, (ux.nwin+1)*sizeof(Uxwin*));
 	ux.win[ux.nwin++] = w;
 	w->dirty = 1;
-	_event(w, "new", "kind", kind, nil);
 	_regwin(w->winid, 1);
 	_menuwin(w, 1);
 	_chrome(w);
@@ -371,12 +369,8 @@ _delwin(Uxwin *w)
 
 	for(i = 0; i < w->nctl; i++){
 		c = w->ctl[i];
-		_event(c, "delete", nil);
-		_gone(c);
 		_delobj(c);
 	}
-	_event(w, "delete", nil);
-	_gone(w);
 	_delobj(w);
 	for(i = 0; i < ux.nwin; i++)
 		if(ux.win[i] == w){
@@ -435,7 +429,6 @@ _winstate(Uxwin *w, int state)
 		fprint(w->wctlfd, (state&Whidden) ? "hide" : "unhide");
 	w->state = state;
 	s = _flags(state, 1);
-	_event(w, "state", "state", s, nil);
 	free(s);
 }
 

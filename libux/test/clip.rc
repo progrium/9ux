@@ -26,22 +26,37 @@ mount -c /srv/$srvname $app
 ctl=$app/win/main
 f=$ctl/field
 
-# uitree's input has no selection to set: these select all of it
+# the selection prop (libux/types/input/spec) picks what's copied
 test=copy-to-snarf
 echo field >$ctl/focus
 echo set field '''value=hello world''' >$ctl/ctl
-press selectall
+echo set field '''selection=0 5''' >$ctl/ctl
+same $f/selection '0 5
+'
 press copy
-same $uxsnarf 'hello world'
+same $uxsnarf 'hello'
+# pasting over the selection: the caret ends after it
 press paste
 same $f/value 'hello world
+'
+same $f/selection '5 5
+'
+echo set field '''selection=6 11''' >$ctl/ctl
+press paste
+same $f/value 'hello hello
+'
+press selectall
+press copy
+same $uxsnarf 'hello hello'
+press paste
+same $f/value 'hello hello
 '
 
 test=cut
 echo -n x >$uxsnarf
 press selectall
 press cut
-same $uxsnarf 'hello world'
+same $uxsnarf 'hello hello'
 same $f/value ''
 
 test=legacy-copy
