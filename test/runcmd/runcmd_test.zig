@@ -11,8 +11,8 @@ const Key = harness.Key;
 const gpa = std.testing.allocator;
 
 const start = "rc /mnt/term/cwd/test/runcmd/runcmd.rc";
-const t = "/tmp/rc/windows/1/controls/text";
-const sv = "/tmp/rc/windows/1/controls/scroll";
+const sv = "/tmp/rc/win/main/scroll";
+const t = sv ++ "/text";
 
 fn waitValue(s: *harness.Session, re: []const u8) !void {
     const cmd = try std.fmt.allocPrint(gpa, "grep -s '{s}' {s}/value", .{ re, t });
@@ -49,11 +49,11 @@ test "runcmd: rc in a console with a scroll bar" {
     try s.typeText("typed line\n");
     try waitValue(s, "^got typed line$");
 
-    // more output than fits: the extent grows and the end stays in view
+    // more output than fits: the console grows and the end stays in view
     try s.typeText("seq 1 80\n");
     try waitValue(s, "^80$");
-    try s.waitRc("~ `{awk '{print $4}' " ++ sv ++ "/extent} [0-9][0-9][0-9][0-9]*", 10_000);
-    try s.waitRc("o=`{awk '{print $2}' " ++ sv ++ "/origin}; ! ~ $o 0", 10_000);
+    try s.waitRc("~ `{awk '{print $4}' " ++ t ++ "/bounds} [0-9][0-9][0-9][0-9]*", 10_000);
+    try s.waitRc("sed 1q " ++ sv ++ "/tree | grep -s 'origin=[1-9]'", 10_000);
     try s.settle();
     s.saveScreen("runcmd-scrolled");
 
@@ -70,7 +70,7 @@ test "runcmd: rc in a console with a scroll bar" {
     // the Shell menu's Interrupt does the same
     try s.typeText("sleep 1000\n");
     try s.waitRc("ps | grep -s ' sleep$'", 10_000);
-    _ = try s.rc("echo invoke interrupt >/tmp/rc/menus/shell/ctl");
+    _ = try s.rc("echo menu 'item=interrupt' >/tmp/rc/debug/inject");
     try s.waitRc("! ps | grep -s ' sleep$'", 10_000);
 
     // raw mode (rawon on consctl): keys go to the reader as typed, unshown
@@ -81,12 +81,12 @@ test "runcmd: rc in a console with a scroll bar" {
     try s.waitRc("! grep -s '^xyz' " ++ t ++ "/value", 1_000);
 
     // the grow box resizes the window, and the text fits the new width
-    const before = try s.rc("cat " ++ t ++ "/rect");
+    const before = try s.rc("cat " ++ t ++ "/bounds");
     defer gpa.free(before);
     s.drag(pt(win.max.x - 8, win.max.y - 8), pt(win.max.x + 92, win.max.y + 42), .left);
-    try s.waitRc("~ `{awk '{print $3}' " ++ sv ++ "/rect} 6[5-9][0-9]", 10_000);
+    try s.waitRc("~ `{awk '{print $1+$3}' " ++ sv ++ "/bounds} 6[5-9][0-9]", 10_000);
     harness.sleepMs(300);
-    const after = try s.rc("cat " ++ t ++ "/rect");
+    const after = try s.rc("cat " ++ t ++ "/bounds");
     defer gpa.free(after);
     try std.testing.expect(!std.mem.eql(u8, before, after));
 

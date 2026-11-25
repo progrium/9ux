@@ -43,6 +43,7 @@ enum {
 	Kscroll,
 	Kchooser,
 	Kcons,
+	Kother,	/* the spike's: drawn, but not synced */
 };
 
 /* an icon view's icon, as its items file shows it */
@@ -68,6 +69,7 @@ struct Cc {
 	int	nic;
 	int	origin;	/* Kscroll: the y origin the node had */
 	Rectangle	r;	/* the API's rectangle, window-local */
+	int	raw;	/* Kcons: keys aren't echoed */
 	Cc	*next;
 };
 
@@ -102,6 +104,7 @@ static char *ntype[] = {
 [Kscroll]	"scroll",
 [Kchooser]	"file-chooser",
 [Kcons]	"console",
+[Kother]	"div",
 };
 
 /* the prop that holds what a kind shows as its label */
@@ -116,6 +119,7 @@ static char *labelprop[] = {
 [Kscroll]	nil,
 [Kchooser]	nil,
 [Kcons]	nil,
+[Kother]	nil,
 };
 
 static Cc	*ccs;
@@ -139,6 +143,7 @@ static void	capisync1(void);
 static void	hook(char*, char*, char*, char*, char*);
 static void	actioncall(char*, char*, char*);
 static void	menusync(void);
+static void	consappend(Node*, char*, long);
 static void	defclose(Uxev*, void*);
 void	uxwinclose(Uxwin*);
 static char*	verb(Node*, Tok*, int);
@@ -451,6 +456,32 @@ quitasked(char *via)
 	free(a);
 }
 
+/* activate, from 9P: to the front */
+static void
+activated(Win *mw)
+{
+	Cw *w;
+
+	if((w = cwbyname(mw->name)) != nil)
+		uxwinfront(w->w);
+}
+
+/* debug/windows: where the windows are, for tests that point and click */
+static char*
+winrects(void)
+{
+	Cw *w;
+	Fmt f;
+	Rectangle r;
+
+	fmtstrinit(&f);
+	for(w = cws; w != nil; w = w->next){
+		r = uxwinrect(w->w);
+		fmtprint(&f, "%s %d %d %d %d %d\n", w->name, uxwinid(w->w), r.min.x, r.min.y, r.max.x, r.max.y);
+	}
+	return fmtstrflush(&f);
+}
+
 /* a window with no handler closes, as in the drawing layer; main quits */
 static void
 defclose(Uxev*, void *arg)
@@ -695,6 +726,9 @@ capictlev(Uxev *e, void *arg)
 		break;
 	case UXsubmit:
 		name = "submit";
+		/* what was typed stays in the console, echoed, unless raw */
+		if(c->kind == Kcons && !c->raw && e->text != nil)
+			consappend(n, e->text, strlen(e->text));
 		break;
 	case UXopen:
 		name = "open";
@@ -858,6 +892,8 @@ uxinit(char *name, char *title)
 	evhook = hook;
 	quithook = quitasked;
 	closehook = closeasked;
+	activatehook = activated;
+	debugwins = winrects;
 	verbhook = verb;
 	_actionhook = actionev;
 	drawing = 1;
@@ -1013,9 +1049,13 @@ setgeom(Node *n, Rectangle r)
 {
 	Cc *pc;
 
+	free(n->style);
+	if(eqrect(r, ZR)){	/* laid out by its style words (spike) */
+		n->style = estrdup("");
+		return;
+	}
 	if(n->parent != nil && (pc = ccbynode(n->parent->id)) != nil)
 		r = rectsubpt(r, pc->r.min);
-	free(n->style);
 	n->style = smprint("absolute left=%d top=%d w=%d h=%d", r.min.x, r.min.y, Dx(r), Dy(r));
 }
 
@@ -1071,6 +1111,61 @@ nodeof(Uxctl *c, Cc **ccp)
 	if(ccp != nil)
 		*ccp = cc;
 	return nodebyid(cc->node);
+}
+
+/* the spike's controls (flex.c, svg.c, stext.c, widget.c), as nodes */
+Uxctl*
+uxdiv(Uxwin *w, char *id)
+{
+	return adopt(w, dxdiv(w, id), Kother, "div", ZR, nil);
+}
+
+Uxctl*
+uxsvg(Uxwin *w, char *id, char *src)
+{
+	return adopt(w, dxsvg(w, id, src), Kother, "svg", ZR, nil);
+}
+
+Uxctl*
+uxstyledtext(Uxwin *w, char *id, char *text, char *runs)
+{
+	return adopt(w, dxstyledtext(w, id, text, runs), Kother, "styled-text", ZR, nil);
+}
+
+Uxctl*
+uxpopup(Uxwin *w, char *id, char *placeholder)
+{
+	return adopt(w, dxpopup(w, id, placeholder), Kother, "select", ZR, nil);
+}
+
+Uxctl*
+uxradios(Uxwin *w, char *id, int row)
+{
+	return adopt(w, dxradios(w, id, row), Kother, "radio-group", ZR, nil);
+}
+
+Uxctl*
+uxslider(Uxwin *w, char *id, int min, int max, int step)
+{
+	return adopt(w, dxslider(w, id, min, max, step), Kother, "slider", ZR, nil);
+}
+
+Uxctl*
+uxswitch(Uxwin *w, char *id, char *label)
+{
+	return adopt(w, dxswitch(w, id, label), Kother, "switch", ZR, nil);
+}
+
+Uxctl*
+uxtabbar(Uxwin *w, char *id)
+{
+	return adopt(w, dxtabbar(w, id), Kother, "tabs", ZR, nil);
+}
+
+Uxctl*
+uxcanvas(Uxwin *w, char *id)
+{
+	return adopt(w, dxcanvas(w, id), Kother, "canvas", ZR, nil);
 }
 
 Uxctl*
@@ -1584,15 +1679,14 @@ uxiconselect(Uxctl *c, char **ids, int ni)
 /* consoles: value is the output, as the console keeps it */
 enum { Maxcons = 64*1024 };
 
-void
-uxconswrite(Uxctl *c, char *s, long ns)
+/* the console's value grows by s, model held */
+static void
+consappend(Node *n, char *s, long ns)
 {
-	Node *n;
 	char *v, *t;
 	long l;
 
-	lockmodel();
-	if((n = nodeof(c, nil)) != nil){
+	{
 		v = getprop(n, "value");
 		l = v != nil ? strlen(v) : 0;
 		t = emalloc(l+ns+1);
@@ -1606,6 +1700,16 @@ uxconswrite(Uxctl *c, char *s, long ns)
 		setprop(n, "value", t, 0);
 		free(t);
 	}
+}
+
+void
+uxconswrite(Uxctl *c, char *s, long ns)
+{
+	Node *n;
+
+	lockmodel();
+	if((n = nodeof(c, nil)) != nil)
+		consappend(n, s, ns);
 	unlockmodel();
 	dxconswrite(c, s, ns);
 }
@@ -1631,9 +1735,11 @@ void
 uxconsraw(Uxctl *c, int on)
 {
 	Node *n;
+	Cc *cc;
 
 	lockmodel();
-	if((n = nodeof(c, nil)) != nil){
+	if((n = nodeof(c, &cc)) != nil){
+		cc->raw = on;
 		if(on)
 			setprop(n, "raw", "on", 1);
 		else

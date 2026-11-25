@@ -45,3 +45,12 @@
 #define uxitemcheck	dxitemcheck
 #define uxsetorigin	dxsetorigin
 #define uxfocus	dxfocus
+#define uxdiv	dxdiv
+#define uxsvg	dxsvg
+#define uxstyledtext	dxstyledtext
+#define uxpopup	dxpopup
+#define uxradios	dxradios
+#define uxslider	dxslider
+#define uxswitch	dxswitch
+#define uxtabbar	dxtabbar
+#define uxcanvas	dxcanvas

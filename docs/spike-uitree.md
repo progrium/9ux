@@ -290,10 +290,47 @@ Not done yet: `set` needs `edit` whatever prop it names (policy.md
 would let a descriptor mark some props `activate`), and a ctl write
 split over several 9P writes is checked one write at a time.
 
+## libux on the tree
+
+This is step 4: the node tree is libux's source of truth, and every
+libux app (Desktop, Run Command, the sample, the spike) serves it.
+
+- **One library.** uxkit's model, ctl parser, events, 9P server,
+  catalog and renderer moved into libux (`libux/t*.c`, `tree.h`);
+  uxkit is now only its `main`.
+- **The C API makes nodes** ([libux/tapi.c](../libux/tapi.c)). The old
+  functions are the drawing layer, renamed `dx*` by `libux/dx.h`;
+  `uxwindow`, `uxbutton` and the rest make a node, then its control.
+  Windows are `main`, then `KIND-N` (`folder-1`, `info-1`), dialogs
+  `dialog-N`; a control's node is its ID, placed with `absolute` from
+  its rectangle (relative to its parent's). Setters change the node,
+  then the control; a 9P write changes the node, and the control
+  follows on the UI thread. Events go the other way: what a person does
+  is a uitree event, and the handler gets it, so one from a script
+  reaches the same handler.
+- **Menus** are in `menu/` (`menu/bar` and `item ID label=...
+  key=cmd-K` lines); a choice is `action ID - via=menu`, from the bar,
+  a shortcut, or `menu item=ID win=NAME` on `debug/inject`.
+- **Desktop's types.** icon-view (`select`, `open`, `move`, `rename`,
+  icon-items) and console (`append`, `clear`) are in the catalog from
+  their specs; `debug/windows` gives each window's place on screen for
+  the gui tests.
+- **Quit and close** from 9P go to the app's handlers, as they did.
+
+Every test that used `windows/N/controls/...` now uses `win/...`:
+libux's six rc suites, Desktop's interface tests, and the gui tests for
+Desktop, the mockup, Run Command, resources, the spike and the e2e
+drag and demo. uxd's own suites keep testing ux.md apps through
+fakeapp.
+
+Not done: a text field's selection (uitree's `input` has none), the
+file chooser's verbs (no spec yet), and the spike controls' props and
+style words (their nodes exist, the drawing layer lays them out).
+
 ## Next, if this goes ahead
 
-1. Step 4: make the node tree libux's source of truth, with the C API
-   (`uxbutton`, `uxwindow`, ...) making nodes, so Desktop and the other
-   apps' public paths become `win/NAME/...`.
-2. Give hover-card and the layout and feedback types their own look.
-3. The transfer layer (drag and drop), the last skipped script.
+1. Give hover-card and the layout and feedback types their own look.
+2. The transfer layer (drag and drop) in uitree terms, the last skipped
+   script.
+3. Retire `libux/srv.c` (the ux.md server) and ux.md's app half once
+   nothing reads it.

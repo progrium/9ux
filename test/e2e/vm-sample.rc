@@ -9,4 +9,4 @@ for(i in `{seq 1 600})
 		sleep 0.1
 mkdir -p /tmp/sample
 mount /srv/ux.$user.sample /tmp/sample
-echo select sample >/tmp/sample/windows/1/controls/icons/ctl
+echo select sample >/tmp/sample/win/main/files/icons/ctl

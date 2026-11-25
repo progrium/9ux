@@ -422,6 +422,7 @@ doquit(void)
 /* libux's C API: a quit or close asked for goes to the app's handler (tapi.c) */
 void	(*quithook)(char*);
 void	(*closehook)(Win*, char*);
+void	(*activatehook)(Win*);
 
 /* a close or quit the user or client asked for: a request if the app asked */
 static void
@@ -1006,6 +1007,8 @@ winverb(Win *w, Tok *t, int nt)
 	}
 	if(strcmp(v, "activate") == 0){
 		w->shown = 1;
+		if(w->capi && activatehook != nil)
+			activatehook(w);
 		return nil;
 	}
 	if(strcmp(v, "state") == 0){

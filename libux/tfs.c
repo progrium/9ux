@@ -14,7 +14,7 @@ enum {
 	Qroot, Qversion, Qctl, Qevents, Qtrace, Qkeys, Qmenudir, Qmenu,
 	Qthemedir, Qtokens, Qtname, Qpref, Qmode, Qassetdir, Qtypesdir,
 	Qtypedir, Qspec, Qtypever, Qstyledir, Qwords, Qwindir, Qclip,
-	Qdebugdir, Qinject,
+	Qdebugdir, Qinject, Qdebugwins,
 	/* node files */
 	Qnode, Qtype, Qstyle, Qorder, Qtag, Qon, Qcontext, Qnctl, Qnevents,
 	Qtree, Qbounds, Qprop, Qtitle, Qinner, Qstate, Qfocus, Qoverdir,
@@ -67,6 +67,7 @@ static Tab tab[] = {
 	"mode",	Qmode,	Qthemedir,	0,
 	"words",	Qwords,	Qstyledir,	0,
 	"inject",	Qinject,	Qdebugdir,	0,
+	"windows",	Qdebugwins,	Qdebugdir,	0,
 	"spec",	Qspec,	Qtypedir,	0,
 	"version",	Qtypever,	Qtypedir,	0,
 	"type",	Qtype,	Qnode,	0,
@@ -86,6 +87,9 @@ static Tab tab[] = {
 };
 
 extern char *profiles[];
+
+/* debug/windows: NAME ID x0 y0 x1 y1, each window's place on the screen (tapi.c) */
+char*	(*debugwins)(void);
 
 static Faux*
 newaux(int k, int node, char *name)
@@ -516,6 +520,8 @@ content(Faux *a, long *len, char **err)
 		return tracetext();
 	case Qinject:
 		return estrdup("");
+	case Qdebugwins:
+		return debugwins != nil ? debugwins() : estrdup("");
 	case Qkeys:
 		return estrdup(app->keys);
 	case Qmenu:
@@ -704,6 +710,8 @@ apppath(Faux *a)
 		return smprint("theme/%s", tabname(a->k));
 	case Qinject:
 		return estrdup("debug/inject");
+	case Qdebugwins:
+		return estrdup("debug/windows");
 	case Qwords:
 		return estrdup("style/words");
 	}

@@ -1,9 +1,18 @@
 # ux: app control trees and `/mnt/ux`
 
-**Protocol:** `ux 1.0` · **Servers:** every libux app (its own tree),
-and uxd (`/mnt/ux`, aggregating them) · **Fake:**
+**Protocol:** `ux 1.0` · **Servers:** uxd (`/mnt/ux`, aggregating the
+apps' trees), and `test/fakes/fakeapp` · **Fake:**
 [`test/fakes/fakeapp`](../../test/fakes/) · **Conventions:**
 [README.md](README.md)
+
+> **libux apps now serve uitree trees.** Since migration step 4
+> ([spike-uitree.md](../spike-uitree.md#libux-on-the-tree)), libux,
+> and so Desktop, Run Command and every other libux app, serves its
+> windows and controls as a uitree node tree (`win/NAME/...`), which uxd
+> takes as described under § Registration, uitree apps and § Rights,
+> uitree apps. The app tree this document describes (`windows/N/controls/...`)
+> is what fakeapp still serves and uxd still accepts; `/mnt/ux` itself
+> is unchanged.
 
 Every 9/UX application serves its controls (windows, buttons, text
 fields, menus) as a 9P tree. The on-screen UI and a shell script see the
@@ -388,7 +397,8 @@ to 1 s), mounts that public service on `/mnt/ux` again (registering is
 open to every attach, so the app needs no more than that), and registers again with `id=` set to its old
 ID. Nothing in the app is lost, and its app ID normally doesn't change.
 
-**uitree apps.** A uitree host (uxkit) registers the same way, with a
+**uitree apps.** A uitree host (libux, and so every libux app and
+uxkit) registers the same way, with a
 `version` whose first line is `uitree 1.x`; uxd accepts both, and also
 uitree's own form of the command, `register NAME srv=PATH [id=APPID]`
 ([policy.md](https://github.com/progrium/scratch/blob/main/uitree/protocols/policy.md#registration)).

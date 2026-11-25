@@ -8,16 +8,20 @@ const harness = @import("harness");
 const rect = harness.rect;
 const gpa = std.testing.allocator;
 
-const tree = "/tmp/sp/windows/1/controls";
+const tree = "/tmp/sp/win/main";
 
+/// A node's rectangle, x0 y0 x1 y1, from its bounds wherever it is in the window.
 fn ctlRect(s: *harness.Session, id: []const u8) ![4]i32 {
-    const cmd = try std.fmt.allocPrint(gpa, "cat " ++ tree ++ "/{s}/rect", .{id});
+    const cmd = try std.fmt.allocPrint(gpa, "awk '{{print $1, $2, $1+$3, $2+$4}}' `{{du -a " ++ tree ++ " | awk '{{print $2}}' | grep '/win/main/(.*/)?{s}/bounds$' | sed 1q}}", .{id});
     defer gpa.free(cmd);
     const out = try s.rc(cmd);
     defer gpa.free(out);
     var r: [4]i32 = undefined;
     var it = std.mem.tokenizeAny(u8, out, " \n");
-    for (&r) |*v| v.* = try std.fmt.parseInt(i32, it.next() orelse return error.BadRect, 10);
+    for (&r) |*v| v.* = std.fmt.parseInt(i32, it.next() orelse return error.BadRect, 10) catch |e| {
+        std.debug.print("{s}: bad rectangle: {s}\n", .{ id, out });
+        return e;
+    };
     return r;
 }
 
@@ -56,7 +60,7 @@ test "spike: a mail screen laid out by flexbox, then narrower" {
     defer gpa.free(ids);
     var p: [64]u8 = undefined;
     try s.writeFile(try std.fmt.bufPrint(&p, "/dev/wsys/{d}/wctl", .{ids[0]}), "resize -r 40 40 620 640");
-    try s.waitRc("! ~ `{awk '{print $3}' " ++ tree ++ "/main/rect} " ++ "x", 5_000);
+    try s.waitRc("! ~ `{awk '{print $3}' `{du -a " ++ tree ++ " | awk '{print $2}' | grep '/win/main/(.*/)?main/bounds$' | sed 1q}} " ++ "x", 5_000);
     harness.sleepMs(500);
     try s.settle();
     s.saveScreen("spike-mail-narrow");

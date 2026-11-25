@@ -314,5 +314,7 @@ extern void	(*evhook)(char*, char*, char*, char*, char*);
 extern char*	(*verbhook)(Node*, Tok*, int);
 extern void	(*quithook)(char*);
 extern void	(*closehook)(Win*, char*);
+extern void	(*activatehook)(Win*);
+extern char*	(*debugwins)(void);
 void	capisync(void);
 char*	capibounds(Node*);

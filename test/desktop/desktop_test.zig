@@ -36,12 +36,16 @@ fn two(s: *harness.Session, cmd: []const u8) !harness.Point {
     return pt(x, y);
 }
 
-/// The window with that kind in Desktop's tree.
+/// The window with that kind in Desktop's tree: the desktop is main,
+/// the others KIND-N.
 fn winOf(s: *harness.Session, kind: []const u8, buf: []u8) ![]const u8 {
     var b: [256]u8 = undefined;
-    const cmd = try std.fmt.bufPrint(&b, "for(w in /tmp/f/windows/*) if(grep -s '^{s}$' $w/kind) basename $w", .{kind});
+    const cmd = if (std.mem.eql(u8, kind, "desktop"))
+        "for(w in /tmp/f/win/main) if(test -d $w) basename $w"
+    else
+        try std.fmt.bufPrint(&b, "for(w in /tmp/f/win/{s}-*) if(test -d $w) basename $w", .{kind});
     var wb: [512]u8 = undefined;
-    try s.waitRc(try std.fmt.bufPrint(&wb, "~ `{{{s}}} [0-9]*", .{cmd}), 10_000);
+    try s.waitRc(try std.fmt.bufPrint(&wb, "~ `{{{s}}} ?*", .{cmd}), 10_000);
     const out = try s.rc(cmd);
     defer gpa.free(out);
     const w = std.mem.trim(u8, out, " \n");
@@ -49,20 +53,29 @@ fn winOf(s: *harness.Session, kind: []const u8, buf: []u8) ![]const u8 {
     return buf[0..w.len];
 }
 
+/// A window's icon view, from /tmp/f: a folder's is in its scroll view.
+fn iconsOf(win: []const u8, buf: []u8) ![]const u8 {
+    if (std.mem.eql(u8, win, "main"))
+        return std.fmt.bufPrint(buf, "win/main/icons", .{});
+    return std.fmt.bufPrint(buf, "win/{s}/scroll/icons", .{win});
+}
+
 /// Where an item's icon centre is on the screen: the window's
-/// rectangle, its border (the window's width minus the drawable width
-/// the icon view fills, halved), the icon view's top, and the item's pos.
+/// rectangle (debug/windows), its border (the window's width minus the
+/// drawable width the icon view fills, halved), the icon view's top,
+/// and the item's pos.
 fn itemAt(s: *harness.Session, win: []const u8, label: []const u8) !harness.Point {
     var b: [512]u8 = undefined;
-    const r = try two(s, try std.fmt.bufPrint(&b, "cat /tmp/f/windows/{s}/rect", .{win}));
-    const rmax = try two(s, try std.fmt.bufPrint(&b, "awk '{{print $3, $4}}' /tmp/f/windows/{s}/rect", .{win}));
+    const r = try two(s, try std.fmt.bufPrint(&b, "awk '$1 == \"{s}\" {{print $3, $4}}' /tmp/f/debug/windows", .{win}));
+    const rmax = try two(s, try std.fmt.bufPrint(&b, "awk '$1 == \"{s}\" {{print $5, $6}}' /tmp/f/debug/windows", .{win}));
     // The icon view's top, and the window's drawable width: a folder
     // window's scroll view is that outset by 1; the desktop's icon view is it.
-    const cv = try two(s, try std.fmt.bufPrint(&b, "c=/tmp/f/windows/{s}/controls; awk '{{print $2}}' $c/icons/rect; if(test -e $c/scroll) awk '{{print $3-1}}' $c/scroll/rect; if not awk '{{print $3}}' $c/icons/rect", .{win}));
+    const cv = try two(s, try std.fmt.bufPrint(&b, "c=/tmp/f/win/{s}; if(test -e $c/scroll){{ awk '{{print $2}}' $c/scroll/icons/bounds; awk '{{print $1+$3-1}}' $c/scroll/bounds }}; if not {{ awk '{{print $2}}' $c/icons/bounds; awk '{{print $1+$3}}' $c/icons/bounds }}", .{win}));
     const top = cv.x;
     const cw = cv.y;
     const border = @divTrunc((rmax.x - r.x) - cw, 2);
-    const p = try two(s, try std.fmt.bufPrint(&b, "grep 'label={s} ' /tmp/f/windows/{s}/controls/icons/items | sed 's/.*pos=([0-9]+),([0-9]+).*/\\1 \\2/'", .{ label, win }));
+    var ib: [128]u8 = undefined;
+    const p = try two(s, try std.fmt.bufPrint(&b, "grep 'label={s} ' /tmp/f/{s}/items | sed 's/.*pos=([0-9]+),([0-9]+).*/\\1 \\2/'", .{ label, try iconsOf(win, &ib) }));
     return pt(r.x + border + p.x, r.y + border + top + p.y);
 }
 
@@ -79,7 +92,8 @@ test "desktop: the desktop, a folder window, moving and selecting icons" {
     var db: [64]u8 = undefined;
     const dw = try winOf(s, "desktop", &db);
     var ib: [128]u8 = undefined;
-    try waitTree(s, try std.fmt.bufPrint(&ib, "windows/{s}/controls/icons/items", .{dw}), "label=scratch icon=disk");
+    var ib2: [128]u8 = undefined;
+    try waitTree(s, try std.fmt.bufPrint(&ib, "{s}/items", .{try iconsOf(dw, &ib2)}), "label=scratch icon=disk");
     try s.settle();
     s.saveScreen("desktop-desktop");
     const vol = try itemAt(s, dw, "scratch");
@@ -92,7 +106,9 @@ test "desktop: the desktop, a folder window, moving and selecting icons" {
     var fb: [64]u8 = undefined;
     const fw = try winOf(s, "folder", &fb);
     var items_b: [128]u8 = undefined;
-    const items = try std.fmt.bufPrint(&items_b, "windows/{s}/controls/icons/items", .{fw});
+    var fi_b: [128]u8 = undefined;
+    const fi = try iconsOf(fw, &fi_b);
+    const items = try std.fmt.bufPrint(&items_b, "{s}/items", .{fi});
     try waitTree(s, items, "label=notes.txt icon=doc-text");
     try s.settle();
 
@@ -112,6 +128,6 @@ test "desktop: the desktop, a folder window, moving and selecting icons" {
     const ws = try itemAt(s, fw, "notes.txt");
     s.drag(pt(docs.x - 48, docs.y - 10), pt(ws.x + 60, ws.y + 60), .left);
     var sb: [128]u8 = undefined;
-    try waitTree(s, try std.fmt.bufPrint(&sb, "windows/{s}/controls/icons/selection", .{fw}), "^i[0-9]+ i[0-9]+ i[0-9]+$");
+    try waitTree(s, try std.fmt.bufPrint(&sb, "{s}/tree", .{fi}), "selection=''i[0-9]+ i[0-9]+ i[0-9]+''");
     s.saveScreen("desktop-folder");
 }

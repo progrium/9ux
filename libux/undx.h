@@ -40,3 +40,12 @@
 #undef uxitemcheck
 #undef uxsetorigin
 #undef uxfocus
+#undef uxdiv
+#undef uxsvg
+#undef uxstyledtext
+#undef uxpopup
+#undef uxradios
+#undef uxslider
+#undef uxswitch
+#undef uxtabbar
+#undef uxcanvas
