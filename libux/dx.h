@@ -38,3 +38,9 @@
 #define uxconswrite	dxconswrite
 #define uxconsclear	dxconsclear
 #define uxconsraw	dxconsraw
+#define uxmenu	dxmenu
+#define uxitem	dxitem
+#define uxsep	dxsep
+#define uxitemenable	dxitemenable
+#define uxitemcheck	dxitemcheck
+#define uxsetorigin	dxsetorigin

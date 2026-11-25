@@ -119,10 +119,19 @@ parsespec(Type *t)
 			}
 		}else if(strcmp(f[0], "file") == 0 && n >= 2){
 			for(i = 0; i < t->np; i++)
-				if(strcmp(t->p[i].name, f[1]) == 0){
-					free(t->p[i].fmt);
-					t->p[i].fmt = attrof(f+2, n-2, "format");
-				}
+				if(strcmp(t->p[i].name, f[1]) == 0)
+					break;
+			if(i == t->np){
+				/* a data file with no prop line (icon-view's items) */
+				t->p = erealloc(t->p, (t->np+1)*sizeof(Pdesc));
+				pd = &t->p[t->np++];
+				memset(pd, 0, sizeof *pd);
+				pd->name = estrdup(f[1]);
+				pd->form = estrdup("data");
+				pd->file = 1;
+			}
+			free(t->p[i].fmt);
+			t->p[i].fmt = attrof(f+2, n-2, "format");
 		}else if(strcmp(f[0], "verb") == 0 && n >= 2){
 			t->verb = erealloc(t->verb, (t->nverb+1)*sizeof(char*));
 			t->vclass = erealloc(t->vclass, (t->nverb+1)*sizeof(char*));

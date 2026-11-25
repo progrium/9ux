@@ -66,6 +66,8 @@ struct Cc {
 	int	off;
 	Ic	*ic;	/* Kicons */
 	int	nic;
+	int	origin;	/* Kscroll: the y origin the node had */
+	Rectangle	r;	/* the API's rectangle, window-local */
 	Cc	*next;
 };
 
@@ -131,7 +133,19 @@ struct Kn {
 static Kn	*kinds;
 
 static void	capisync1(void);
-static void	hook(char*, char*, char*, char*);
+static void	hook(char*, char*, char*, char*, char*);
+static void	actioncall(char*, char*, char*);
+static void	menusync(void);
+static void	defclose(Uxev*, void*);
+void	uxwinclose(Uxwin*);
+static char*	verb(Node*, Tok*, int);
+
+/* menu.c */
+extern Uxfn	*_actionhook;
+char*	_uitreebar(void);
+char*	_uitreemenu(int, char**);
+void	_uitreeaction(char*, Uxwin*, int);
+void	_uitreequit(int);
 
 static Cc*
 ccbyctl(Uxctl *c)
@@ -336,9 +350,13 @@ synth(Call *k, char *name, char *attrs, Cw *w, Cc *c)
 	k->ev.via = viaof(attrs);
 	k->ev.win = w->w;
 	k->ev.ctl = c != nil ? c->c : nil;
-	if((v = attrof(attrs, "item")) != nil){
+	if((v = attrof(attrs, "item")) != nil || (v = attrof(attrs, "items")) != nil){
 		k->s[0] = v;
 		k->ev.item = v;
+		if(c != nil && c->kind == Klist){
+			k->ev.n = atoi(v)-1;
+			k->ev.item = nil;
+		}
 	}
 	if((v = attrof(attrs, "text")) != nil){
 		k->s[1] = v;
@@ -348,12 +366,18 @@ synth(Call *k, char *name, char *attrs, Cw *w, Cc *c)
 		k->ev.n = atoi(v);
 		free(v);
 	}
+	if((v = attrof(attrs, "pos")) != nil){
+		k->ev.pt.x = atoi(v);
+		if(strchr(v, ',') != nil)
+			k->ev.pt.y = atoi(strchr(v, ',')+1);
+		free(v);
+	}
 	return 1;
 }
 
 /* every event in the tree passes here (tev.c's deliver), model held */
 static void
-hook(char *name, char *path, char *attrs, char *win)
+hook(char *name, char *key, char *path, char *attrs, char *win)
 {
 	Cw *w;
 	Cc *c;
@@ -364,12 +388,22 @@ hook(char *name, char *path, char *attrs, char *win)
 	Call *k;
 	char *e;
 
-	if(inapi || path == nil || strcmp(path, "-") == 0 || (w = cwbyname(win)) == nil)
+	if(inapi)
+		return;
+	if(strcmp(name, "action") == 0 && key != nil && strcmp(key, "-") != 0){
+		actioncall(key, attrs, win);
+		return;
+	}
+	if(path == nil || strcmp(path, "-") == 0 || (w = cwbyname(win)) == nil)
 		return;
 	c = nil;
 	if(strcmp(path, ".") == 0){
 		fn = w->fn;
 		arg = w->arg;
+		if(fn == nil && strcmp(name, "close") == 0){
+			fn = defclose;
+			arg = w->w;
+		}
 	}else{
 		if((mw = winbyname(win)) == nil)
 			return;
@@ -402,6 +436,154 @@ hook(char *name, char *path, char *attrs, char *win)
 	uxcall(runcalls, nil);
 }
 
+/* quit, from 9P: the app's handler decides, as with uxquit */
+static void
+quitasked(char *via)
+{
+	char *a;
+
+	a = smprint("via=%s", via != nil ? via : "ctl");
+	_uitreequit(viaof(a));
+	free(a);
+}
+
+/* a window with no handler closes, as in the drawing layer; main quits */
+static void
+defclose(Uxev*, void *arg)
+{
+	Cw *w;
+	int ismain;
+
+	lockmodel();
+	w = cwbywin(arg);
+	ismain = w != nil && strcmp(w->name, "main") == 0;
+	unlockmodel();
+	if(w == nil)
+		return;
+	if(ismain)
+		uxquit();
+	else
+		uxwinclose(arg);
+}
+
+/* close, from 9P: UXclose to the window's handler, which closes it or not */
+static void
+closeasked(Win *mw, char *via)
+{
+	Cw *w;
+	Call *k;
+	char *a;
+
+	if((w = cwbyname(mw->name)) == nil)
+		return;
+	k = emalloc(sizeof *k);
+	memset(k, 0, sizeof *k);
+	k->fn = w->fn != nil ? w->fn : defclose;
+	k->arg = w->fn != nil ? w->arg : w->w;
+	k->ev.type = UXclose;
+	a = smprint("via=%s", via != nil ? via : "ctl");
+	k->ev.via = viaof(a);
+	free(a);
+	k->ev.win = w->w;
+	*calltail = k;
+	calltail = &k->next;
+	uxcall(runcalls, nil);
+}
+
+/* an action event from the tree: a script's, or a key binding's */
+static void
+actioncall(char *action, char *attrs, char *win)
+{
+	Cw *w;
+
+	w = cwbyname(win);
+	_uitreeaction(action, w != nil ? w->w : nil, viaof(attrs));
+}
+
+/* an action chosen in the drawing layer (the bar, a shortcut): tell the tree */
+static void
+actionev(Uxev *e, void*)
+{
+	Cw *w;
+	char *a;
+
+	lockmodel();
+	w = e->win != nil ? cwbywin(e->win) : nil;
+	a = smprint("via=%s", e->text != nil ? e->text : "menu");
+	inapi++;
+	emit("action", e->action, "-", a, w != nil ? w->name : nil, nil, 0, 0);
+	inapi--;
+	free(a);
+	unlockmodel();
+}
+
+/* the app's menus, into the tree's menu/ */
+static void
+menusync(void)
+{
+	char *bar, *id, *text;
+	int i, j;
+
+	bar = _uitreebar();
+	lockmodel();
+	free(app->bar);
+	app->bar = bar;
+	for(i = 0; (text = _uitreemenu(i, &id)) != nil; i++){
+		for(j = 0; j < app->nmenu; j++)
+			if(strcmp(app->menu[j].name, id) == 0)
+				break;
+		if(j == app->nmenu){
+			app->menu = erealloc(app->menu, (app->nmenu+1)*sizeof(Menu));
+			app->menu[j].name = id;
+			app->menu[j].text = text;
+			app->nmenu++;
+		}else{
+			free(id);
+			free(app->menu[j].text);
+			app->menu[j].text = text;
+		}
+	}
+	unlockmodel();
+}
+
+Uxmenu*
+uxmenu(char *id, char *title)
+{
+	Uxmenu *m;
+
+	m = dxmenu(id, title);
+	menusync();
+	return m;
+}
+
+void
+uxitem(Uxmenu *m, char *action, char *label, char *key)
+{
+	dxitem(m, action, label, key);
+	menusync();
+}
+
+void
+uxsep(Uxmenu *m, char *id)
+{
+	dxsep(m, id);
+	menusync();
+}
+
+void
+uxitemenable(char *action, int on)
+{
+	dxitemenable(action, on);
+	menusync();
+}
+
+void
+uxitemcheck(char *action, int on)
+{
+	dxitemcheck(action, on);
+	menusync();
+}
+
 /*
  * The drawing layer's events, as uitree events
  */
@@ -429,6 +611,22 @@ viaword(int via)
 }
 
 static void	iconitems(Cc*, Node*);
+void	_dxlistsel(Uxctl*, int*, int);
+
+/* a list's selection as its value: item keys, from 1, space-separated */
+static char*
+listvalue(Cc *c)
+{
+	Fmt f;
+	int *sel, i, n;
+
+	n = uxgetsel(c->c, &sel);
+	fmtstrinit(&f);
+	for(i = 0; i < n; i++)
+		fmtprint(&f, "%s%d", i > 0 ? " " : "", sel[i]+1);
+	free(sel);
+	return fmtstrflush(&f);
+}
 
 static void
 capictlev(Uxev *e, void *arg)
@@ -467,23 +665,39 @@ capictlev(Uxev *e, void *arg)
 		state = 1;
 		if(c->kind == Kicons){
 			ni = uxicongetsel(c->c, &ids);
-			fmtprint(&f, "value=");
-			for(i = 0; i < ni; i++){
-				fmtprint(&f, "%s%s", i > 0 ? "," : "", ids[i]);
-				free(ids[i]);
+			if(ni > 0){
+				fmtprint(&f, "sel=");
+				for(i = 0; i < ni; i++)
+					fmtprint(&f, "%s%s", i > 0 ? "," : "", ids[i]);
+				fmtprint(&f, " ");
 			}
-			fmtprint(&f, " ");
+			for(i = 0; i < ni; i++)
+				free(ids[i]);
 			free(ids);
-		}else if(e->n > 0)
-			fmtprint(&f, "value=%d ", e->n);
+			iconitems(c, n);
+		}else if(c->kind == Klist){
+			v = listvalue(c);
+			setstr(&c->value, v);
+			setprop(n, "value", v, 0);
+			if(v[0] != 0){
+				q = quoteval(v);
+				fmtprint(&f, "value=%s ", q);
+				free(q);
+			}
+			free(v);
+		}
 		break;
 	case UXsubmit:
 		name = "submit";
 		break;
 	case UXopen:
 		name = "open";
-		if(e->item != nil)
+		if(c->kind == Kicons && e->item != nil)
+			fmtprint(&f, "items=%s ", e->item);
+		else if(e->item != nil)
 			fmtprint(&f, "item=%s ", e->item);
+		else if(c->kind == Klist)
+			fmtprint(&f, "item=%d ", e->n+1);
 		break;
 	case UXrename:
 		name = "rename";
@@ -509,6 +723,10 @@ capictlev(Uxev *e, void *arg)
 	case UXscroll:
 		name = "scroll";
 		state = 1;
+		c->origin = uxgetorigin(c->c).y;
+		q = smprint("%d", c->origin);
+		setprop(n, "origin", q, 0);
+		free(q);
 		break;
 	case UXinterrupt:
 		name = "interrupt";
@@ -618,6 +836,10 @@ uxinit(char *name, char *title)
 	dxinit(name, title);
 	initapp();
 	evhook = hook;
+	quithook = quitasked;
+	closehook = closeasked;
+	verbhook = verb;
+	_actionhook = actionev;
 	drawing = 1;
 	treeserve(nil, nil);
 	uxpublish(treepost);
@@ -762,10 +984,17 @@ uxwinclose(Uxwin *w)
 	dxwinclose(w);
 }
 
-/* the style that places a node where the API's rectangle says */
+/*
+ * The style that places a node where the API's rectangle says: the
+ * API's is window-local, a node's place is its parent's.
+ */
 static void
 setgeom(Node *n, Rectangle r)
 {
+	Cc *pc;
+
+	if(n->parent != nil && (pc = ccbynode(n->parent->id)) != nil)
+		r = rectsubpt(r, pc->r.min);
 	free(n->style);
 	n->style = smprint("absolute left=%d top=%d w=%d h=%d", r.min.x, r.min.y, Dx(r), Dy(r));
 }
@@ -802,6 +1031,7 @@ adopt(Uxwin *w, Uxctl *c, int kind, char *type, Rectangle r, char *lbl)
 	cc->win = estrdup(cw->name);
 	cc->c = c;
 	cc->kind = kind;
+	cc->r = r;
 	cc->label = strornil(lbl);
 	cc->next = ccs;
 	ccs = cc;
@@ -969,16 +1199,20 @@ reparent(Node *n, Node *p)
 void
 uxdelete(Uxctl *c)
 {
-	Node *n, *root;
+	Node *n, *k, *root;
 	Win *w;
+	Cc *cc;
 
 	lockmodel();
 	if((n = nodeof(c, nil)) != nil){
 		/* as the drawing layer does: the children stay, in the window */
 		w = winofnode(n);
 		root = w != nil ? w->root : nil;
-		while(n->nkid > 0 && root != nil && n->kid[0] != nil)
-			reparent(n->kid[0], root);
+		while(n->nkid > 0 && root != nil && (k = n->kid[0]) != nil){
+			reparent(k, root);
+			if((cc = ccbynode(k->id)) != nil)
+				setgeom(k, cc->r);
+		}
 		delnode(n);
 		purge();
 		sweep();
@@ -1007,6 +1241,7 @@ uxsetparent(Uxctl *c, Uxctl *p)
 {
 	Node *n, *pn;
 	Win *w;
+	Cc *cc;
 
 	lockmodel();
 	if((n = nodeof(c, nil)) != nil){
@@ -1014,6 +1249,8 @@ uxsetparent(Uxctl *c, Uxctl *p)
 		if(pn == nil && (w = winofnode(n)) != nil)
 			pn = w->root;
 		reparent(n, pn);
+		if((cc = ccbyctl(c)) != nil)
+			setgeom(n, cc->r);
 		sweep();
 	}
 	unlockmodel();
@@ -1024,10 +1261,13 @@ void
 uxsetrect(Uxctl *c, Rectangle r)
 {
 	Node *n;
+	Cc *cc;
 
 	lockmodel();
-	if((n = nodeof(c, nil)) != nil)
+	if((n = nodeof(c, &cc)) != nil){
+		cc->r = r;
 		setgeom(n, r);
+	}
 	unlockmodel();
 	dxsetrect(c, r);
 }
@@ -1200,11 +1440,17 @@ iconitems(Cc *c, Node *n)
 		free(l);
 		free(ic);
 	}
-	for(j = 0; j < ns; j++)
-		free(ids[j]);
-	free(ids);
 	t = fmtstrflush(&f);
 	setprop(n, "items", t, 0);
+	free(t);
+	fmtstrinit(&f);
+	for(j = 0; j < ns; j++){
+		fmtprint(&f, "%s%s", j > 0 ? " " : "", ids[j]);
+		free(ids[j]);
+	}
+	free(ids);
+	t = fmtstrflush(&f);
+	setprop(n, "selection", t, 0);
 	free(t);
 }
 
@@ -1377,6 +1623,143 @@ uxconsraw(Uxctl *c, int on)
 	dxconsraw(c, on);
 }
 
+/* a list's value, onto the list */
+static void
+listsel(Cc *c, char *v)
+{
+	char *s, *f[256];
+	int idx[256], i, n;
+
+	setstr(&c->value, v);
+	s = estrdup(v);
+	n = getfields(s, f, nelem(f), 1, " ,");
+	for(i = 0; i < n; i++)
+		idx[i] = atoi(f[i])-1;
+	free(s);
+	_dxlistsel(c->c, idx, n);
+}
+
+void
+uxsetorigin(Uxctl *c, Point p)
+{
+	Node *n;
+	Cc *cc;
+	char *s;
+
+	dxsetorigin(c, p);
+	lockmodel();
+	if((n = nodeof(c, &cc)) != nil){
+		cc->origin = uxgetorigin(c).y;
+		s = smprint("%d", cc->origin);
+		setprop(n, "origin", s, 0);
+		free(s);
+	}
+	unlockmodel();
+}
+
+/*
+ * The verbs of the desktop types, from 9P: icon views and consoles.
+ * (char*)-1 leaves a verb to tcmd.c. The model is held.
+ */
+static char*
+iconverb(Cc *c, Node *n, Tok *t, int nt)
+{
+	Fmt f;
+	Ic *ic;
+	char **ids, *a, *q;
+	int i;
+	Point pt;
+
+	if(strcmp(t[0].s, "select") == 0 || strcmp(t[0].s, "open") == 0){
+		for(i = 1; i < nt; i++)
+			if(icof(c, t[i].s) == nil)
+				return smprint("not found: %s", t[i].s);
+		if(strcmp(t[0].s, "open") == 0 && nt < 2)
+			return smprint("bad syntax: open ID...");
+		fmtstrinit(&f);
+		for(i = 1; i < nt; i++)
+			fmtprint(&f, "%s%s", i > 1 ? "," : "", t[i].s);
+		a = fmtstrflush(&f);
+		if(strcmp(t[0].s, "select") == 0){
+			ids = emalloc(nt*sizeof(char*));
+			for(i = 1; i < nt; i++)
+				ids[i-1] = t[i].s;
+			dxiconselect(c->c, ids, nt-1);
+			free(ids);
+			iconitems(c, n);
+			q = a[0] != 0 ? smprint("sel=%s via=ctl", a) : estrdup("via=ctl");
+			emitnode("select", winofnode(n), n, q, 1);
+		}else{
+			q = smprint("items=%s via=ctl", a);
+			emitnode("open", winofnode(n), n, q, 0);
+		}
+		free(q);
+		free(a);
+		return nil;
+	}
+	if(strcmp(t[0].s, "move") == 0){
+		if(nt != 3 || (pt.x = strtol(t[2].s, &a, 10), *a != ',') || (pt.y = strtol(a+1, &q, 10), *q != 0))
+			return smprint("bad syntax: move ID x,y");
+		if((ic = icof(c, t[1].s)) == nil)
+			return smprint("not found: %s", t[1].s);
+		ic->pt = pt;
+		dxiconset(c->c, ic->id, nil, nil, pt);
+		iconitems(c, n);
+		q = smprint("item=%s pos=%d,%d via=ctl", ic->id, pt.x, pt.y);
+		emitnode("move", winofnode(n), n, q, 1);
+		free(q);
+		return nil;
+	}
+	if(strcmp(t[0].s, "rename") == 0){
+		if(nt != 3)
+			return smprint("bad syntax: rename ID TEXT");
+		if((ic = icof(c, t[1].s)) == nil)
+			return smprint("not found: %s", t[1].s);
+		setstr(&ic->label, t[2].s);
+		dxiconset(c->c, ic->id, ic->label, nil, ic->pt);
+		iconitems(c, n);
+		a = quoteval(t[2].s);
+		q = smprint("item=%s text=%s via=ctl", ic->id, a);
+		emitnode("rename", winofnode(n), n, q, 0);
+		free(q);
+		free(a);
+		return nil;
+	}
+	return (char*)-1;
+}
+
+static char*
+consverb(Cc *c, Tok *t, int nt)
+{
+	if(strcmp(t[0].s, "append") == 0){
+		if(nt != 2)
+			return smprint("bad syntax: append TEXT");
+		uxconswrite(c->c, t[1].s, strlen(t[1].s));
+		return nil;
+	}
+	if(strcmp(t[0].s, "clear") == 0){
+		uxconsclear(c->c);
+		return nil;
+	}
+	if(strcmp(t[0].s, "insert") == 0)
+		return smprint("unsupported: insert");
+	return (char*)-1;
+}
+
+static char*
+verb(Node *n, Tok *t, int nt)
+{
+	Cc *c;
+
+	if((c = ccbynode(n->id)) == nil)
+		return (char*)-1;
+	if(c->kind == Kicons)
+		return iconverb(c, n, t, nt);
+	if(c->kind == Kcons)
+		return consverb(c, t, nt);
+	return (char*)-1;
+}
+
 /*
  * 9P's changes, onto the controls: run by trender's sync, on the UI
  * thread with the model held.
@@ -1418,6 +1801,20 @@ capisync1(void)
 			if(!streq(v, c->value != nil ? c->value : "")){
 				setstr(&c->value, v);
 				dxsetvalue(c->c, v);
+			}
+		}
+		if(c->kind == Klist){
+			v = getprop(n, "value");
+			if(v == nil)
+				v = "";
+			if(!streq(v, c->value != nil ? c->value : ""))
+				listsel(c, v);
+		}
+		if(c->kind == Kscroll){
+			v = getprop(n, "origin");
+			if(v != nil && atoi(v) != c->origin){
+				c->origin = atoi(v);
+				dxsetorigin(c->c, Pt(0, c->origin));
 			}
 		}
 		off = getprop(n, "disabled") != nil;

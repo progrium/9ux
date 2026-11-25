@@ -30,8 +30,8 @@ fake focus 1
 	sleep 0.2
 	drain 4 $out/e
 } <[4]$app/events
-want 'action menu=file id=new win=1 via=menu' $out/e
-same $app/windows/1/controls/status/value 'new
+want '^action new - via=menu win=main seq=[0-9]+$' $out/e
+same $app/win/main/status/text 'new
 '
 
 test=shortcut
@@ -40,11 +40,12 @@ test=shortcut
 	sleep 0.3
 	drain 4 $out/e
 } <[4]$app/events
-want 'action menu=file id=confirm win=1 via=key' $out/e
-want 'new win=2 kind=dialog' $out/e
-echo cancel >$app/windows/2/ctl
+want '^action confirm - via=key win=main seq=[0-9]+$' $out/e
+same $app/win/dialog-1/title 'Confirm
+'
+echo close >$app/win/dialog-1/ctl
 sleep 0.2
-same $app/windows/1/controls/status/value 'cancelled
+same $app/win/main/status/text 'cancelled
 '
 
 test=enable

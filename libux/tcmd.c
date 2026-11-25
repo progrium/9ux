@@ -419,6 +419,10 @@ doquit(void)
 	servesubs();
 }
 
+/* libux's C API: a quit or close asked for goes to the app's handler (tapi.c) */
+void	(*quithook)(char*);
+void	(*closehook)(Win*, char*);
+
 /* a close or quit the user or client asked for: a request if the app asked */
 static void
 request(int kind, Win *w, char *via)
@@ -427,6 +431,14 @@ request(int kind, Win *w, char *via)
 	char *attrs;
 	Request *r;
 
+	if(kind == Aquit && quithook != nil){
+		quithook(via);
+		return;
+	}
+	if(kind == Aclose && w->capi && closehook != nil){
+		closehook(w, via);
+		return;
+	}
 	if(kind == Aclose)
 		asked = w->ask == 1 || (w->ask == -1 && (app->ask & Aclose));
 	else
@@ -1140,6 +1152,9 @@ appverb(Tok *t, int nt)
 	return smprint("unknown command: %s", v);
 }
 
+/* libux's C API does the verbs of the controls it draws (tapi.c) */
+char*	(*verbhook)(Node*, Tok*, int);
+
 /* a verb the node's descriptor lists; (char*)-1 if it lists none by that name */
 static char*
 typeverb(Node *n, Tok *t, int nt)
@@ -1159,6 +1174,8 @@ typeverb(Node *n, Tok *t, int nt)
 		d = getprop(n, "disabled");
 		if(d != nil && strcmp(d, "on") == 0)
 			return smprint("disabled: %s", n->name);
+		if(verbhook != nil && (d = verbhook(n, t, nt)) != (char*)-1)
+			return d;
 		/* an overlay's open and close show and hide it */
 		if(ty->overlay && (strcmp(t[0].s, "open") == 0 || strcmp(t[0].s, "close") == 0)){
 			setprop(n, "open", strcmp(t[0].s, "open") == 0 ? "on" : "off", strcmp(t[0].s, "open") == 0);

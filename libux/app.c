@@ -929,3 +929,21 @@ uxchooserdir(Uxctl *c)
 	qunlock(&uxlk);
 	return s;
 }
+
+/* for the tree (tapi.c): select list items, by index, without a handler call */
+void
+_dxlistsel(Uxctl *c, int *idx, int n)
+{
+	int i;
+
+	qlock(&uxlk);
+	if(c->sel != nil){
+		memset(c->sel, 0, c->nitems);
+		for(i = 0; i < n; i++)
+			if(idx[i] >= 0 && idx[i] < c->nitems)
+				c->sel[idx[i]] = 1;
+		c->w->dirty = 1;
+	}
+	qunlock(&uxlk);
+	kick();
+}

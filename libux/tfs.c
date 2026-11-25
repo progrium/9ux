@@ -1426,7 +1426,8 @@ poster(void*)
 			sendul(postr, -1);
 			continue;
 		}
-		if((cfd = create(path, OWRITE, 0600)) < 0 || fprint(cfd, "%d", fd[0]) < 0){
+		/* the entry goes when the app does */
+		if((cfd = create(path, OWRITE|ORCLOSE|OCEXEC, 0600)) < 0 || fprint(cfd, "%d", fd[0]) < 0){
 			if(cfd >= 0){
 				close(cfd);
 				remove(path);
@@ -1436,7 +1437,6 @@ poster(void*)
 			sendul(postr, -1);
 			continue;
 		}
-		close(cfd);
 		close(fd[0]);
 		s = emalloc(sizeof *s);
 		*s = pubtmpl;

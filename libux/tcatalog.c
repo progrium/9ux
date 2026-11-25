@@ -150,6 +150,18 @@ char *catalog[] = {
 	"child   none\n"
 	"file    items  format=items\n"
 	,
+	"console",
+	"type    console  tier=component  profile=desktop  since=1.0\n"
+	"prop    value      text  file readonly\n"
+	"prop    input      text  file readonly\n"
+	"prop    raw        bool  default=off\n"
+	"verb    append   TEXT                  class=edit\n"
+	"verb    insert   TEXT                  class=edit\n"
+	"verb    interrupt                      class=activate\n"
+	"verb    clear                          class=edit\n"
+	"event   submit     kind=action   attrs=n\n"
+	"event   interrupt  kind=action\n"
+	,
 	"context-menu",
 	"type    context-menu  tier=overlay  profile=overlay  since=1.0\n"
 	"prop    anchor  path\n"
@@ -230,6 +242,21 @@ char *catalog[] = {
 	"prop    title  text  file\n"
 	"word    normal fill outline  kind=variant\n"
 	"child   any\n"
+	,
+	"icon-view",
+	"type    icon-view  tier=component  profile=desktop  since=1.0\n"
+	"file    items  format=icon-items\n"
+	"prop    selection  text  readonly\n"
+	"prop    arrange    enum=free,grid,list  default=free\n"
+	"verb    select   ID...                  class=activate\n"
+	"verb    open     ID...                  class=activate\n"
+	"verb    move     ID x,y                 class=edit\n"
+	"verb    rename   ID TEXT                class=edit\n"
+	"event   select   kind=state   attrs=sel\n"
+	"event   move     kind=state   attrs=item,pos\n"
+	"event   open     kind=action  attrs=items\n"
+	"event   rename   kind=action  attrs=item\n"
+	"event   drop     kind=request attrs=drag,item\n"
 	,
 	"icon",
 	"type    icon  tier=element  profile=core  since=1.0\n"

@@ -33,3 +33,9 @@
 #undef uxconswrite
 #undef uxconsclear
 #undef uxconsraw
+#undef uxmenu
+#undef uxitem
+#undef uxsep
+#undef uxitemenable
+#undef uxitemcheck
+#undef uxsetorigin

@@ -310,6 +310,9 @@ void	uirun(void);
 char*	uibounds(Node*);
 
 /* tapi.c */
-extern void	(*evhook)(char*, char*, char*, char*);
+extern void	(*evhook)(char*, char*, char*, char*, char*);
+extern char*	(*verbhook)(Node*, Tok*, int);
+extern void	(*quithook)(char*);
+extern void	(*closehook)(Win*, char*);
 void	capisync(void);
 char*	capibounds(Node*);

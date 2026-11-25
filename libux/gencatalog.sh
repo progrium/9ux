@@ -1,9 +1,9 @@
 #!/bin/sh
-# Write catalog.c, the descriptors uxkit embeds, from uitree's
+# Write tcatalog.c, the descriptors libux embeds, from uitree's
 # core/types: every type of the profiles named, as their specs say,
 # plus each type named +TYPE (components that have no profile yet).
 #
-#	gencatalog.sh UITREE_TYPES_DIR PROFILE... [+TYPE...] >catalog.c
+#	gencatalog.sh UITREE_TYPES_DIR PROFILE... [+TYPE...] >tcatalog.c
 set -eu
 dir=$1
 shift
