@@ -1281,25 +1281,27 @@ client(void *v)
 	Waitmsg *w;
 
 	argv = v;
+	/*
+	 * Everything the child needs is made before the fork. The child gets
+	 * a copy of the heap taken while the server procs may be halfway
+	 * through changing it (their malloc lock held, a free list being
+	 * relinked), so it mustn't malloc: it would hang or find the heap
+	 * corrupt. That was uxkit's rare hang and heap crash at start.
+	 */
+	cmd = argv[0];
+	if(cmd[0] != '/' && strncmp(cmd, "./", 2) != 0 && strncmp(cmd, "../", 3) != 0)
+		cmd = smprint("/bin/%s", cmd);
 	switch(pid = fork()){
 	case -1:
 		sysfatal("fork: %r");
 	case 0:
-		cmd = argv[0];
-		if(cmd[0] != '/' && strncmp(cmd, "./", 2) != 0 && strncmp(cmd, "../", 3) != 0)
-			cmd = smprint("/bin/%s", cmd);
 		exec(cmd, argv);
-		sysfatal("exec %s: %r", cmd);
+		fprint(2, "uxkit: exec %s: %r\n", cmd);
+		_exits("exec failed");
 	}
 	while((w = wait()) != nil){
-		if(w->pid == pid){
-			/*
-			 * Hold the model while the other procs are killed, so
-			 * none is stopped halfway through changing it.
-			 */
-			lockmodel();
+		if(w->pid == pid)
 			threadexitsall(w->msg[0] != 0 ? w->msg : nil);
-		}
 		free(w);
 	}
 	threadexitsall("no client");
@@ -1307,9 +1309,29 @@ client(void *v)
 
 int mainstacksize = 64*1024;
 
+/*
+ * uxkitdebug=1 keeps a proc that fails an assertion (the heap's among
+ * them) alive and asleep, so acid can read its stack.
+ */
+extern void (*__assert)(char*);
+
+static void
+stayassert(char *s)
+{
+	fprint(2, "uxkit: assertion failed: %s, pid %d\n", s, getpid());
+	for(;;)
+		sleep(1000);
+}
+
 void
 threadmain(int argc, char **argv)
 {
+	char *pe;
+
+	if((pe = getenv("uxkitdebug")) != nil){
+		__assert = stayassert;
+		free(pe);
+	}
 	ARGBEGIN{
 	case 'd':
 		drawing = 1;
@@ -1342,3 +1364,4 @@ threadmain(int argc, char **argv)
 	uirun();
 	threadexitsall(nil);
 }
+

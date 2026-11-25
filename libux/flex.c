@@ -429,6 +429,8 @@ measure(Uxctl *c, int availw)
 	p = Pt(100, 100);
 	if(_iswidget(c))
 		return _widgetsize(c, availw);
+	if(_iscanvas(c))
+		return Pt(300, 200);
 	if(c->t == &_svgtype)
 		return _svgsize(c);
 	if(c->t == &_stexttype)

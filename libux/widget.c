@@ -7,6 +7,7 @@
  */
 #include <u.h>
 #include <libc.h>
+#include <ctype.h>
 #include <draw.h>
 #include <mouse.h>
 #include <keyboard.h>
@@ -50,6 +51,8 @@ Ctltype _radiotype = { "radios", nofiles, noverbs, nil, nil, nil, radiomouse, ni
 Ctltype _slidertype = { "slider", nofiles, noverbs, nil, nil, nil, slidermouse, nil, 0 };
 Ctltype _switchtype = { "switch", nofiles, noverbs, nil, nil, nil, switchmouse, nil, 0 };
 Ctltype _tabbartype = { "tabbar", nofiles, noverbs, nil, nil, nil, tabmouse, nil, 0 };
+
+extern Ctltype _canvastype;
 
 int
 _iswidget(Uxctl *c)
@@ -741,6 +744,343 @@ uxpopmenu(Uxwin *w, Point pt, char **items, int n, Uxfn *fn, void *arg)
 	if(w->img != nil)
 		pt = addpt(pt, w->img->r.min);
 	_popopen(w, pt, items, n, -1, menuchose, mp);
+	qunlock(&uxlk);
+	_kickui();
+}
+
+/*
+ * canvas: a retained display list, uitree's ops (kind id geometry
+ * attrs), painted in node space. Pointer events name the item under the
+ * pointer: UXpointer with Uxev.n 0 down, 1 up, 2 drag, 3 move.
+ */
+static int	canvasmouse(Uxctl*, Mouse*);
+Ctltype _canvastype = { "canvas", nofiles, noverbs, nil, nil, nil, canvasmouse, nil, 0 };
+
+typedef struct Op Op;
+struct Op {
+	char	*f[64];
+	int	n;
+	char	*buf;
+};
+
+static int
+opsplit(char *ops, Op **op)
+{
+	char *p, *nl, *s;
+	int n;
+	Op *o;
+
+	n = 0;
+	*op = nil;
+	s = estrdup(ops != nil ? ops : "");
+	for(p = s; p != nil && *p; p = nl){
+		nl = strchr(p, '\n');
+		if(nl != nil)
+			*nl++ = 0;
+		*op = erealloc(*op, (n+1)*sizeof(Op));
+		o = &(*op)[n];
+		o->buf = estrdup(p);
+		o->n = tokenize(o->buf, o->f, nelem(o->f));
+		if(o->n < 2){
+			free(o->buf);
+			continue;
+		}
+		n++;
+	}
+	free(s);
+	return n;
+}
+
+static void
+opfree(Op *op, int n)
+{
+	int i;
+
+	for(i = 0; i < n; i++)
+		free(op[i].buf);
+	free(op);
+}
+
+static char*
+opattr(Op *o, char *name)
+{
+	int i, l;
+
+	l = strlen(name);
+	for(i = 2; i < o->n; i++)
+		if(strncmp(o->f[i], name, l) == 0 && o->f[i][l] == '=')
+			return o->f[i]+l+1;
+	return nil;
+}
+
+/* the op's geometry: its numbers after kind and id, x,y pairs split */
+static int
+opnums(Op *o, double *v, int max)
+{
+	int i, n;
+	char *p, *e;
+
+	n = 0;
+	for(i = 2; i < o->n && n < max; i++){
+		if(strchr(o->f[i], '=') != nil)
+			continue;
+		p = o->f[i];
+		if(*p == 'M' || *p == 'L')
+			p++;
+		while(*p && n < max){
+			v[n] = strtod(p, &e);
+			if(e == p)
+				break;
+			n++;
+			p = e;
+			if(*p == ',')
+				p++;
+		}
+	}
+	return n;
+}
+
+static Image*
+opcolor(Uxwin *w, char *s, ulong dflt, int *none)
+{
+	ulong rgba;
+
+	*none = 0;
+	if(s == nil){
+		if(dflt == 0){
+			*none = 1;
+			return nil;
+		}
+		return col(w, dflt);
+	}
+	if(strcmp(s, "none") == 0 || _parsecolor(s, &rgba) < 0){
+		*none = 1;
+		return nil;
+	}
+	return col(w, rgba);
+}
+
+static int
+rnd(double d)
+{
+	return d < 0 ? (int)(d - 0.5) : (int)(d + 0.5);
+}
+
+/* an item's bounds in node space, for hits */
+static Rectangle
+opbounds(Op *o)
+{
+	double v[64];
+	int n, i;
+	Rectangle r;
+	char *k;
+
+	n = opnums(o, v, nelem(v));
+	k = o->f[0];
+	if(strcmp(k, "rect") == 0 || strcmp(k, "image") == 0){
+		if(n >= 4)
+			return Rect(rnd(v[0]), rnd(v[1]), rnd(v[0]+v[2]), rnd(v[1]+v[3]));
+	}else if(strcmp(k, "circle") == 0){
+		if(n >= 3)
+			return Rect(rnd(v[0]-v[2]), rnd(v[1]-v[2]), rnd(v[0]+v[2])+1, rnd(v[1]+v[2])+1);
+	}else if(strcmp(k, "ellipse") == 0){
+		if(n >= 4)
+			return Rect(rnd(v[0]-v[2]), rnd(v[1]-v[3]), rnd(v[0]+v[2])+1, rnd(v[1]+v[3])+1);
+	}else if(strcmp(k, "text") == 0){
+		if(n >= 2)
+			return Rect(rnd(v[0]), rnd(v[1])-12, rnd(v[0])+120, rnd(v[1])+4);
+	}else if(n >= 2){
+		r = Rect(rnd(v[0]), rnd(v[1]), rnd(v[0])+1, rnd(v[1])+1);
+		for(i = 2; i+1 < n; i += 2)
+			combinerect(&r, Rect(rnd(v[i]), rnd(v[i+1]), rnd(v[i])+1, rnd(v[i+1])+1));
+		return insetrect(r, -3);
+	}
+	return ZR;
+}
+
+static void
+paintop(Uxwin *w, Op *o, Point org)
+{
+	double v[64];
+	Point pts[32];
+	Image *fill, *stroke;
+	int n, i, np, fnone, snone, wd, rad;
+	char *k, *s;
+	Rectangle r;
+	Font *f;
+
+	n = opnums(o, v, nelem(v));
+	k = o->f[0];
+	fill = opcolor(w, opattr(o, "fill"), 0, &fnone);
+	stroke = opcolor(w, opattr(o, "stroke") != nil ? opattr(o, "stroke") : opattr(o, "border"), 0, &snone);
+	wd = opattr(o, "width") != nil ? rnd(atof(opattr(o, "width"))) : 1;
+	if(wd < 1)
+		wd = 1;
+	if(strcmp(k, "rect") == 0 && n >= 4){
+		r = rectaddpt(Rect(rnd(v[0]), rnd(v[1]), rnd(v[0]+v[2]), rnd(v[1]+v[3])), org);
+		rad = opattr(o, "radius") != nil ? atoi(opattr(o, "radius")) : 0;
+		if(!fnone){
+			if(rad > 0){
+				draw(w->img, Rect(r.min.x+rad, r.min.y, r.max.x-rad, r.max.y), fill, nil, ZP);
+				draw(w->img, Rect(r.min.x, r.min.y+rad, r.max.x, r.max.y-rad), fill, nil, ZP);
+				fillellipse(w->img, Pt(r.min.x+rad, r.min.y+rad), rad, rad, fill, ZP);
+				fillellipse(w->img, Pt(r.max.x-1-rad, r.min.y+rad), rad, rad, fill, ZP);
+				fillellipse(w->img, Pt(r.min.x+rad, r.max.y-1-rad), rad, rad, fill, ZP);
+				fillellipse(w->img, Pt(r.max.x-1-rad, r.max.y-1-rad), rad, rad, fill, ZP);
+			}else
+				draw(w->img, r, fill, nil, ZP);
+		}
+		if(!snone)
+			border(w->img, r, wd, stroke, ZP);
+	}else if((strcmp(k, "circle") == 0 && n >= 3) || (strcmp(k, "ellipse") == 0 && n >= 4)){
+		Point c;
+		int rx, ry;
+
+		c = addpt(Pt(rnd(v[0]), rnd(v[1])), org);
+		rx = rnd(v[2]);
+		ry = strcmp(k, "circle") == 0 ? rx : rnd(v[3]);
+		if(!fnone)
+			fillellipse(w->img, c, rx, ry, fill, ZP);
+		if(!snone)
+			ellipse(w->img, c, rx, ry, wd-1, stroke, ZP);
+	}else if(strcmp(k, "text") == 0 && n >= 2){
+		s = nil;
+		for(i = 2; i < o->n; i++)
+			if(strchr(o->f[i], '=') == nil && strtod(o->f[i], nil) == 0 && !isdigit(o->f[i][0]) && o->f[i][0] != '-' && o->f[i][0] != '.'){
+				s = o->f[i];
+				break;
+			}
+		if(s != nil){
+			f = opattr(o, "size") != nil && atoi(opattr(o, "size")) >= 14 ? w->sysfont : w->font;
+			stroke = opcolor(w, opattr(o, "color"), UXink, &snone);
+			if(!snone)
+				string(w->img, addpt(Pt(rnd(v[0]), rnd(v[1]) - f->ascent), org), stroke, ZP, f, s);
+		}
+	}else if(strcmp(k, "image") == 0 && n >= 4){
+		r = rectaddpt(Rect(rnd(v[0]), rnd(v[1]), rnd(v[0]+v[2]), rnd(v[1]+v[3])), org);
+		draw(w->img, r, col(w, UXcoltrack), nil, ZP);
+		border(w->img, r, 1, col(w, UXcoldisabled), ZP);
+	}else if(n >= 4){
+		/* line, path, polyline, polygon */
+		np = 0;
+		for(i = 0; i+1 < n && np < nelem(pts); i += 2)
+			pts[np++] = addpt(Pt(rnd(v[i]), rnd(v[i+1])), org);
+		if(strcmp(k, "polygon") == 0 && !fnone)
+			fillpoly(w->img, pts, np, 0, fill, ZP);
+		if(snone && strcmp(k, "polygon") != 0)
+			stroke = col(w, UXink), snone = 0;
+		if(!snone)
+			poly(w->img, pts, np, Endsquare, Endsquare, wd > 1 ? wd/2 : 0, stroke, ZP);
+		if(strcmp(k, "polygon") == 0 && !snone && np > 2)
+			line(w->img, pts[np-1], pts[0], Endsquare, Endsquare, wd > 1 ? wd/2 : 0, stroke, ZP);
+	}
+}
+
+static void
+drawcanvas(Uxctl *c, Rectangle r)
+{
+	Op *op;
+	int i, n;
+
+	n = opsplit(c->ops, &op);
+	replclipr(c->w->img, 0, rectclip(&r, c->w->clip) ? r : c->w->clip);
+	for(i = 0; i < n; i++)
+		paintop(c->w, &op[i], r.min);
+	replclipr(c->w->img, 0, c->w->clip);
+	opfree(op, n);
+}
+
+/* the topmost item at p, node space: malloc'd id, or nil */
+static char*
+canvashit(Uxctl *c, Point p)
+{
+	Op *op;
+	int i, n;
+	char *id;
+
+	id = nil;
+	n = opsplit(c->ops, &op);
+	for(i = n-1; i >= 0; i--)
+		if(ptinrect(p, opbounds(&op[i]))){
+			id = estrdup(op[i].f[1]);
+			break;
+		}
+	opfree(op, n);
+	return id;
+}
+
+static void
+pointer(Uxctl *c, int kind, Mouse *m)
+{
+	Uxev e;
+	Point p;
+
+	p = subpt(m->xy, _abs(c).min);
+	memset(&e, 0, sizeof e);
+	e.type = UXpointer;
+	e.via = UXui;
+	e.win = c->w;
+	e.ctl = c;
+	e.n = kind;
+	e.pt = p;
+	e.item = canvashit(c, p);
+	e.text = (m->buttons & 4) || c->pressed == 4 ? "right" : (m->buttons & 2) || c->pressed == 2 ? "middle" : "left";
+	_notify(c->fn, c->arg, &e);
+	free(e.item);
+}
+
+static int
+canvasmouse(Uxctl *c, Mouse *m)
+{
+	if(m->buttons & 7){
+		if(!c->pressed){
+			c->pressed = m->buttons & 7;
+			pointer(c, 0, m);
+		}else
+			pointer(c, 2, m);
+		return 1;
+	}
+	if(c->pressed){
+		pointer(c, 1, m);
+		c->pressed = 0;
+		return 0;
+	}
+	pointer(c, 3, m);
+	return 0;
+}
+
+int
+_iscanvas(Uxctl *c)
+{
+	return c->t == &_canvastype;
+}
+
+void
+_drawcanvas(Uxctl *c, Rectangle r)
+{
+	drawcanvas(c, r);
+}
+
+/* a move with no button over a canvas */
+void
+_canvasmove(Uxctl *c, Mouse *m)
+{
+	pointer(c, 3, m);
+}
+
+Uxctl*
+uxcanvas(Uxwin *w, char *id)
+{
+	return mkwidget(w, id, &_canvastype, "");
+}
+
+void
+uxsetops(Uxctl *c, char *ops)
+{
+	qlock(&uxlk);
+	free(c->ops);
+	c->ops = estrdup(ops != nil ? ops : "");
+	c->w->dirty = 1;
 	qunlock(&uxlk);
 	_kickui();
 }

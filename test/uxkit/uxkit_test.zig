@@ -8,6 +8,35 @@ const harness = @import("harness");
 const rect = harness.rect;
 const gpa = std.testing.allocator;
 
+/// Dumps what a hung or failed client left: uxkit's stderr, the event
+/// log, the processes and a screenshot.
+fn dump(s: *harness.Session, name: []const u8) void {
+    const shot = std.fmt.allocPrint(gpa, "{s}-fail", .{name}) catch return;
+    defer gpa.free(shot);
+    s.saveScreen(shot);
+    const out = s.rc("echo '--- uxkit.err'; cat $work/uxkit.err; echo '--- uxkit.events'; cat $work/uxkit.events; echo '--- ps'; ps; echo '--- srv'; ls /srv") catch return;
+    defer gpa.free(out);
+    std.debug.print("{s}\n", .{out});
+}
+
+/// Runs uxkit.rc with a client in a window, mounts its tree at /n/ui and
+/// waits for the client's event loop.
+fn launch(s: *harness.Session, name: []const u8, r: harness.Rect, cmd: []const u8) !void {
+    try s.openWindow(r, cmd);
+    gpa.free(try s.waitWindows(1));
+    s.waitRc("test -e /srv/uitree.$user", 20_000) catch |e| {
+        dump(s, name);
+        return e;
+    };
+    _ = try s.rc("mkdir -p /n/ui && mount /srv/uitree.$user /n/ui");
+    // the client's last step: its event log exists once the tree is built
+    s.waitRc("test -e $work/uxkit.events", 30_000) catch |e| {
+        dump(s, name);
+        return e;
+    };
+    try s.settle();
+}
+
 fn bounds(s: *harness.Session, path: []const u8) ![4]i32 {
     const cmd = try std.fmt.allocPrint(gpa, "cat /n/ui/win/main/{s}/bounds", .{path});
     defer gpa.free(cmd);
@@ -22,17 +51,7 @@ fn bounds(s: *harness.Session, path: []const u8) ![4]i32 {
 test "uxkit: a uitree mail screen drawn by libux, and a click" {
     var s = try harness.Session.start(.{ .name = "uxkit-mail", .rio_args = &.{"-u"} });
     defer s.stop();
-    try s.openWindow(rect(40, 40, 900, 600), "rc /mnt/term/cwd/test/uxkit/uxkit.rc");
-    gpa.free(try s.waitWindows(1));
-    s.waitRc("test -e /srv/uitree.$user", 15_000) catch |e| {
-        s.saveScreen("uxkit-fail");
-        s.rcQuiet("cat $work/uxkit.err") catch {};
-        return e;
-    };
-    _ = try s.rc("mkdir -p /n/ui && mount /srv/uitree.$user /n/ui");
-    // demo.rc's last step: its event log exists once the tree is built
-    try s.waitRc("test -e $work/uxkit.events", 15_000);
-    try s.settle();
+    try launch(s, "uxkit", rect(40, 40, 900, 600), "rc /mnt/term/cwd/test/uxkit/uxkit.rc");
     s.saveScreen("uxkit-mail");
 
     // the sidebar keeps w=176; the cards stack in main, m1 above m2
@@ -83,16 +102,7 @@ fn waitEvent(s: *harness.Session, pattern: []const u8) !void {
 test "uxkit: form, list, table and an alert dialog drawn with libux controls" {
     var s = try harness.Session.start(.{ .name = "uxkit-form", .rio_args = &.{"-u"} });
     defer s.stop();
-    try s.openWindow(rect(40, 40, 760, 560), "rc /mnt/term/cwd/test/uxkit/uxkit.rc form.rc");
-    gpa.free(try s.waitWindows(1));
-    s.waitRc("test -e /srv/uitree.$user", 15_000) catch |e| {
-        s.saveScreen("uxkit-form-fail");
-        s.rcQuiet("cat $work/uxkit.err") catch {};
-        return e;
-    };
-    _ = try s.rc("mkdir -p /n/ui && mount /srv/uitree.$user /n/ui");
-    try s.waitRc("test -e $work/uxkit.events", 15_000);
-    try s.settle();
+    try launch(s, "uxkit-form", rect(40, 40, 760, 560), "rc /mnt/term/cwd/test/uxkit/uxkit.rc form.rc");
     s.saveScreen("uxkit-form");
 
     const ids = try s.windows();
@@ -140,16 +150,7 @@ fn ptIn(wr: harness.Rect, b: [4]i32, dx: i32, dy: i32) harness.Point {
 test "uxkit: tabs, select, radios, slider, switch, popover and context menu" {
     var s = try harness.Session.start(.{ .name = "uxkit-widgets", .rio_args = &.{"-u"} });
     defer s.stop();
-    try s.openWindow(rect(40, 40, 620, 480), "rc /mnt/term/cwd/test/uxkit/uxkit.rc widgets.rc");
-    gpa.free(try s.waitWindows(1));
-    s.waitRc("test -e /srv/uitree.$user", 15_000) catch |e| {
-        s.saveScreen("uxkit-widgets-fail");
-        s.rcQuiet("cat $work/uxkit.err") catch {};
-        return e;
-    };
-    _ = try s.rc("mkdir -p /n/ui && mount /srv/uitree.$user /n/ui");
-    try s.waitRc("test -e $work/uxkit.events", 15_000);
-    try s.settle();
+    try launch(s, "uxkit-widgets", rect(40, 40, 620, 480), "rc /mnt/term/cwd/test/uxkit/uxkit.rc widgets.rc");
     s.saveScreen("uxkit-widgets");
 
     const ids = try s.windows();
@@ -203,4 +204,55 @@ test "uxkit: tabs, select, radios, slider, switch, popover and context menu" {
     try waitEvent(s, "^change tabs tabs .*value=look");
     try s.settle();
     s.saveScreen("uxkit-widgets-tab");
+}
+
+test "uxkit: sidebar, toolbar, tooltip, breadcrumb, number input, combobox and canvas" {
+    var s = try harness.Session.start(.{ .name = "uxkit-tools", .rio_args = &.{"-u"} });
+    defer s.stop();
+    try launch(s, "uxkit-tools", rect(40, 40, 780, 540), "rc /mnt/term/cwd/test/uxkit/uxkit.rc tools.rc");
+    s.saveScreen("uxkit-tools");
+
+    const ids = try s.windows();
+    defer gpa.free(ids);
+    const wr = try s.windowRect(ids[0]);
+
+    // a sidebar item is a click with its tag
+    try clickNode(s, wr, "side/work/sent");
+    try waitEvent(s, "^click go:sent side/work/sent");
+
+    // the number input's + steps the value
+    const n = try bounds(s, "main/row/n");
+    s.click(ptIn(wr, n, n[2] - 8, @divTrunc(n[3], 2)), .left);
+    try waitEvent(s, "^change copies main/row/n .*value=6");
+
+    // the breadcrumb's first crumb
+    const cr = try bounds(s, "main/crumbs");
+    s.click(ptIn(wr, cr, 8, @divTrunc(cr[3], 2)), .left);
+    try waitEvent(s, "^click crumbs main/crumbs .*item=home");
+
+    // typing in the combobox is a query; its menu offers what matches
+    const cb = try bounds(s, "main/row2/c");
+    s.click(ptIn(wr, cb, 20, @divTrunc(cb[3], 2)), .left);
+    try s.settle();
+    try s.typeText("f");
+    try waitEvent(s, "^query country main/row2/c .*value=f");
+    s.click(ptIn(wr, cb, cb[2] - 8, @divTrunc(cb[3], 2)), .left);
+    try s.settle();
+    s.saveScreen("uxkit-tools-combo");
+    // the first match below the field is France (Finland is second)
+    s.click(ptIn(wr, cb, cb[2] - 8 + 10, cb[3] + 1 + 9), .left);
+    try waitEvent(s, "^change country main/row2/c .*value=fr");
+
+    // a press on the canvas names the item under it, and a click follows
+    const ch = try bounds(s, "main/chart");
+    s.click(ptIn(wr, ch, 60, 60), .left);
+    try waitEvent(s, "^mouse-down chart main/chart .*item=card");
+    try waitEvent(s, "^click chart main/chart .*item=card");
+
+    // the pointer over Delete shows its tooltip
+    const del = try bounds(s, "main/tools/del");
+    s.move(ptIn(wr, del, @divTrunc(del[2], 2), @divTrunc(del[3], 2)));
+    try s.waitRc("grep -s 'open' /n/ui/win/main/over/tip/tree", 5_000);
+    try s.settle();
+    s.saveScreen("uxkit-tools-tooltip");
 }

@@ -212,6 +212,13 @@ These types are drawn with libux's own controls, inside the flex layout:
 | `tabs` | a tab bar over the chosen tab's panel | `change value=TAB via=user`; the panel follows `value` |
 | `popover` in `over/` | a box placed by its anchor, over the window | `open` and `close` when its anchor is clicked |
 | `context-menu` in `over/` | a pop-up menu at the pointer on a right-button press on its anchor | `action ID over/NAME via=user` |
+| `number-input` | a field with − and + buttons, kept to `min`, `max` and `step` | `change value=N via=user` |
+| `combobox` | a field and a pop-up of the `items` that match what's typed | `query value=TEXT`, then `change value=ID via=user` |
+| `sidebar`, `sidebar-group`, `sidebar-item` | a column of groups and items; `active` is highlighted, `badge` on the right | `click` with the item's tag |
+| `toolbar` | a row of its children in a bar | (its children's events) |
+| `breadcrumb` | its `items` as links, the last one bold | `click item=ID` |
+| `tooltip` in `over/` | a small box under its anchor while the pointer is over it | the overlay's `open` follows the pointer |
+| `canvas` | its `ops` painted: rect, circle, ellipse, line, polyline, polygon, path, text | `mouse-down`, `mouse-up`, `drag`, `move` with `item=`, `x=`, `y=`, `button=`, and `click` when the press and release are on one item |
 
 libux didn't have a pop-up menu button, radio buttons, a slider, a
 switch or tabs, so `libux/widget.c` adds them in the classic look, plus
@@ -224,15 +231,29 @@ item, saves, then opens the alert dialog with Delete and confirms it
 with Enter. `widgets.rc` is a preferences window: its test picks from
 the select's menu, a radio button, the slider's end, the switch, opens
 and closes the popover, chooses from the context menu and changes tab.
-Each test checks every event and the client's answer to it.
+`tools.rc` is a projects screen: its test clicks a sidebar item, steps
+the number input, follows a crumb, types in the combobox and picks from
+its menu, presses on a canvas item and hovers a toolbar button for its
+tooltip. Each test checks every event and the client's answer to it.
 
-Still drawn as plain divs: number-input, combobox, sidebar, breadcrumb,
-toolbar, tooltip and hover-card, canvas ops, and the layout and feedback
-types (they lay out, but without their own look).
+Still drawn as plain divs: hover-card, and the layout and feedback
+types (they lay out, but without their own look). combobox has no
+profile in uitree yet, so `gencatalog.sh` takes it by name (`+combobox`).
+
+### The flaky start
+
+Now and then uxkit hung or crashed in the heap at start (about one run
+in ten under load). The cause was `client()`: the forked child built the
+client's path with `smprint` before `exec`. A fork in a program with
+several procs copies the heap as it is at that moment, and another proc
+can be halfway through changing it, so the child's malloc found the lock
+held or the free list broken. The path is now made before the fork, and
+the child only execs. 240 runs in a row came up clean; before the fix,
+failures came within 4 to 37 runs. With `uxkitdebug=1`, a failed heap
+assertion leaves the proc asleep so acid can read its stack.
 
 ## Next, if this goes ahead
 
-1. Paint canvas ops, and give the nav, layout and feedback types their
-   own look.
+1. Give hover-card and the layout and feedback types their own look.
 2. The transfer layer (drag and drop), the last skipped script.
 3. Replace the spike's C API in libux with uxkit's tree.

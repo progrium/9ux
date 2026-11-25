@@ -43,6 +43,8 @@ enum {
 	UXdragend,	/* our drag ended: Uxev.text the op the target did, nil if cancelled */
 	UXinterrupt,	/* console: Delete typed, or ctl interrupt */
 	UXcontext,	/* spike: a right-button press on a div, svg or styled-text (Uxev.pt, window-local) */
+	UXhover,	/* spike: the pointer came onto (Uxev.n 1) or left (0) the control */
+	UXpointer,	/* spike: canvas: Uxev.n 0 down, 1 up, 2 drag, 3 move; .pt node space, .item, .text button */
 };
 
 /* how an event came about; Uxev.via */
@@ -200,6 +202,8 @@ Uxctl*	uxtabbar(Uxwin*, char *id);	/* a tab per item */
 void	uxsetrange(Uxctl*, int min, int max, int step);
 int	uxchoice(Uxctl*);	/* the chosen item, -1 none; a slider's value; a switch's 0/1 */
 void	uxsetchoice(Uxctl*, int);
+Uxctl*	uxcanvas(Uxwin*, char *id);	/* spike: uitree ops */
+void	uxsetops(Uxctl*, char *ops);
 void	uxpopmenu(Uxwin*, Point, char **items, int n, Uxfn*, void*);	/* "-" is a separator; UXaction, Uxev.n */
 void	uxcall(Uxfn*, void*);	/* fn(nil event, arg) on the UI thread */	/* window-local, from the last layout */
 

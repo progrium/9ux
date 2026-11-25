@@ -30,6 +30,8 @@ struct Uc {
 	char	**ids;	/* a list's item ids, by row */
 	int	nids;
 	char	*pre;	/* style words before the node's own (a popover's place) */
+	Uxctl	*sub;	/* a composite's field: number-input's, combobox's */
+	Uxctl	*sub2;	/* combobox's menu button */
 };
 
 /* a drawn window, or an open overlay (ov: its node) drawn as a dialog */
@@ -52,6 +54,12 @@ static void	togglepops(Node*);
 static void	contextmenu(Node*, Point);
 static Uw*	uwof(char*, int);
 static int	ison(Node*, char*);
+static void	hoverpops(Node*, int);
+static void	pointerev(Node*, Uxev*);
+static void	partev(Uxev*, void*);
+static int	parseitems(Uc*, char*, char***);
+static void	freelist(char**, int);
+static char*	propor(Node*, char*, char*);
 static char*	valof(Node*);
 static void	mkctl(Uw*, Node*, Uxctl*);
 
@@ -75,6 +83,15 @@ sig(Fmt *f, Node *n)
 	if(strcmp(n->type, "tabs") == 0 || strcmp(n->type, "tab") == 0)
 		fmtprint(f, "(%s,%s)", getprop(n, "value") != nil ? getprop(n, "value") : "",
 			getprop(n, "label") != nil ? getprop(n, "label") : "");
+	/* drawn from props with controls of their own: rebuilt when they change */
+	if(strcmp(n->type, "sidebar-item") == 0 || strcmp(n->type, "sidebar-group") == 0)
+		fmtprint(f, "(%s,%s,%s)", getprop(n, "label") != nil ? getprop(n, "label") : "",
+			getprop(n, "active") != nil ? getprop(n, "active") : "",
+			getprop(n, "badge") != nil ? getprop(n, "badge") : "");
+	if(strcmp(n->type, "breadcrumb") == 0)
+		fmtprint(f, "(%s)", getprop(n, "items") != nil ? getprop(n, "items") : "");
+	if(strcmp(n->type, "tooltip") == 0)
+		fmtprint(f, "(%s)", getprop(n, "text") != nil ? getprop(n, "text") : "");
 	fmtprint(f, "[");
 	for(i = 0; i < n->nord; i++)
 		for(j = 0; j < n->nkid; j++)
@@ -122,12 +139,21 @@ nodeev(Uxev *e, void *arg)
 		unlockmodel();
 		return;
 	}
+	if(e->type == UXhover){
+		lockmodel();
+		if((x = nodebyid((int)(uintptr)arg)) != nil && !quitting)
+			hoverpops(x, e->n);
+		sweep();
+		unlockmodel();
+		return;
+	}
 	if(e->type != UXactivate)
 		return;
 	lockmodel();
 	x = nodebyid((int)(uintptr)arg);
 	for(n = x; n != nil; n = n->parent)
-		if(hasword(getprop(n, "on"), "click"))
+		if(hasword(getprop(n, "on"), "click")
+		|| (strcmp(n->type, "sidebar-item") == 0 && !ison(n, "disabled")))
 			break;
 	if(n != nil && !quitting)
 		emitnode("click", winof(n), n, nil, 0);
@@ -398,6 +424,210 @@ contextmenu(Node *n, Point pt)
 	free(labels);
 }
 
+/* the pointer onto (on) or off a node: its tooltips show and hide */
+static void
+hoverpops(Node *n, int on)
+{
+	Node *t[8];
+	int i, m;
+
+	m = anchored(n, "tooltip", t, nelem(t));
+	for(i = 0; i < m; i++)
+		if(ison(t[i], "open") != on)
+			setprop(t[i], "open", on ? "on" : "off", on);
+}
+
+/* a canvas's pointer: the events its on file asks for, naming the item */
+static void
+pointerev(Node *n, Uxev *e)
+{
+	static char *names[] = { "mouse-down", "mouse-up", "drag", "move" };
+	static char *down;
+	char *on, *a, *item;
+	int st;
+	Fmt f;
+
+	if(e->n < 0 || e->n > 3)
+		return;
+	on = getprop(n, "on");
+	item = e->item;
+	st = e->n >= 2;
+	if(hasword(on, names[e->n])){
+		fmtstrinit(&f);
+		if(e->n < 2)
+			fmtprint(&f, "button=%s ", e->text != nil ? e->text : "left");
+		if(item != nil)
+			fmtprint(&f, "item=%s ", item);
+		if(st)
+			fmtprint(&f, "via=user ");
+		fmtprint(&f, "x=%d y=%d", e->pt.x, e->pt.y);
+		a = fmtstrflush(&f);
+		emitnode(names[e->n], winof(n), n, a, st);
+		free(a);
+	}
+	/* a press and release on the same item is a click */
+	if(e->n == 0){
+		free(down);
+		down = estrdup(item != nil ? item : "");
+	}else if(e->n == 1){
+		if(down != nil && strcmp(down, item != nil ? item : "") == 0 && hasword(on, "click")){
+			a = item != nil ? smprint("button=%s item=%s x=%d y=%d", e->text, item, e->pt.x, e->pt.y)
+				: smprint("button=%s x=%d y=%d", e->text, e->pt.x, e->pt.y);
+			emitnode("click", winof(n), n, a, 0);
+			free(a);
+		}
+		free(down);
+		down = nil;
+	}
+}
+
+/* combobox: the items its menu offers for the query, by id */
+static int	combonode;
+static char	**comboids;
+static int	ncomboids;
+
+static void
+setcombo(Uc *u, Node *n)
+{
+	char **rows, *q, **show;
+	int k, i, ns;
+
+	k = parseitems(u, getprop(n, "items") != nil ? getprop(n, "items") : "", &rows);
+	q = getprop(n, "query");
+	show = emalloc((k+1)*sizeof(char*));
+	for(i = 0; i < ncomboids; i++)
+		free(comboids[i]);
+	free(comboids);
+	comboids = emalloc((k+1)*sizeof(char*));
+	ncomboids = 0;
+	ns = 0;
+	for(i = 0; i < k; i++)
+		if(q == nil || q[0] == 0 || cistrstr(rows[i], q) != nil){
+			show[ns++] = rows[i];
+			comboids[ncomboids++] = estrdup(u->ids[i]);
+		}
+	combonode = n->id;
+	uxsetitems(u->sub2, show, ns);
+	uxsetchoice(u->sub2, -1);
+	free(show);
+	freelist(rows, k);
+}
+
+/* the label of item id in items, or nil */
+static char*
+itemlabel(char *items, char *id)
+{
+	char *buf, *line, *nl, *f[8], *r;
+	int nf;
+
+	r = nil;
+	buf = estrdup(items != nil ? items : "");
+	for(line = buf; line != nil && *line && r == nil; line = nl){
+		nl = strchr(line, '\n');
+		if(nl != nil)
+			*nl++ = 0;
+		nf = strchr(line, '\t') != nil ? getfields(line, f, nelem(f), 0, "\t") : tokenize(line, f, nelem(f));
+		if(nf >= 1 && strcmp(f[0], id) == 0)
+			r = estrdup(nf > 1 ? f[1] : f[0]);
+	}
+	free(buf);
+	return r;
+}
+
+static double
+numprop(Node *n, char *name, double d)
+{
+	char *v;
+
+	v = getprop(n, name);
+	return v != nil && v[0] != 0 ? atof(v) : d;
+}
+
+static char*
+fmtnum(double d)
+{
+	if(d == (vlong)d)
+		return smprint("%lld", (vlong)d);
+	return smprint("%g", d);
+}
+
+/* a part of a composite: number-input's field and steppers, combobox's field and menu, a breadcrumb's crumb */
+static void
+partev(Uxev *e, void *arg)
+{
+	Node *n;
+	Uc *u;
+	char *id, *v, *p, *lab;
+	double d, mn, mx, st;
+	int i;
+
+	if(e->via == UXctl)
+		return;
+	lockmodel();
+	n = nodebyid((int)(uintptr)arg);
+	u = ucbyid((int)(uintptr)arg);
+	if(n == nil || u == nil || quitting){
+		unlockmodel();
+		return;
+	}
+	id = uxctlid(e->ctl);
+	p = strrchr(id, '-');
+	p = p != nil ? p+1 : "";
+	if(strcmp(n->type, "number-input") == 0){
+		mn = numprop(n, "min", -1e18);
+		mx = numprop(n, "max", 1e18);
+		st = numprop(n, "step", 1);
+		if(e->type == UXactivate && (strcmp(p, "inc") == 0 || strcmp(p, "dec") == 0) && !ison(n, "disabled")){
+			d = numprop(n, "value", mn > -1e18 ? mn : 0) + (strcmp(p, "inc") == 0 ? st : -st);
+			if(d < mn)
+				d = mn;
+			if(d > mx)
+				d = mx;
+			v = fmtnum(d);
+			uservalue(n, "change", "value", v, v);
+			uxsetvalue(u->sub, v);
+			free(v);
+		}else if(e->type == UXvalue){
+			v = uxgetvalue(e->ctl);
+			d = strtod(v, &p);
+			if(v[0] == 0 || (*p == 0 && d >= mn && d <= mx))
+				uservalue(n, "change", "value", v, v);
+			free(v);
+		}else if(e->type == UXsubmit)
+			emitnode("submit", winof(n), n, nil, 0);
+	}else if(strcmp(n->type, "combobox") == 0){
+		if(e->type == UXvalue && strcmp(p, "f") == 0){
+			v = uxgetvalue(e->ctl);
+			setprop(n, "query", v, 0);
+			lab = quoteval(v);
+			p = smprint("value=%s via=user", lab);
+			emitnode("query", winof(n), n, p, 1);
+			free(p);
+			free(lab);
+			free(v);
+			setcombo(u, n);
+		}else if(e->type == UXvalue && strcmp(p, "open") == 0){
+			i = uxchoice(e->ctl);
+			if(i >= 0 && i < ncomboids){
+				uservalue(n, "change", "value", comboids[i], comboids[i]);
+				lab = itemlabel(getprop(n, "items"), comboids[i]);
+				uxsetvalue(u->sub, lab != nil ? lab : comboids[i]);
+				free(lab);
+			}
+			uxsetchoice(e->ctl, -1);
+		}
+	}else if(strcmp(n->type, "breadcrumb") == 0 && e->type == UXactivate){
+		i = atoi(p);
+		if(i >= 0 && i < u->nids){
+			v = smprint("item=%s", u->ids[i]);
+			emitnode("click", winof(n), n, v, 0);
+			free(v);
+		}
+	}
+	sweep();
+	unlockmodel();
+}
+
 /* a native control's event */
 static void
 ctlev(Uxev *e, void *arg)
@@ -418,6 +648,14 @@ ctlev(Uxev *e, void *arg)
 		unlockmodel();
 		if(n == nil || strcmp(n->type, "button") != 0)
 			nodeev(e, arg);
+		return;
+	}
+	if(e->type == UXhover){
+		lockmodel();
+		if((n = nodebyid((int)(uintptr)arg)) != nil && !quitting)
+			hoverpops(n, e->n);
+		sweep();
+		unlockmodel();
 		return;
 	}
 	if(e->via == UXctl)
@@ -466,6 +704,9 @@ ctlev(Uxev *e, void *arg)
 		v = selids(u);
 		uservalue(n, "select", strcmp(n->type, "table") == 0 ? "row" : "value", v, v);
 		free(v);
+		break;
+	case UXpointer:
+		pointerev(n, e);
 		break;
 	case UXopen:
 		v = selids(u);
@@ -588,6 +829,19 @@ valof(Node *n)
 		return estrdup(t != nil ? t : "");
 	}
 	if(strcmp(n->type, "select") == 0 || strcmp(n->type, "radio-group") == 0){
+		t = getprop(n, "items");
+		r = getprop(n, "value");
+		return smprint("%s\001%s\001%d", t != nil ? t : "", r != nil ? r : "", ison(n, "disabled"));
+	}
+	if(strcmp(n->type, "canvas") == 0){
+		t = getprop(n, "ops");
+		return estrdup(t != nil ? t : "");
+	}
+	if(strcmp(n->type, "number-input") == 0){
+		t = getprop(n, "value");
+		return smprint("%s\001%d", t != nil ? t : "", ison(n, "disabled"));
+	}
+	if(strcmp(n->type, "combobox") == 0){
 		t = getprop(n, "items");
 		r = getprop(n, "value");
 		return smprint("%s\001%s\001%d", t != nil ? t : "", r != nil ? r : "", ison(n, "disabled"));
@@ -768,6 +1022,26 @@ setnative(Uc *u, Node *n, char *v)
 	}else if((strcmp(n->type, "select") == 0 || strcmp(n->type, "radio-group") == 0) && nf >= 3){
 		setchoice(u, f[0], f[1]);
 		uxenable(u->c, !atoi(f[2]));
+	}else if(strcmp(n->type, "canvas") == 0)
+		uxsetops(u->c, v);
+	else if(strcmp(n->type, "number-input") == 0 && nf >= 2){
+		if(u->sub != nil){
+			uxsetvalue(u->sub, f[0]);
+			uxenable(u->sub, !atoi(f[1]));
+		}
+	}else if(strcmp(n->type, "combobox") == 0 && nf >= 3){
+		if(u->sub != nil && u->sub2 != nil){
+			char *lab;
+
+			setcombo(u, n);
+			lab = f[1][0] != 0 ? itemlabel(f[0], f[1]) : nil;
+			if(lab != nil){
+				uxsetvalue(u->sub, lab);
+				free(lab);
+			}
+			uxenable(u->sub, !atoi(f[2]));
+			uxenable(u->sub2, !atoi(f[2]));
+		}
 	}else if(strcmp(n->type, "slider") == 0 && nf >= 5){
 		uxsetrange(u->c, atoi(f[0]), atoi(f[1]), atoi(f[2]));
 		uxsetchoice(u->c, atoi(f[3]));
@@ -796,7 +1070,8 @@ isnative(char *t)
 	return strcmp(t, "button") == 0 || strcmp(t, "checkbox") == 0 || strcmp(t, "switch") == 0
 		|| strcmp(t, "input") == 0 || strcmp(t, "textarea") == 0 || strcmp(t, "list") == 0
 		|| strcmp(t, "table") == 0 || strcmp(t, "select") == 0 || strcmp(t, "radio-group") == 0
-		|| strcmp(t, "slider") == 0;
+		|| strcmp(t, "slider") == 0 || strcmp(t, "canvas") == 0 || strcmp(t, "number-input") == 0
+		|| strcmp(t, "combobox") == 0;
 }
 
 static void
@@ -836,7 +1111,126 @@ setstyle(Uc *u, Node *n)
 		: strcmp(n->type, "spacer") == 0 ? "flex-1"
 		: strcmp(n->type, "text") == 0 ? "font-normal"
 		: strcmp(n->type, "tabs") == 0 ? "v-flex"
+		: strcmp(n->type, "sidebar") == 0 ? "v-flex gap=10 p=8 w=200 bg=muted border-1"
+		: strcmp(n->type, "sidebar-group") == 0 ? "v-flex gap=2"
+		: strcmp(n->type, "sidebar-item") == 0 ? (ison(n, "active") ? "h-flex items-center gap=6 p=4 bg=accent" : "h-flex items-center gap=6 p=4")
+		: strcmp(n->type, "toolbar") == 0 ? "h-flex items-center gap=6 p=4 bg=muted border-1"
+		: strcmp(n->type, "breadcrumb") == 0 ? "h-flex items-center gap=4"
+		: strcmp(n->type, "number-input") == 0 ? "h-flex items-center gap=2"
+		: strcmp(n->type, "combobox") == 0 ? "h-flex items-center gap=2"
 		: strcmp(n->type, "tab") == 0 ? "v-flex flex-1 gap=8 p=10 border-1 bg=background" : "", n->style);
+}
+
+/* a control that's part of a node, with no node of its own */
+static Uxctl*
+part(Uw *w, Uxctl *c, Uxctl *parent, char *type)
+{
+	Uc *u;
+
+	uxsetparent(c, parent);
+	w->c = erealloc(w->c, (w->n+1)*sizeof(Uc));
+	u = &w->c[w->n++];
+	memset(u, 0, sizeof *u);
+	u->c = c;
+	u->type = estrdup(type);
+	return c;
+}
+
+static Uxctl*
+partlabel(Uw *w, Uxctl *parent, char *id, char *text, char *style)
+{
+	Uxctl *c;
+
+	c = part(w, uxlabel(w->uw, id, text, ZR), parent, "label");
+	uxsetstyle(c, style);
+	return c;
+}
+
+/*
+ * Types drawn as several controls: the node's own control c holds the
+ * parts. Returns 1 when n's children are drawn too (or it has none).
+ */
+static int
+mkparts(Uw *w, Node *n, Uxctl *c)
+{
+	char id[48], **rows;
+	Uxctl *x, *f, *b;
+	int i, k, idx;
+	char *v;
+
+	idx = w->n - 1;	/* n's own Uc; w->c moves as parts are added */
+	if(strcmp(n->type, "sidebar-group") == 0){
+		snprint(id, sizeof id, "n%d-h", n->id);
+		x = partlabel(w, c, id, propor(n, "label", ""), "text-xs");
+		uxlabelstyle(x, UXsmall);
+		return 0;
+	}
+	if(strcmp(n->type, "sidebar-item") == 0){
+		snprint(id, sizeof id, "n%d-l", n->id);
+		partlabel(w, c, id, propor(n, "label", n->name), ison(n, "active") ? "font-bold flex-1" : "font-normal flex-1");
+		if(getprop(n, "badge") != nil && getprop(n, "badge")[0] != 0){
+			snprint(id, sizeof id, "n%d-b", n->id);
+			x = partlabel(w, c, id, getprop(n, "badge"), "text-xs");
+			uxlabelstyle(x, UXsmall|UXright);
+		}
+		return 0;
+	}
+	if(strcmp(n->type, "breadcrumb") == 0){
+		k = parseitems(&w->c[idx], getprop(n, "items") != nil ? getprop(n, "items") : "", &rows);
+		for(i = 0; i < k; i++){
+			if(i > 0){
+				snprint(id, sizeof id, "n%d-s%d", n->id, i);
+				partlabel(w, c, id, "/", "font-normal");
+			}
+			snprint(id, sizeof id, "n%d-c-%d", n->id, i);
+			x = part(w, uxdiv(w->uw, id), c, "crumb");
+			uxhandler(x, partev, (void*)(uintptr)n->id);
+			snprint(id, sizeof id, "n%d-cl%d", n->id, i);
+			partlabel(w, x, id, rows[i], i == k-1 ? "font-bold" : "font-normal");
+		}
+		freelist(rows, k);
+		return 1;
+	}
+	if(strcmp(n->type, "number-input") == 0){
+		snprint(id, sizeof id, "n%d-f", n->id);
+		f = part(w, uxtextfield(w->uw, id, "", ZR, 0), c, "text-field");
+		uxsetstyle(f, "w=80");
+		uxhandler(f, partev, (void*)(uintptr)n->id);
+		snprint(id, sizeof id, "n%d-dec", n->id);
+		b = part(w, uxbutton(w->uw, id, "-", ZR), c, "button");
+		uxsetstyle(b, "w=24");
+		uxhandler(b, partev, (void*)(uintptr)n->id);
+		snprint(id, sizeof id, "n%d-inc", n->id);
+		b = part(w, uxbutton(w->uw, id, "+", ZR), c, "button");
+		uxsetstyle(b, "w=24");
+		uxhandler(b, partev, (void*)(uintptr)n->id);
+		w->c[idx].sub = f;
+		v = valof(n);
+		setnative(&w->c[idx], n, v);
+		free(v);
+		return 1;
+	}
+	if(strcmp(n->type, "combobox") == 0){
+		snprint(id, sizeof id, "n%d-f", n->id);
+		f = part(w, uxtextfield(w->uw, id, "", ZR, 0), c, "text-field");
+		uxhandler(f, partev, (void*)(uintptr)n->id);
+		snprint(id, sizeof id, "n%d-open", n->id);
+		b = part(w, uxpopup(w->uw, id, ""), c, "popup");
+		uxsetstyle(b, "w=22");
+		uxhandler(b, partev, (void*)(uintptr)n->id);
+		w->c[idx].sub = f;
+		w->c[idx].sub2 = b;
+		v = valof(n);
+		setnative(&w->c[idx], n, v);
+		free(v);
+		return 1;
+	}
+	if(strcmp(n->type, "tooltip") == 0){
+		snprint(id, sizeof id, "n%d-t", n->id);
+		partlabel(w, c, id, propor(n, "text", ""), "font-normal text-sm");
+		return 1;
+	}
+	return 0;
 }
 
 /* a tabs node: a tab bar, then the chosen tab's panel */
@@ -907,6 +1301,8 @@ mkctl(Uw *w, Node *n, Uxctl *parent)
 		c = uxtextfield(w->uw, id, "", ZR, UXmultiline);
 	else if(strcmp(n->type, "list") == 0 || strcmp(n->type, "table") == 0)
 		c = uxlist(w->uw, id, ZR);
+	else if(strcmp(n->type, "canvas") == 0)
+		c = uxcanvas(w->uw, id);
 	else
 		c = uxdiv(w->uw, id);
 	if(parent != nil)
@@ -926,6 +1322,8 @@ mkctl(Uw *w, Node *n, Uxctl *parent)
 		mktabs(w, n, c);
 		return;
 	}
+	if(mkparts(w, n, c))
+		return;
 	for(i = 0; i < n->nord; i++)
 		for(j = 0; j < n->nkid; j++)
 			if(n->kid[j]->id == n->ord[i])
@@ -1080,7 +1478,8 @@ openpops(Node *root, Node **out, int max)
 	m = 0;
 	o = root->parent == nil && root->win != nil ? root->win->over : nil;
 	for(i = 0; o != nil && i < o->nkid && m < max; i++)
-		if(strcmp(o->kid[i]->type, "popover") == 0 && ison(o->kid[i], "open"))
+		if((strcmp(o->kid[i]->type, "popover") == 0 || strcmp(o->kid[i]->type, "tooltip") == 0)
+		&& ison(o->kid[i], "open"))
 			out[m++] = o->kid[i];
 	return m;
 }
@@ -1115,8 +1514,12 @@ mkpop(Uw *u, Node *p, Old *old, int nold)
 	for(i = 0; a != nil && i < nold; i++)
 		if(old[i].id == a->id)
 			ar = old[i].r;
-	pl = getprop(p, "placement") != nil ? getprop(p, "placement") : "bottom-start";
-	if(strncmp(pl, "right", 5) == 0){
+	pl = getprop(p, "placement") != nil ? getprop(p, "placement")
+		: strcmp(p->type, "tooltip") == 0 ? "top" : "bottom-start";
+	if(strncmp(pl, "top", 3) == 0){
+		x = ar.min.x;
+		y = ar.min.y - 26;
+	}else if(strncmp(pl, "right", 5) == 0){
 		x = ar.max.x + 4;
 		y = ar.min.y;
 	}else if(strncmp(pl, "left", 4) == 0){
@@ -1131,7 +1534,11 @@ mkpop(Uw *u, Node *p, Old *old, int nold)
 	k = u->n;
 	mkctl(u, p, nil);
 	free(u->c[k].pre);
-	u->c[k].pre = smprint("absolute v-flex gap=6 p=10 bg=background border-1 left=%d top=%d", x, y);
+	if(y < 2)
+		y = ar.max.y + 4;
+	u->c[k].pre = strcmp(p->type, "tooltip") == 0
+		? smprint("absolute p=4 bg=background border-1 left=%d top=%d", x, y)
+		: smprint("absolute v-flex gap=6 p=10 bg=background border-1 left=%d top=%d", x, y);
 	free(u->c[k].style);
 	u->c[k].style = nil;
 	setstyle(&u->c[k], p);

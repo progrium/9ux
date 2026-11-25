@@ -1,8 +1,9 @@
 #!/bin/sh
 # Write catalog.c, the descriptors uxkit embeds, from uitree's
-# core/types: every type of the profiles named, as their specs say.
+# core/types: every type of the profiles named, as their specs say,
+# plus each type named +TYPE (components that have no profile yet).
 #
-#	gencatalog.sh UITREE_TYPES_DIR PROFILE... >catalog.c
+#	gencatalog.sh UITREE_TYPES_DIR PROFILE... [+TYPE...] >catalog.c
 set -eu
 dir=$1
 shift
@@ -11,7 +12,7 @@ echo '#include <u.h>'
 echo '#include <libc.h>'
 echo
 echo 'char *profiles[] = {'
-for p; do echo "	\"$p\","; done
+for p; do case $p in +*) ;; *) echo "	\"$p\","; esac; done
 echo '	nil,'
 echo '};'
 echo
@@ -20,7 +21,7 @@ for spec in "$dir"/*/spec; do
 	t=$(basename "$(dirname "$spec")")
 	p=$(sed -n 's/^type[ 	].*profile=\([a-z-]*\).*/\1/p' "$spec")
 	want=0
-	for q; do [ "$q" = "$p" ] && want=1; done
+	for q; do [ "$q" = "$p" -o "$q" = "+$t" ] && want=1; done
 	[ $want = 1 ] || continue
 	echo "	\"$t\","
 	sed 's/\\/\\\\/g; s/"/\\"/g; s/^/	"/; s/$/\\n"/' "$spec"

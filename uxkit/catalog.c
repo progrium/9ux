@@ -134,6 +134,22 @@ char *catalog[] = {
 	"slot    content\n"
 	"child   none\n"
 	,
+	"combobox",
+	"type    combobox  tier=component  since=1.0\n"
+	"prop    items        data  file\n"
+	"prop    value        text  file\n"
+	"prop    multiple     bool\n"
+	"prop    placeholder  text  file\n"
+	"prop    query        text  file  readonly\n"
+	"prop    disabled     bool\n"
+	"prop    controlled   bool\n"
+	"word    multiple disabled controlled  kind=flag\n"
+	"word    xs sm md lg  kind=size\n"
+	"event   change  kind=state\n"
+	"event   query   kind=state\n"
+	"child   none\n"
+	"file    items  format=items\n"
+	,
 	"context-menu",
 	"type    context-menu  tier=overlay  profile=overlay  since=1.0\n"
 	"prop    anchor  path\n"

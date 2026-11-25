@@ -201,6 +201,7 @@ struct Uxctl {
 	int	follow;	/* console: show the end at the next layout */
 	int	vmin, vmax, vstep, val;	/* spike: slider */
 	int	row;	/* spike: radios laid out in a row */
+	char	*ops;	/* spike: canvas display list */
 	Font	*cfont;	/* console: its own font, or nil for the body font */
 
 	/* spike: uitree layout, svg and styled-text */
@@ -253,6 +254,7 @@ struct Uxwin {
 	Rectangle	clip;	/* where the control being drawn may draw */
 	Uxstyle	*st;	/* spike: a root style: lay the window out by flexbox */
 	Uxpop	*pop;	/* spike: a pop-up menu over the window (widget.c) */
+	Uxctl	*hover;	/* spike: the control under the pointer, for UXhover */
 };
 
 struct Item {
@@ -483,8 +485,11 @@ void	_popopen(Uxwin*, Point, char**, int, int, void(*)(Uxwin*, int, void*), void
 void	_popclose(Uxwin*, int);
 void	_popmouse(Uxwin*, Mouse*, int);
 void	_drawpop(Uxwin*);
-int	_spikemouse(Uxctl*, Mouse*);
+int	_iscanvas(Uxctl*);
+void	_drawcanvas(Uxctl*, Rectangle);
+void	_canvasmove(Uxctl*, Mouse*);
 int	_parsecolor(char*, ulong*);
+int	_spikemouse(Uxctl*, Mouse*);
 void	_styledefault(Uxstyle*);
 char*	_parsestyle(Uxstyle*, char*);
 void	_flexlayout(Uxwin*);

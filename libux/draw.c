@@ -872,6 +872,8 @@ _drawctl(Uxctl *c)
 		_drawstext(c, r);
 	else if(_iswidget(c))
 		_drawwidget(c, r);
+	else if(_iscanvas(c))
+		_drawcanvas(c, r);
 	if(!eqrect(w->clip, w->img->r)){
 		w->clip = w->img->r;
 		replclipr(w->img, 0, w->clip);

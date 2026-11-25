@@ -529,6 +529,49 @@ ctlat(Uxwin *w, Point p)
 	return nil;
 }
 
+static int
+live(Uxwin *w, Uxctl *c)
+{
+	int i;
+
+	for(i = 0; i < w->nctl; i++)
+		if(w->ctl[i] == c)
+			return !c->dead;
+	return 0;
+}
+
+static void
+hovernote(Uxctl *c, int on)
+{
+	Uxev e;
+
+	memset(&e, 0, sizeof e);
+	e.type = UXhover;
+	e.via = UXui;
+	e.win = c->w;
+	e.ctl = c;
+	e.n = on;
+	_notify(c->fn, c->arg, &e);
+}
+
+/* spike: UXhover as the pointer moves between controls, and canvas moves */
+static void
+hovering(Uxwin *w, Mouse *m)
+{
+	Uxctl *c;
+
+	c = ctlat(w, m->xy);
+	if(c != w->hover){
+		if(w->hover != nil && live(w, w->hover))
+			hovernote(w->hover, 0);
+		w->hover = c;
+		if(c != nil)
+			hovernote(c, 1);
+	}
+	if(c != nil && _iscanvas(c))
+		_canvasmove(c, m);
+}
+
 void
 _wininput(Uxwin *w, Mouse *m)
 {
@@ -547,6 +590,8 @@ _wininput(Uxwin *w, Mouse *m)
 			w->grab = nil;
 		return;
 	}
+	if(m->buttons == 0)
+		hovering(w, m);
 	if(!down)
 		return;
 	mw = modal();
