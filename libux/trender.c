@@ -13,6 +13,7 @@
 #include <fcall.h>
 #include <thread.h>
 #include <9p.h>
+#include "dx.h"
 #include "ux.h"
 #include "tree.h"
 
@@ -1676,7 +1677,7 @@ dosync(void)
 	}
 	for(i = 0; i < app->nwin; i++){
 		w = app->win[i];
-		if(!w->shown)
+		if(!w->shown || w->capi)
 			continue;
 		u = uwof(w->name, 0);
 		if(u == nil){
@@ -1691,6 +1692,7 @@ dosync(void)
 			if(isdialog(o->kid[j]->type) && ison(o->kid[j], "open"))
 				syncover(u, w, o->kid[j]);
 	}
+	capisync();
 }
 
 static void
@@ -1734,6 +1736,8 @@ uibounds(Node *n)
 	w = winof(n);
 	if(w == nil)
 		return nil;
+	if(w->capi)
+		return capibounds(n);
 	u = uwof(w->name, 0);
 	if(u == nil)
 		return nil;

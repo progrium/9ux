@@ -21,6 +21,7 @@
 #include <thread.h>
 #include <fcall.h>
 #include <9p.h>
+#include "dx.h"
 #include "ux.h"
 #include "impl.h"
 

@@ -65,6 +65,7 @@ struct Win {
 	char	*state;
 	int	shown;
 	int	claimed;
+	int	capi;	/* made with libux's C API (tapi.c): drawn by it, not trender */
 	int	focus;	/* node id, or 0 */
 	int	ask;	/* -1: the app's; 0: none; 1: close */
 };
@@ -307,3 +308,8 @@ void	uisync(void);
 void	uistart(char*, int(*)(char*));
 void	uirun(void);
 char*	uibounds(Node*);
+
+/* tapi.c */
+extern void	(*evhook)(char*, char*, char*, char*);
+void	capisync(void);
+char*	capibounds(Node*);

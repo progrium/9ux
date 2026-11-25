@@ -206,12 +206,17 @@ attrline(char *attrs, char *win)
 	return fmtstrflush(&fm);
 }
 
+/* libux's C API sees each event first, to call the app's handlers */
+void	(*evhook)(char*, char*, char*, char*);
+
 static void
 deliver(Pend *p)
 {
 	char *line, *a;
 	Sub *s;
 
+	if(evhook != nil)
+		evhook(p->name, p->path, p->attrs, p->win);
 	a = attrline(p->attrs, p->win);
 	line = smprint("%s %s %s%s seq=%d\n", p->name, p->key, p->path, a, p->seq);
 	free(a);
