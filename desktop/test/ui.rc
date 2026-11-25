@@ -1,9 +1,11 @@
 #!/bin/rc
 # Interface tests for the Desktop app: rc test/ui.rc [path/to/desktop]
 #
-# Desktop runs headless (uxheadless=1) and publishes its control tree
+# Desktop runs headless (uxheadless=1) and publishes its uitree tree
 # (uxpublic=1); the tests drive it from rc the way a script or uxd
-# client would, with a real uxmeta behind it:
+# client would, with a real uxmeta behind it. Its windows are win/main
+# (the desktop) and win/KIND-N (folder-1, info-1, dialog-1...); menu
+# choices go in through debug/inject:
 #
 #  - the desktop shows the registry's volumes; opening one opens a
 #    folder window with the folder's entries
@@ -83,16 +85,27 @@ fn waitfor {
 	}
 }
 
-# itemid view label: the icon item ID of the label in a window's icon view
+# icons win: a window's icon view
+fn icons {
+	if(test -d $1/scroll/icons)
+		echo $1/scroll/icons
+	if not
+		echo $1/icons
+}
+
+# itemid win label: the icon item ID of the label in a window's icon view
 fn itemid {
-	grep -e 'label='^$2^'( |$)' -e '''label='^$2^'''' $1/controls/icons/items | awk '{print $2}'
+	grep -e 'label='^$2^'( |$)' -e '''label='^$2^'''' `{icons $1}^/items | awk '{print $1}'
 }
 
 # winof kind: the windows of that kind
 fn winof {
-	for(w in $a/windows/*)
-		if(~ `{cat $w/kind} $1)
-			echo $w
+	ls -d $a/win/$1-* >[2]/dev/null
+}
+
+# choose item win: a menu item, chosen in a window
+fn choose {
+	echo menu 'item='^$1 'win='^`{basename $2} >$a/debug/inject
 }
 
 fn startdesktop {
@@ -103,7 +116,7 @@ fn startdesktop {
 	a=$t/app
 	mkdir -p $a
 	mount -c /srv/ux.$user.desktop $a
-	for(i in `{seq 50}) if(! test -s $a/windows/1/controls/icons/items) sleep 0.1
+	for(i in `{seq 50}) if(! test -s $a/win/main/icons/items) sleep 0.1
 }
 
 fn stopdesktop {
@@ -132,58 +145,59 @@ ws=$t/user/workspace/uiws.ndb
 
 test=desktop
 startdesktop
-d=$a/windows/1
-has $d/kind '^desktop$'
-has $d/controls/icons/items '^item i1 label=scratch icon=disk pos='
-lacks $d/controls/icons/items 'label=hidden'
-has $a/menus/file/items '^item newfolder ' '^item info ' '^item rename ' '^item close '
-has $a/menus/view/items '^item byicon ' '^item bylist ' '^item cleanup '
+d=$a/win/main
+has $d/icons/type '^icon-view$'
+has $d/icons/items '^i1 label=scratch icon=disk pos='
+lacks $d/icons/items 'label=hidden'
+has $a/menu/file '^item newfolder ' '^item info ' '^item rename ' '^item close '
+has $a/menu/view '^item byicon ' '^item bylist ' '^item cleanup '
 
 test=open-volume
-echo open `{itemid $d scratch} > $d/controls/icons/ctl
+echo open `{itemid $d scratch} > $d/icons/ctl
 for(i in `{seq 50}) if(~ $#f 0) { f=`{winof folder}; sleep 0.1 }
 if(~ $#f 0)
 	fail no folder window
 f=$f(1)
 has $f/title '^scratch$'
-has $f/controls/icons/items 'label=a.txt icon=doc-text ' 'label=docs icon=folder ' 'label=run icon=app '
-has $f/controls/status/value '^3 items$'
+fi=`{icons $f}
+has $fi/items 'label=a.txt icon=doc-text ' 'label=docs icon=folder ' 'label=run icon=app '
+has $f/status/text '^3 items$'
 waitfor $ws '^folder='^$t^'/vol '
 has $ws 'open=yes' 'view=icons'
 
 test=rename
-echo rename `{itemid $f a.txt} b.txt > $f/controls/icons/ctl
+echo rename `{itemid $f a.txt} b.txt > $fi/ctl
 sleep 0.3
 if(test -e $t/vol/b.txt && ! test -e $t/vol/a.txt)
 	pass
 if not
 	fail a.txt was not renamed to b.txt
-has $f/controls/icons/items 'label=b.txt '
+has $fi/items 'label=b.txt '
 
 test=move
-echo move `{itemid $f b.txt} 250,120 > $f/controls/icons/ctl
+echo move `{itemid $f b.txt} 250,120 > $fi/ctl
 waitfor $ws '^item='^$t^'/vol/b.txt x=250 y=120'
 
 test=rescan
 echo new > $t/vol/new.txt
-waitfor $f/controls/icons/items 'label=new.txt '
+waitfor $fi/items 'label=new.txt '
 rm $t/vol/new.txt
-for(i in `{seq 50}) if(grep -s 'label=new.txt' $f/controls/icons/items) sleep 0.1
-lacks $f/controls/icons/items 'label=new.txt'
+for(i in `{seq 50}) if(grep -s 'label=new.txt' $fi/items) sleep 0.1
+lacks $fi/items 'label=new.txt'
 
 test=newfolder
-echo invoke newfolder win^'='^`{basename $f} > $a/menus/file/ctl
+choose newfolder $f
 sleep 0.3
 if(test -d $t/vol/'untitled folder')
 	pass
 if not
 	fail no untitled folder
-has $f/controls/icons/items '''label=untitled folder'' icon=folder .*state=selected'
+has $fi/items '''label=untitled folder'' icon=folder .* selected$'
 # rename in place: a text field over the label; Enter renames
-if(test -d $f/controls/rename){
+if(test -d $f/rename){
 	pass
-	echo set projects > $f/controls/rename/ctl
-	echo submit > $f/controls/rename/ctl
+	echo projects > $f/rename/value
+	echo event submit 'win='^`{basename $f} 'node=rename' 'via=user' >$a/debug/inject
 	sleep 0.3
 	if(test -d $t/vol/projects)
 		pass
@@ -194,93 +208,94 @@ if not
 	fail no rename field
 
 test=duplicate
-echo select `{itemid $f b.txt} > $f/controls/icons/ctl
-echo invoke duplicate win^'='^`{basename $f} > $a/menus/file/ctl
+echo select `{itemid $f b.txt} > $fi/ctl
+choose duplicate $f
 sleep 0.3
 if(test -e $t/vol/'b copy.txt')
 	pass
 if not
 	fail no b copy.txt
-has $f/controls/icons/items '''label=b copy.txt'''
+has $fi/items '''label=b copy.txt'''
 
 test=info
-echo select `{itemid $f b.txt} > $f/controls/icons/ctl
-echo invoke info win^'='^`{basename $f} > $a/menus/file/ctl
+echo select `{itemid $f b.txt} > $fi/ctl
+choose info $f
 for(i in `{seq 50}) if(~ $#g 0) { g=`{winof info}; sleep 0.1 }
 if(~ $#g 0)
 	fail no info window
 g=$g(1)
 has $g/title '^b.txt Info$'
-has $g/controls/kind/value '^Plain text$'
-has $g/controls/size/value '^6 bytes$'
-has $g/controls/volume/value '^scratch$'
-has $g/controls/opens/value '^edit$'
-has $g/controls/mode/value '^-rw'
+has $g/kind/text '^Plain text$'
+has $g/size/text '^6 bytes$'
+has $g/volume/text '^scratch$'
+has $g/opens/text '^edit$'
+has $g/mode/text '^-rw'
 # renaming from Get Info
-echo set c.txt > $g/controls/name/ctl
-echo submit > $g/controls/name/ctl
+echo c.txt > $g/name/value
+echo event submit 'win='^`{basename $g} 'node=name' 'via=user' >$a/debug/inject
 sleep 0.3
 if(test -e $t/vol/c.txt)
 	pass
 if not
 	fail Get Info did not rename
 has $g/title '^c.txt Info$'
-has $f/controls/icons/items 'label=c.txt '
+has $fi/items 'label=c.txt '
 echo close > $g/ctl
 
 test=list
-echo invoke bylist win^'='^`{basename $f} > $a/menus/view/ctl
+choose bylist $f
 sleep 0.3
-has $f/controls/list/items '^c\.txt	(text|file)	' '^docs	folder	--$'
-has $a/menus/view/items '^item bylist .*check=on'
+has $f/scroll/list/items '^[0-9]+ c\.txt	(text|file)	' '^[0-9]+ docs	folder	--$'
+has $a/menu/view '^item bylist .*check=on'
 waitfor $ws 'view=list'
-echo invoke byicon win^'='^`{basename $f} > $a/menus/view/ctl
+choose byicon $f
 sleep 0.3
-has $f/controls/icons/items 'label=c.txt '
+has $fi/items 'label=c.txt '
 
 test=trash
 # Move to Trash puts it in the volume's own Trash; the folder view hides .trash
-d=$a/windows/1
-has $d/controls/icons/items 'label=Trash icon=trash '
-echo select `{itemid $f b' 'copy.txt} > $f/controls/icons/ctl
-echo invoke trash win^'='^`{basename $f} > $a/menus/file/ctl
+d=$a/win/main
+has $d/icons/items 'label=Trash icon=trash '
+echo select `{itemid $f b' 'copy.txt} > $fi/ctl
+choose trash $f
 sleep 0.5
 if(! test -e $t/vol/'b copy.txt' && test -d $t/vol/.trash)
 	pass
 if not
 	fail b copy.txt did not go to the Trash
-lacks $f/controls/icons/items 'label=.trash' '''label=b copy.txt'''
-waitfor $d/controls/icons/items 'label=Trash icon=trash-full '
-echo open `{itemid $d Trash} > $d/controls/icons/ctl
+lacks $fi/items 'label=.trash' '''label=b copy.txt'''
+waitfor $d/icons/items 'label=Trash icon=trash-full '
+echo open `{itemid $d Trash} > $d/icons/ctl
 for(i in `{seq 50}) if(~ $#tw 0) { tw=`{winof trash}; sleep 0.1 }
 if(~ $#tw 0)
 	fail no Trash window
 tw=$tw(1)
-has $tw/controls/icons/items '''label=b copy.txt'''
-has $tw/controls/status/value '^1 item\. '
+twi=`{icons $tw}
+has $twi/items '''label=b copy.txt'''
+has $tw/status/text '^1 item\. '
 # Put Back returns it where it was
-echo select `{itemid $tw b' 'copy.txt} > $tw/controls/icons/ctl
-echo invoke putback win^'='^`{basename $tw} > $a/menus/file/ctl
+echo select `{itemid $tw b' 'copy.txt} > $twi/ctl
+choose putback $tw
 sleep 0.5
 if(test -e $t/vol/'b copy.txt')
 	pass
 if not
 	fail Put Back did not put it back
-waitfor $f/controls/icons/items '''label=b copy.txt'''
-waitfor $d/controls/icons/items 'label=Trash icon=trash '
+waitfor $fi/items '''label=b copy.txt'''
+waitfor $d/icons/items 'label=Trash icon=trash '
 # Empty Trash asks first, then deletes
-echo select `{itemid $f b' 'copy.txt} > $f/controls/icons/ctl
-echo invoke trash win^'='^`{basename $f} > $a/menus/file/ctl
+echo select `{itemid $f b' 'copy.txt} > $fi/ctl
+choose trash $f
 sleep 0.5
-echo invoke emptytrash > $a/menus/special/ctl
+echo menu 'item=emptytrash' >$a/debug/inject
 for(i in `{seq 50}) if(~ $#al 0) { al=`{winof dialog}; sleep 0.1 }
 if(~ $#al 0)
 	fail no Empty Trash alert
 al=$al(1)
-has $al/controls/other/label '^Empty Trash$'
-echo activate > $al/controls/other/ctl
-waitfor $d/controls/icons/items 'label=Trash icon=trash '
-lacks $tw/controls/icons/items 'label='
+has $al/other/label '^Empty Trash$'
+echo click > $al/other/ctl
+waitfor $d/icons/items 'label=Trash icon=trash '
+lacks $twi/items 'label='
 echo close > $tw/ctl
 al=()
 
@@ -291,7 +306,7 @@ if(grep -s 'c\.txt x=300 y=200' $t/ws.new)
 	cat $t/ws.new > $ws
 if not
 	fail could not edit $ws
-waitfor $f/controls/icons/items 'label=c.txt icon=doc-text pos=300,200'
+waitfor $fi/items 'label=c.txt icon=doc-text pos=300,200'
 
 test=restart
 # window, view and positions come back after a restart
@@ -303,8 +318,9 @@ if(~ $#f2 0)
 	fail the folder window did not reopen
 f=$f2(1)
 has $f/title '^scratch$'
-has $f/rect '^80 60 520 360$'
-has $f/controls/icons/items 'label=c.txt icon=doc-text pos=300,200'
+has $f/bounds '^0 0 440 300$'
+fi=`{icons $f}
+has $fi/items 'label=c.txt icon=doc-text pos=300,200'
 # closing it means it stays closed
 echo close > $f/ctl
 waitfor $ws 'open=no'
@@ -318,27 +334,28 @@ echo data > $t/nw/x.txt
 echo 'volume=nw path='^$t^'/nw desktop=yes' >> $t/user/meta.ndb
 sleep 0.3
 startdesktop
-d=$a/windows/1
-waitfor $d/controls/icons/items 'label=nw '
-echo open `{itemid $d nw} > $d/controls/icons/ctl
+d=$a/win/main
+waitfor $d/icons/items 'label=nw '
+echo open `{itemid $d nw} > $d/icons/ctl
 for(i in `{seq 50}) if(~ $#f3 0) { f3=`{for(w in `{winof folder}) if(grep -s '^nw$' $w/title) echo $w}; sleep 0.1 }
 f=$f3(1)
-echo rename `{itemid $f x.txt} y.txt > $f/controls/icons/ctl
+fi=`{icons $f}
+echo rename `{itemid $f x.txt} y.txt > $fi/ctl
 for(i in `{seq 50}) if(~ $#al 0) { al=`{winof dialog}; sleep 0.1 }
 if(~ $#al 0)
 	fail no alert
 al=$al(1)
-cat $al/controls/msg*/value > $t/msg
+cat $al/msg*/text > $t/msg
 has $t/msg 'can''t be renamed' 'not supported'
-has $al/controls/other/label '^Copy and Delete$'
-has $f/controls/icons/items 'label=x.txt '
-echo activate > $al/controls/other/ctl
+has $al/other/label '^Copy and Delete$'
+has $fi/items 'label=x.txt '
+echo click > $al/other/ctl
 sleep 0.5
 if(test -e $t/nw/y.txt && ! test -e $t/nw/x.txt)
 	pass
 if not
 	fail copy and delete did not happen
-waitfor $f/controls/icons/items 'label=y.txt '
+waitfor $fi/items 'label=y.txt '
 stopdesktop
 unmount $t/nw >[2]/dev/null
 rm -f /srv/desktop-nw.$pid

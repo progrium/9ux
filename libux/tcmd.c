@@ -1729,10 +1729,13 @@ injectline(char *line)
 		e = injkey(t+1, nt-1);
 	else if(strcmp(t[0].s, "menu") == 0){
 		v = attr(t+1, nt-1, "item");
+		old = attr(t+1, nt-1, "win");
 		if(v == nil)
-			e = smprint("bad syntax: menu item=ID");
+			e = smprint("bad syntax: menu item=ID [win=NAME]");
+		else if(old != nil && winbyname(old) == nil)
+			e = smprint("not found: window %s", old);
 		else
-			emit("action", v, "-", "via=menu", nil, nil, 0, 0);
+			emit("action", v, "-", "via=menu", old, nil, 0, 0);
 	}else if(strcmp(t[0].s, "appearance") == 0){
 		v = attr(t+1, nt-1, "mode");
 		if(v == nil || !oneof(v, "light", "dark", nil, nil))

@@ -542,8 +542,10 @@ _uitreemenu(int i, char **id)
 		if(it->key != nil && it->key[0] != 0){
 			if(strlen(it->key) == 1)
 				fmtprint(&f, " key=cmd-%s", it->key);
+			else if(strcmp(it->key, "bs") == 0)
+				fmtprint(&f, " key=cmd-backspace");
 			else
-				fmtprint(&f, " key=%s", it->key);
+				fmtprint(&f, " key=cmd-%s", it->key);
 		}
 		if(!it->enabled)
 			fmtprint(&f, " enabled=off");
