@@ -8,6 +8,10 @@
  * that /debug/inject's tick moves.
  */
 
+#define emalloc	kemalloc
+#define erealloc	kerealloc
+#define estrdup	kestrdup
+
 typedef struct Prop Prop;
 typedef struct Node Node;
 typedef struct Win Win;
@@ -262,3 +266,20 @@ void	subflush(Req*);
 void	servesubs(void);
 int	anysub(void);
 char*	codeof(char*);
+void	startresponder(void);
+extern int	srvpid;
+
+/* fs.c */
+void	lockmodel(void);
+void	unlockmodel(void);
+
+/* cmd.c, for ui.c */
+void	closerequest(Win*, char*);
+void	quitrequest(char*);
+
+/* ui.c */
+extern int	drawing;
+void	uisync(void);
+void	uistart(void);
+void	uirun(void);
+char*	uibounds(Node*);

@@ -739,7 +739,16 @@ _flexnatural(Uxwin *w, int availw)
  */
 static char *divfiles[] = { nil };
 static Verb divverbs[] = { nil };
-Ctltype _divtype = { "div", divfiles, divverbs, nil, nil, nil, nil, nil, 0 };
+/* a press on a div, svg or styled-text node: activate, for a uitree host's on=click */
+int
+_spikemouse(Uxctl *c, Mouse *m)
+{
+	if((m->buttons & 7) && c->fn != nil)
+		_activate(c, UXui);
+	return 0;
+}
+
+Ctltype _divtype = { "div", divfiles, divverbs, nil, nil, nil, _spikemouse, nil, 0 };
 
 void
 _drawdiv(Uxctl *c, Rectangle r)
@@ -881,4 +890,75 @@ uxwinstyle(Uxwin *w, char *words)
 		werrstr("%s", err);
 	qunlock(&uxlk);
 	return err == nil ? 0 : -1;
+}
+
+/* replace a control's or a window's style, rather than add to it */
+int
+uxsetstyle(Uxctl *c, char *words)
+{
+	char *err;
+	Uxstyle s;
+
+	qlock(&uxlk);
+	_styledefault(&s);
+	err = _parsestyle(&s, words);
+	if(err == nil){
+		if(c->st == nil)
+			c->st = emalloc(sizeof *c->st);
+		*c->st = s;
+		c->w->dirty = 1;
+	}else
+		werrstr("%s", err);
+	qunlock(&uxlk);
+	if(ux.uikick)
+		nbsendul(ux.uikick, 1);
+	return err == nil ? 0 : -1;
+}
+
+int
+uxwinsetstyle(Uxwin *w, char *words)
+{
+	char *err;
+	Uxstyle s;
+
+	qlock(&uxlk);
+	_styledefault(&s);
+	err = _parsestyle(&s, words);
+	if(err == nil){
+		if(w->st == nil)
+			w->st = emalloc(sizeof *w->st);
+		*w->st = s;
+		w->dirty = 1;
+	}else
+		werrstr("%s", err);
+	qunlock(&uxlk);
+	if(ux.uikick)
+		nbsendul(ux.uikick, 1);
+	return err == nil ? 0 : -1;
+}
+
+/* where the last layout put a control, window-local */
+Rectangle
+uxctlrect(Uxctl *c)
+{
+	Rectangle r;
+
+	qlock(&uxlk);
+	r = c->dead ? ZR : _local(c);
+	qunlock(&uxlk);
+	return r;
+}
+
+/* run fn on the UI thread, soon */
+void
+uxcall(Uxfn *fn, void *arg)
+{
+	Uxev e;
+
+	memset(&e, 0, sizeof e);
+	qlock(&uxlk);
+	_notify(fn, arg, &e);
+	qunlock(&uxlk);
+	if(ux.uikick)
+		nbsendul(ux.uikick, 1);
 }

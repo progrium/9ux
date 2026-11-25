@@ -868,7 +868,7 @@ svgdraw(Uxwin *w, Image *dst, Svg *g, Rectangle r, ulong fg)
  */
 static char *svgfiles[] = { "src", nil };
 static Verb svgverbs[] = { nil };
-Ctltype _svgtype = { "svg", svgfiles, svgverbs, nil, nil, nil, nil, nil, 0 };
+Ctltype _svgtype = { "svg", svgfiles, svgverbs, nil, nil, nil, _spikemouse, nil, 0 };
 
 static Svg*
 svgof(Uxctl *c)
@@ -964,4 +964,20 @@ uxsvg(Uxwin *w, char *id, char *src)
 	c->svgsrc = doc;
 	qunlock(&uxlk);
 	return c;
+}
+
+void
+uxsetsvg(Uxctl *c, char *src)
+{
+	char *doc;
+
+	doc = src[0] == '<' ? estrdup(src) : readall(src);
+	qlock(&uxlk);
+	free(c->svgsrc);
+	c->svgsrc = doc;
+	_svgfree(c);
+	c->w->dirty = 1;
+	qunlock(&uxlk);
+	if(ux.uikick)
+		nbsendul(ux.uikick, 1);
 }

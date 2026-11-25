@@ -1,0 +1,72 @@
+#!/bin/rc
+# A uitree client: a mail screen made only through $ui files, in the
+# core profile. It logs the app's events to $work/uxkit.events.
+r=$ui/win/main
+echo window main 'title=''uitree on 9/UX''' 'size=860,560' >$ui/ctl
+
+# an icon set in the Lucide style, as svg nodes
+inbox='<svg viewBox=''0 0 24 24'' fill=''none'' stroke=''currentColor'' stroke-width=''2'' stroke-linecap=''round'' stroke-linejoin=''round''><path d=''M22 12h-6l-2 3h-4l-2-3H2''/><path d=''M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z''/></svg>'
+send='<svg viewBox=''0 0 24 24'' fill=''none'' stroke=''currentColor'' stroke-width=''2'' stroke-linecap=''round'' stroke-linejoin=''round''><path d=''M22 2 11 13''/><path d=''M22 2 15 22 11 13 2 9z''/></svg>'
+trash='<svg viewBox=''0 0 24 24'' fill=''none'' stroke=''currentColor'' stroke-width=''2'' stroke-linecap=''round'' stroke-linejoin=''round''><path d=''M3 6h18''/><path d=''M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6''/><path d=''M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2''/></svg>'
+logo='<svg viewBox=''0 0 32 32''><rect x=''1'' y=''1'' width=''30'' height=''30'' rx=''7'' fill=''#226666''/><circle cx=''16'' cy=''16'' r=''9'' fill=''#EEEE9E''/><path d=''M11.5 16.5l3 3 6-7'' fill=''none'' stroke=''#000000'' stroke-width=''2.5'' stroke-linecap=''round''/></svg>'
+
+echo 'set . : h-flex items-stretch size-full bg=background
+new div side : v-flex w=176 p=12 gap=8 bg=muted border-1 border-color=border
+new div side/brand : h-flex items-center gap=8
+new svg side/brand/logo : w=28 h=28
+new text side/brand/name text=Mail : text-lg font-bold
+new div main : v-flex flex-1 p=12 gap=10' >$r/ctl
+echo -n $logo >$r/side/brand/logo/src
+
+fn folder {
+	echo 'new div side/'^$1^' tag=folder:'^$1^' on=click : h-flex items-center gap=6 p=4
+new svg side/'^$1^'/icon : w=16 h=16
+new text side/'^$1^'/label text='^$2 >$r/ctl
+	echo -n $3 >$r/side/$1/icon/src
+}
+folder inbox Inbox $inbox
+folder sent Sent $send
+folder trash Trash $trash
+echo 'new spacer side/gap
+new text side/foot text=''3 messages'' : text-sm' >$r/ctl
+
+echo 'new div main/head : h-flex items-center gap=8
+new text main/head/title text=Inbox : text-xl font-bold
+new spacer main/head/gap
+new text main/head/count text=''2 unread'' : text-sm' >$r/ctl
+
+fn card {
+	echo 'new div main/'^$1^' tag=open:'^$1^' on=click : v-flex gap=2 p=8 border-1 border-color=border bg=background
+new text main/'^$1^'/from text='''^$2^''' : font-bold
+new text main/'^$1^'/subj text='''^$3^'''' >$r/ctl
+}
+card m1 'Rob Pike' 'The new window system'
+card m2 'Ken Thompson' 'Re: a smaller compiler'
+card m3 'Dennis Ritchie' 'Notes on the manual'
+
+echo 'new styled-text main/body : flex-1 p=8 border-1 border-color=border' >$r/ctl
+echo 'Every node here came through $ui: a ctl write made it, flexbox placed it, and libux drew it. A click on a card is an event with the card''s tag as its key.
+Styled text has runs in bold, italic, underlined and coloured text.' >$r/main/body/text
+echo '179 4 font-bold
+185 6 italic
+193 10 underline
+208 8 text-color=primary' >$r/main/body/runs
+
+# the event loop: a click on a card selects it, a click on a folder
+# names it in the heading
+cardstyle='v-flex gap=2 p=8 border-1 border-color=border'
+>$work/uxkit.events
+cat $ui/events | while(l=`{read}){
+	echo $l >>$work/uxkit.events
+	if(~ $l(1) click){
+		switch($l(2)){
+		case open:*
+			for(m in m1 m2 m3)
+				echo set main/$m : $cardstyle 'bg=background' >$r/ctl
+			echo set main/`{echo $l(2) | sed 's/^open://'} : $cardstyle 'bg=accent' >$r/ctl
+		case folder:*
+			f=`{echo $l(2) | sed 's/^folder://'}
+			cat $r/side/$f/label/text >$r/main/head/title/text
+		}
+	}
+}

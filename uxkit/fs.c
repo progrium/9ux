@@ -89,6 +89,7 @@ static Tab tab[] = {
 };
 
 static char *mtpt = "/mnt/ui";
+static char *srvname;
 
 static Faux*
 newaux(int k, int node, char *name)
@@ -559,6 +560,11 @@ content(Faux *a, long *len, char **err)
 	case Qtree:
 		return printtree(n);
 	case Qbounds:
+		if((s = uibounds(n)) != nil){
+			t = oneline(s);
+			free(s);
+			return t;
+		}
 		return oneline(n->bounds);
 	case Qprop:
 		return oneline(getprop(n, a->name));
@@ -1153,7 +1159,14 @@ fswstat(Req *r)
 	respond(r, nil);
 }
 
+static void
+fsstart(Srv*)
+{
+	startresponder();
+}
+
 static Srv fs = {
+	.start = fsstart,
 	.attach = fsattach,
 	.walk1 = fswalk1,
 	.clone = fsclone,
@@ -1168,37 +1181,40 @@ static Srv fs = {
 	.destroyfid = fsdestroyfid,
 };
 
-static void
-usage(void)
+void
+lockmodel(void)
 {
-	fprint(2, "usage: uxkit [-D] [-m mtpt] cmd [arg...]\n");
-	exits("usage");
+	srvacquire(&fs);
 }
 
 void
-main(int argc, char **argv)
+unlockmodel(void)
 {
-	char *cmd;
+	srvrelease(&fs);
+}
+
+static void
+forker(void (*fn)(void*), void *arg, int flag)
+{
+	procrfork(fn, arg, 256*1024, flag);
+}
+
+static void
+usage(void)
+{
+	fprint(2, "usage: uxkit [-dD] [-m mtpt] [-s srvname] cmd [arg...]\n");
+	threadexitsall("usage");
+}
+
+/* run the client, and exit with its status */
+static void
+client(void *v)
+{
+	char **argv, *cmd;
 	int pid;
 	Waitmsg *w;
 
-	ARGBEGIN{
-	case 'D':
-		chatty9p++;
-		break;
-	case 'm':
-		mtpt = EARGF(usage());
-		break;
-	default:
-		usage();
-	}ARGEND
-	if(argc < 1)
-		usage();
-	initapp();
-	if(access(mtpt, AEXIST) < 0)
-		close(create(mtpt, OREAD, DMDIR|0777));
-	postmountsrv(&fs, nil, mtpt, MREPL|MCREATE);
-	putenv("ui", mtpt);
+	argv = v;
 	switch(pid = fork()){
 	case -1:
 		sysfatal("fork: %r");
@@ -1210,12 +1226,47 @@ main(int argc, char **argv)
 		sysfatal("exec %s: %r", cmd);
 	}
 	while((w = wait()) != nil){
-		if(w->pid == pid){
-			if(w->msg[0] != 0)
-				exits(w->msg);
-			exits(nil);
-		}
+		if(w->pid == pid)
+			threadexitsall(w->msg[0] != 0 ? w->msg : nil);
 		free(w);
 	}
-	exits("no client");
+	threadexitsall("no client");
+}
+
+int mainstacksize = 64*1024;
+
+void
+threadmain(int argc, char **argv)
+{
+	ARGBEGIN{
+	case 'd':
+		drawing = 1;
+		break;
+	case 'D':
+		chatty9p++;
+		break;
+	case 'm':
+		mtpt = EARGF(usage());
+		break;
+	case 's':
+		srvname = EARGF(usage());
+		break;
+	default:
+		usage();
+	}ARGEND
+	if(argc < 1)
+		usage();
+	initapp();
+	if(drawing)
+		uistart();
+	if(access(mtpt, AEXIST) < 0)
+		close(create(mtpt, OREAD, DMDIR|0777));
+	fs.forker = forker;
+	threadpostmountsrv(&fs, srvname, mtpt, MREPL|MCREATE);
+	putenv("ui", mtpt);
+	if(!drawing)
+		client(argv);
+	proccreate(client, argv, 64*1024);
+	uirun();
+	threadexitsall(nil);
 }

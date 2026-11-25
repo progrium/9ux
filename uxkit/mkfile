@@ -1,8 +1,13 @@
 </$objtype/mkfile
 
 TARG=uxkit
-OFILES=fs.$O model.$O cmd.$O ev.$O
-HFILES=dat.h
+OFILES=fs.$O model.$O cmd.$O ev.$O ui.$O
+HFILES=dat.h ../libux/ux.h
+LIB=../libux/libux.a$O
+CFLAGS=$CFLAGS -I../libux
 BIN=/$objtype/bin
 
 </sys/src/cmd/mkone
+
+$LIB:
+	cd ../libux && mk

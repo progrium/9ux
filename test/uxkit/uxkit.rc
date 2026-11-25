@@ -1,0 +1,8 @@
+#!/bin/rc
+# uxkit drawing a uitree client: demo.rc builds a mail screen through
+# $ui, and uxkit draws it with libux. The tree is also posted at
+# /srv/uitree.$user, so a test can mount it. Arguments go to demo.rc.
+cd /mnt/term/cwd/uxkit
+O=`{sed -n 's/^O=//p' /$objtype/mkfile}
+resfs=../resfs/$O.resfs uxsysres=../assets/gen/system.rsrc uxpublic=1 \
+	exec ./$O.out -d -s uitree.$user rc /mnt/term/cwd/test/uxkit/demo.rc $* >[2]$work/uxkit.err

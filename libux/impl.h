@@ -471,6 +471,7 @@ int	_dragstart(Uxdrag*, Uxctl*);
 
 /* flex.c, svg.c, stext.c: the spike */
 extern Ctltype	_divtype, _svgtype, _stexttype;
+int	_spikemouse(Uxctl*, Mouse*);
 int	_parsecolor(char*, ulong*);
 void	_styledefault(Uxstyle*);
 char*	_parsestyle(Uxstyle*, char*);

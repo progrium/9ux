@@ -288,7 +288,7 @@ flow(Uxctl *c, int width, Rectangle *r)
 
 static char *stextfiles[] = { "text", "runs", nil };
 static Verb stextverbs[] = { nil };
-Ctltype _stexttype = { "styled-text", stextfiles, stextverbs, nil, nil, nil, nil, nil, 0 };
+Ctltype _stexttype = { "styled-text", stextfiles, stextverbs, nil, nil, nil, _spikemouse, nil, 0 };
 
 Point
 _stextsize(Uxctl *c, int availw)
@@ -313,4 +313,18 @@ uxstyledtext(Uxwin *w, char *id, char *text, char *runs)
 	c->runs = runs != nil ? estrdup(runs) : nil;
 	qunlock(&uxlk);
 	return c;
+}
+
+void
+uxsetstext(Uxctl *c, char *text, char *runs)
+{
+	qlock(&uxlk);
+	free(c->stext);
+	free(c->runs);
+	c->stext = estrdup(text);
+	c->runs = runs != nil ? estrdup(runs) : nil;
+	c->w->dirty = 1;
+	qunlock(&uxlk);
+	if(ux.uikick)
+		nbsendul(ux.uikick, 1);
 }

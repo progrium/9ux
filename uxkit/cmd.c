@@ -451,6 +451,18 @@ request(int kind, Win *w, char *via)
 	requests = r;
 }
 
+void
+closerequest(Win *w, char *via)
+{
+	request(Aclose, w, via);
+}
+
+void
+quitrequest(char *via)
+{
+	request(Aquit, nil, via);
+}
+
 /* answer seq=N: keep, or the request's own default */
 static char*
 answer(Win *w, int keep, int kind, char *arg)

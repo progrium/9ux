@@ -186,6 +186,12 @@ int	uxstyle(Uxctl*, char *words);
 Uxctl*	uxdiv(Uxwin*, char *id);
 Uxctl*	uxsvg(Uxwin*, char *id, char *src);	/* SVG text, or a file */
 Uxctl*	uxstyledtext(Uxwin*, char *id, char *text, char *runs);
+int	uxsetstyle(Uxctl*, char *words);	/* replaces; uxstyle adds */
+int	uxwinsetstyle(Uxwin*, char *words);
+void	uxsetsvg(Uxctl*, char *src);
+void	uxsetstext(Uxctl*, char *text, char *runs);
+Rectangle	uxctlrect(Uxctl*);
+void	uxcall(Uxfn*, void*);	/* fn(nil event, arg) on the UI thread */	/* window-local, from the last layout */
 
 Uxctl*	uxconsole(Uxwin*, char *id, Rectangle r);
 void	uxconswrite(Uxctl*, char *s, long n);	/* output, before what's typed; \b erases */

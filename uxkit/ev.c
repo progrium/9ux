@@ -345,6 +345,7 @@ sweep(void)
 		}
 	}
 	servesubs();
+	uisync();
 }
 
 static int
@@ -414,11 +415,44 @@ servesub(Sub *s)
 	return 1;
 }
 
+/*
+ * Replies go out on the server proc's descriptors, which the UI thread
+ * doesn't share; from anywhere else, the responder proc answers.
+ */
+int	srvpid;
+static Channel	*servec;
+
+static void
+responder(void*)
+{
+	Sub *s;
+
+	for(;;){
+		recvul(servec);
+		lockmodel();
+		for(s = subs; s != nil; s = s->next)
+			servesub(s);
+		unlockmodel();
+	}
+}
+
+void
+startresponder(void)
+{
+	srvpid = getpid();
+	servec = chancreate(sizeof(ulong), 1);
+	proccreate(responder, nil, 32*1024);
+}
+
 void
 servesubs(void)
 {
 	Sub *s;
 
+	if(servec != nil && getpid() != srvpid){
+		nbsendul(servec, 1);
+		return;
+	}
 	for(s = subs; s != nil; s = s->next)
 		servesub(s);
 }
