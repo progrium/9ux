@@ -399,15 +399,15 @@ _drawcons(Uxctl *c, Rectangle r)
 	w = c->w;
 	f = consfont(c);
 	vis = _vis(c);
-	draw(w->img, vis, _color(w, UXpaper), nil, ZP);
+	draw(w->img, vis, _color(w, UXcolwindow), nil, ZP);
 	if(f == nil || c->nline == 0)
 		return;
 	ht = f->height;
 	tabw = tabwidth(f);
 	focused = w->focus == c && active(w);
-	fg = _color(w, (c->state & Cenabled) ? UXink : UXcoldisabled);
-	bg = _color(w, UXpaper);
-	selbg = _color(w, focused ? UXcoltextselect : UXgrey1);
+	fg = _color(w, (c->state & Cenabled) ? UXcoltext : UXcoldisabled);
+	bg = _color(w, UXcolwindow);
+	selbg = _color(w, focused ? UXcoltextselect : UXcolface);
 	x0 = r.min.x + Pad;
 	i = (vis.min.y - (r.min.y + Padtop)) / ht;
 	if(i < 0)
@@ -451,7 +451,7 @@ _drawcons(Uxctl *c, Rectangle r)
 		for(; q < c->q0; q++)
 			x += c->text[q] == '\n' ? 0 : runew(f, c->text[q], x, tabw);
 		p = Pt(x0+x, r.min.y + Padtop + i*ht);
-		draw(w->img, Rect(p.x, p.y, p.x+1, p.y+ht), _color(w, UXink), nil, ZP);
+		draw(w->img, Rect(p.x, p.y, p.x+1, p.y+ht), _color(w, UXcoltext), nil, ZP);
 	}
 }
 

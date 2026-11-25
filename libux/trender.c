@@ -1693,6 +1693,7 @@ dosync(void)
 				syncover(u, w, o->kid[j]);
 	}
 	capisync();
+	uxsetdark(strcmp(effmode(), "dark") == 0);
 }
 
 static void

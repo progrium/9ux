@@ -19,6 +19,7 @@ OFILES=\
 	uxstyle.$O\
 	uxchrome.$O\
 	uxglyphs.$O\
+	uxtheme.$O\
 	xfid.$O\
 
 HFILES=dat.h\
@@ -37,6 +38,9 @@ syms:V:
 # 9/UX assets (assets/gen, made by S8's tools): glyphs and the bar's mark
 uxglyphs.$O:	../assets/gen/uxglyphs.c
 	$CC $CFLAGS -o $target ../assets/gen/uxglyphs.c
+
+uxtheme.$O:	../assets/gen/uxtheme.c ../assets/gen/uxstyle.h
+	$CC $CFLAGS -I../assets/gen -o $target ../assets/gen/uxtheme.c
 
 uxstyle.$O:	uxmark.h
 

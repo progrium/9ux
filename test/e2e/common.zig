@@ -150,7 +150,8 @@ pub fn waitItems(s: *Session, win: []const u8, needle: []const u8) !void {
 }
 
 /// The x centres of the menu bar's titles, from the screen: runs of
-/// black in the bar, apart by more than a letter gap (as test/devux does).
+/// ink in the bar (what isn't its background, in either theme), apart by
+/// more than a letter gap (as test/devux does).
 pub fn barTitles(s: *Session) ![8]i32 {
     const img = try s.screenshot();
     defer img.deinit(gpa);
@@ -163,7 +164,7 @@ pub fn barTitles(s: *Session) ![8]i32 {
         var ink = false;
         var y: i32 = 2;
         while (y < bar_h - 2) : (y += 1) {
-            if (img.at(x, y) == 0x000000) ink = true;
+            if (img.at(x, y) != img.at(x, 0)) ink = true; // not the bar: ink in either theme
         }
         if (!ink) continue;
         if (x - last > 8) {

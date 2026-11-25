@@ -7,7 +7,9 @@ Writes:
     gen/icons/NAME.SIZE.img       a8r8g8b8 image(6), colour, alpha mask
     gen/icons/NAME.SIZE.1.img     a8r8g8b8 image(6), the 1-bit form
     gen/patterns/NAME.img         r8g8b8 image(6), one 8x8 tile
-    gen/uxstyle.h                 colours and metrics for rio and libux
+    gen/patterns/NAME.dark.img    the same in the dark theme's colours
+    gen/uxstyle.h                 colours, roles and metrics for rio and libux
+    gen/uxtheme.c                 the light and dark themes' role values
     gen/uxcursors.c               Plan 9 Cursor structs
     gen/uxglyphs.c, uxglyphs.h    chrome glyph bitmaps
     gen/uxcursors.h               extern declarations for uxcursors.c
@@ -28,7 +30,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(__file__))
-from uxassets import (ASSETS, read_ndb, load_palette, load_metrics, load_icons,
+from uxassets import (ASSETS, read_ndb, hexrgb, load_roles, load_palette, load_metrics, load_icons,
                       load_cursors, load_patterns, load_glyphs,
                       write_image6_argb, write_image6_rgb)
 
@@ -87,9 +89,14 @@ def build(out):
                 write_image6_argb(os.path.join(out, "icons", "%s.%d%s.img" % (ic.name, size, suf)),
                                   g.w, g.h, icon_pixels(g, bychar, mono))
 
+    roles, darkpat = load_roles()
     for p in load_patterns():
         px = [bychar[p.grid.at(x, y)].rgb for y in range(p.grid.h) for x in range(p.grid.w)]
         write_image6_rgb(os.path.join(out, "patterns", p.name + ".img"),
+                         p.grid.w, p.grid.h, px)
+        px = [darkpat.get(bychar[p.grid.at(x, y)].name, bychar[p.grid.at(x, y)].rgb)
+              for y in range(p.grid.h) for x in range(p.grid.w)]
+        write_image6_rgb(os.path.join(out, "patterns", p.name + ".dark.img"),
                          p.grid.w, p.grid.h, px)
 
     # cursors as images, for rescomp
@@ -127,12 +134,22 @@ def build(out):
         r, g, b = c.rgb
         h.append("\tUX%s\t= 0x%02X%02X%02XFF," % (c.name, r, g, b))
     h.append("};\n")
-    h.append("/* roles: what each part of the chrome is drawn in (UXcolrole) */")
+    h.append("/*")
+    h.append(" * roles: what each part of the chrome is drawn in. UXcolrole is its")
+    h.append(" * value in the current theme, uxtheme: uxlight (the default) or uxdark,")
+    h.append(" * from gen/uxtheme.c. A program switches with uxtheme = uxdark.")
+    h.append(" */")
     h.append("enum {")
-    for e in read_ndb(os.path.join(ASSETS, "palette.ndb")):
-        if "role" in e:
-            h.append("\tUXcol%s\t= UX%s," % (cname(e["role"]), e["color"]))
+    for name, _, _ in roles:
+        h.append("\tUXR%s," % cname(name))
+    h.append("\tUXNrole,")
     h.append("};\n")
+    h.append("extern ulong uxlight[UXNrole];")
+    h.append("extern ulong uxdark[UXNrole];")
+    h.append("extern ulong *uxtheme;\n")
+    for name, _, _ in roles:
+        h.append("#define UXcol%s\t(uxtheme[UXR%s])" % (cname(name), cname(name)))
+    h.append("")
     h.append("/* metrics in pixels at 1x: see assets/metrics.ndb */")
     h.append("enum {")
     for k, v in load_metrics().items():
@@ -140,6 +157,18 @@ def build(out):
     h.append("};\n")
     with open(os.path.join(out, "uxstyle.h"), "w") as f:
         f.write("\n".join(h))
+
+    # uxtheme.c: the themes' role tables, in uxstyle.h's role order
+    t = [HEADER, "#include <u.h>", "#include <libc.h>", "#include \"uxstyle.h\"", ""]
+    for tname, idx in (("light", 1), ("dark", 2)):
+        t.append("ulong ux%s[UXNrole] = {" % tname)
+        for r in roles:
+            rr, g, b = r[idx]
+            t.append("\t0x%02X%02X%02XFF,\t/* %s */" % (rr, g, b, r[0]))
+        t.append("};\n")
+    t.append("ulong *uxtheme = uxlight;")
+    with open(os.path.join(out, "uxtheme.c"), "w") as f:
+        f.write("\n".join(t) + "\n")
 
     # uxcursors.c: Cursor{offset, clr, set}; set bits draw black and
     # clr bits white, as in cursor(2).

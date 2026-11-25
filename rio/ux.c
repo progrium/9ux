@@ -16,6 +16,7 @@
 #include "ux.h"
 
 int	uxmode;
+int	uxdarkmode;
 Rune	uxcmdkey = Kmod4;
 
 static	Uxsub	*subs[Nstream];
@@ -57,9 +58,17 @@ noquote(int)
 void
 uxinit(int on)
 {
+	char *s;
+
 	quotefmtinstall();
 	doquote = noquote;	/* quote only what tokenize needs (devux conventions) */
 	uxmode = on;
+	s = getenv("uxtheme");
+	if(s != nil && strcmp(s, "dark") == 0){
+		uxdarkmode = 1;
+		uxtheme = uxdark;
+	}
+	free(s);
 	syncc = chancreate(sizeof(int), 1);
 	threadcreate(uxsyncthread, nil, STACK);
 	lastscreen = screen->r;
@@ -460,7 +469,8 @@ uxctlread(int *np)
 {
 	char *s;
 
-	s = smprint("mode %s\ncmdkey %s\nclock %q\n", uxmode ? "on" : "off", keyname(uxcmdkey), uxclockstate());
+	s = smprint("mode %s\ntheme %s\ncmdkey %s\nclock %q\n", uxmode ? "on" : "off",
+		uxdarkmode ? "dark" : "light", keyname(uxcmdkey), uxclockstate());
 	*np = strlen(s);
 	return s;
 }
@@ -483,6 +493,19 @@ uxsetmode(int on)
 	uxchanged();
 }
 
+/* light (0) or dark (1): redraw what rio draws, and tell the apps */
+void
+uxsettheme(int dark)
+{
+	if(dark == uxdarkmode)
+		return;
+	uxdarkmode = dark;
+	uxtheme = dark ? uxdark : uxlight;
+	uxbardraw();
+	uxchrometheme();
+	uxpost(Sux, "theme mode=%s", dark ? "dark" : "light");
+}
+
 char*
 uxctlwrite(Window *own, char *line)
 {
@@ -503,6 +526,17 @@ uxctlwrite(Window *own, char *line)
 			uxsetmode(1);
 		else if(strcmp(f[1], "off") == 0)
 			uxsetmode(0);
+		else
+			return "bad value";
+		return nil;
+	}
+	if(strcmp(f[0], "theme") == 0){
+		if(nf != 2)
+			return "bad syntax";
+		if(strcmp(f[1], "light") == 0)
+			uxsettheme(0);
+		else if(strcmp(f[1], "dark") == 0)
+			uxsettheme(1);
 		else
 			return "bad value";
 		return nil;

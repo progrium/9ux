@@ -38,7 +38,7 @@ Image	*uxmark;
 static struct {
 	ulong	c;
 	Image	*i;
-} ucols[32];
+} ucols[128];
 static int ncols;
 
 static struct {
@@ -134,7 +134,7 @@ uxglyph(Image *dst, Point p, char *name, Image *col)
 		return;
 	r = Rpt(p, addpt(p, masks[i].size));
 	if(masks[i].fill != nil)
-		draw(dst, r, uxcolor(UXpaper), masks[i].fill, ZP);
+		draw(dst, r, uxcolor(UXcolwindow), masks[i].fill, ZP);
 	if(masks[i].ink != nil)
 		draw(dst, r, col, masks[i].ink, ZP);
 }

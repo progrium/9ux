@@ -206,7 +206,8 @@ void	uxsetchoice(Uxctl*, int);
 Uxctl*	uxcanvas(Uxwin*, char *id);	/* spike: uitree ops */
 void	uxsetops(Uxctl*, char *ops);
 void	uxpopmenu(Uxwin*, Point, char **items, int n, Uxfn*, void*);	/* "-" is a separator; UXaction, Uxev.n */
-void	uxcall(Uxfn*, void*);	/* fn(nil event, arg) on the UI thread */	/* window-local, from the last layout */
+void	uxcall(Uxfn*, void*);	/* fn(nil event, arg) on the UI thread */
+void	uxsetdark(int);	/* draw in the dark theme (1) or the light one (0) */	/* window-local, from the last layout */
 
 Uxctl*	uxconsole(Uxwin*, char *id, Rectangle r);
 void	uxconswrite(Uxctl*, char *s, long n);	/* output, before what's typed; \b erases */

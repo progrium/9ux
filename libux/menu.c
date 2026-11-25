@@ -134,11 +134,39 @@ barreader(void*)
 	close(fd);
 }
 
-/* /dev/ux/events: close boxes in rio's window chrome (devux 1.2), and focus */
+/* rio's theme changed (devux's theme event): set by tapi.c */
+void	(*_themehook)(char*);
+
+/* rio's theme, from /dev/ux/ctl's theme line: "light", "dark", or nil */
+char*
+_riotheme(void)
+{
+	char buf[256], *p;
+	int fd, n;
+
+	fd = open("/dev/ux/ctl", OREAD);
+	if(fd < 0)
+		return nil;
+	n = read(fd, buf, sizeof buf-1);
+	close(fd);
+	if(n <= 0)
+		return nil;
+	buf[n] = 0;
+	if((p = strstr(buf, "theme ")) == nil || (p != buf && p[-1] != '\n'))
+		return nil;
+	p += 6;
+	if(strncmp(p, "dark", 4) == 0)
+		return "dark";
+	if(strncmp(p, "light", 5) == 0)
+		return "light";
+	return nil;
+}
+
+/* /dev/ux/events: close boxes in rio's window chrome (devux 1.2), focus, and the theme */
 static void
 uxevreader(void*)
 {
-	char buf[8192], *p, *e;
+	char buf[8192], *p, *e, *q;
 	int fd, n, off;
 
 	threadsetname("uxdevuxevents");
@@ -154,6 +182,8 @@ uxevreader(void*)
 			*e = 0;
 			if(strstr(p, " close win=") != nil || strstr(p, " focus win=") != nil || strstr(p, " mode ux=") != nil)
 				sendp(ux.menuc, estrdup(p));
+			else if((q = strstr(p, " theme mode=")) != nil && _themehook != nil)
+				_themehook(strncmp(q+12, "dark", 4) == 0 ? "dark" : "light");
 			p = e+1;
 		}
 		off = n - (p-buf);

@@ -26,21 +26,24 @@ enum {
 	Maxkids	= 512,
 };
 
-/* theme tokens, mapped onto the 9/UX palette */
+/*
+ * theme tokens, mapped onto the 9/UX palette; the ones that change
+ * with the light and dark themes are roles, resolved when drawn
+ */
 static struct {
 	char	*name;
 	ulong	rgba;
 } tokens[] = {
-	"background",	UXpaper,
-	"foreground",	UXink,
-	"muted",	UXgrey1,
-	"muted-foreground",	UXgrey4,
+	"background",	UXrole(UXRwindow),
+	"foreground",	UXrole(UXRtext),
+	"muted",	UXrole(UXRface),
+	"muted-foreground",	UXrole(UXRmuted),
 	"primary",	UXdeep,
 	"primary-foreground",	UXpaper,
 	"accent",	UXbutter,
 	"accent-foreground",	UXink,
-	"border",	UXgrey3,
-	"ring",	UXteal,
+	"border",	UXrole(UXRdisabled),
+	"ring",	UXrole(UXRfocus),
 	"danger",	UXred,
 	"success",	UXolive,
 	"warning",	UXbutter,
@@ -780,30 +783,14 @@ _drawdiv(Uxctl *c, Rectangle r)
 	if(s->hasbg)
 		draw(w->img, r, _anycolor(w, s->bg), nil, ZP);
 	if(s->border)
-		border(w->img, r, s->border, _anycolor(w, s->hasbordercol ? s->bordercol : UXgrey3), ZP);
+		border(w->img, r, s->border, _anycolor(w, s->hasbordercol ? s->bordercol : UXcoldisabled), ZP);
 }
 
-/* a colour of any value, cached per window */
+/* a colour of any value, a theme role's (UXrole) included, cached per window */
 Image*
 _anycolor(Uxwin *w, ulong rgba)
 {
-	static struct {
-		Uxwin	*w;
-		ulong	rgba;
-		Image	*i;
-	} cache[64];
-	static int ncache;
-	int i;
-
-	for(i = 0; i < ncache; i++)
-		if(cache[i].w == w && cache[i].rgba == rgba)
-			return cache[i].i;
-	if(ncache == nelem(cache))
-		return _color(w, rgba);
-	cache[ncache].w = w;
-	cache[ncache].rgba = rgba;
-	cache[ncache].i = allocimage(w->d, Rect(0,0,1,1), w->img->chan, 1, rgba);
-	return cache[ncache++].i;
+	return _color(w, rgba);
 }
 
 /*

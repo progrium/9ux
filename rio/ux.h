@@ -139,11 +139,13 @@ struct Uxdata
 
 /* ux.c */
 extern int	uxmode;		/* 9/UX presentation and interception on */
+extern int	uxdarkmode;	/* drawing with the dark theme */
 extern Rune	uxcmdkey;	/* Command key rune; 0 for none */
 extern int	uxbarh;		/* height of the menu bar strip */
 extern Uxapp	*uxapps;
 
 void		uxinit(int);
+void		uxsettheme(int);
 void		uxchanged(void);
 void		uxpost(int, char*, ...);
 int		uxisdesktop(Window*);
@@ -207,6 +209,7 @@ void		uxchromefit(Window*);
 void		uxchromebottom(Window*);
 void		uxchromedel(int);
 void		uxchromeall(void);
+void		uxchrometheme(void);
 char*	uxchromectl(Window*, char**, int);
 char*	uxclockctl(char**, int);
 char*	uxclockstate(void);

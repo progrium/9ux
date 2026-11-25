@@ -1340,6 +1340,28 @@ ctlrun(Node *base, char *text, char *upath)
 /*
  * Theme, keys and menus.
  */
+
+/*
+ * The system's appearance changed (rio's theme, or debug/inject's
+ * appearance): apps whose pref is system follow it.
+ */
+void
+setsysmode(char *v)
+{
+	char *old, *s;
+
+	lockmodel();
+	old = estrdup(effmode());
+	mode = strcmp(v, "dark") == 0 ? "dark" : "light";
+	if(strcmp(old, effmode()) != 0){
+		s = smprint("mode=%s via=system", effmode());
+		emit("theme", "-", "-", s, nil, nil, 0, 1);
+		free(s);
+	}
+	free(old);
+	uisync();
+	unlockmodel();
+}
 char*
 settokens(char *text)
 {
@@ -1675,7 +1697,7 @@ char*
 injectline(char *line)
 {
 	Line *L;
-	int nl, nt, i, k;
+	int nl, nt, i;
 	Tok *t;
 	char *e, *v, *old, *file;
 	Win *w;
@@ -1743,19 +1765,8 @@ injectline(char *line)
 		v = attr(t+1, nt-1, "mode");
 		if(v == nil || !oneof(v, "light", "dark", nil, nil))
 			e = smprint("bad value: appearance mode=light|dark");
-		else{
-			old = effmode();
-			k = strcmp(old, v);
-			old = estrdup(old);
-			mode = strcmp(v, "dark") == 0 ? "dark" : "light";
-			if(strcmp(old, effmode()) != 0){
-				v = smprint("mode=%s via=system", effmode());
-				emit("theme", "-", "-", v, nil, nil, 0, 1);
-				free(v);
-			}
-			USED(k);
-			free(old);
-		}
+		else
+			setsysmode(v);
 	}else if(strcmp(t[0].s, "drag") == 0)
 		e = smprint("unsupported: no transfer layer");
 	else

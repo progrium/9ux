@@ -20,24 +20,67 @@ enum {
 	UXgrey5	= 0x444444FF,
 };
 
-/* roles: what each part of the chrome is drawn in (UXcolrole) */
+/*
+ * roles: what each part of the chrome is drawn in. UXcolrole is its
+ * value in the current theme, uxtheme: uxlight (the default) or uxdark,
+ * from gen/uxtheme.c. A program switches with uxtheme = uxdark.
+ */
 enum {
-	UXcoldesktop	= UXteal,
-	UXcoltitlebar	= UXbutter,
-	UXcoltitlelight	= UXcream,
-	UXcoltitlerule	= UXolive,
-	UXcoltitleoff	= UXgrey1,
-	UXcoltitletextoff	= UXgrey4,
-	UXcolselect	= UXnavy,
-	UXcolselecttext	= UXpaper,
-	UXcoltextselect	= UXbutter,
-	UXcolfield	= UXcream,
-	UXcolfocus	= UXteal,
-	UXcolface	= UXgrey1,
-	UXcoldialogband	= UXteal,
-	UXcoldisabled	= UXgrey3,
-	UXcoltrack	= UXgrey2,
+	UXRdesktop,
+	UXRwindow,
+	UXRcontrol,
+	UXRtext,
+	UXRsecondary,
+	UXRmuted,
+	UXRline,
+	UXRshadow,
+	UXRtitlebar,
+	UXRtitlelight,
+	UXRtitlerule,
+	UXRtitletext,
+	UXRtitleoff,
+	UXRtitletextoff,
+	UXRboxfill,
+	UXRselect,
+	UXRselecttext,
+	UXRtextselect,
+	UXRfield,
+	UXRfocus,
+	UXRface,
+	UXRdialogband,
+	UXRdisabled,
+	UXRtrack,
+	UXNrole,
 };
+
+extern ulong uxlight[UXNrole];
+extern ulong uxdark[UXNrole];
+extern ulong *uxtheme;
+
+#define UXcoldesktop	(uxtheme[UXRdesktop])
+#define UXcolwindow	(uxtheme[UXRwindow])
+#define UXcolcontrol	(uxtheme[UXRcontrol])
+#define UXcoltext	(uxtheme[UXRtext])
+#define UXcolsecondary	(uxtheme[UXRsecondary])
+#define UXcolmuted	(uxtheme[UXRmuted])
+#define UXcolline	(uxtheme[UXRline])
+#define UXcolshadow	(uxtheme[UXRshadow])
+#define UXcoltitlebar	(uxtheme[UXRtitlebar])
+#define UXcoltitlelight	(uxtheme[UXRtitlelight])
+#define UXcoltitlerule	(uxtheme[UXRtitlerule])
+#define UXcoltitletext	(uxtheme[UXRtitletext])
+#define UXcoltitleoff	(uxtheme[UXRtitleoff])
+#define UXcoltitletextoff	(uxtheme[UXRtitletextoff])
+#define UXcolboxfill	(uxtheme[UXRboxfill])
+#define UXcolselect	(uxtheme[UXRselect])
+#define UXcolselecttext	(uxtheme[UXRselecttext])
+#define UXcoltextselect	(uxtheme[UXRtextselect])
+#define UXcolfield	(uxtheme[UXRfield])
+#define UXcolfocus	(uxtheme[UXRfocus])
+#define UXcolface	(uxtheme[UXRface])
+#define UXcoldialogband	(uxtheme[UXRdialogband])
+#define UXcoldisabled	(uxtheme[UXRdisabled])
+#define UXcoltrack	(uxtheme[UXRtrack])
 
 /* metrics in pixels at 1x: see assets/metrics.ndb */
 enum {

@@ -32,19 +32,37 @@ color=grey5   char=5 rgb=444444 bit=0
 
 # Roles: what each part of the chrome is drawn in. gen/uxstyle.h has
 # these as UXcoltitlebar and so on, so rio and libux name the role, not
-# the colour, and a theme change is a change here.
-role=desktop       color=teal      # with sea dots: the Nine teal pattern
-role=titlebar      color=butter
-role=titlelight    color=cream     # 1 px line along the bar's top
-role=titlerule     color=olive
-role=titleoff      color=grey1     # inactive title bar
-role=titletextoff  color=grey4
-role=select        color=navy      # selected objects
-role=selecttext    color=paper
-role=textselect    color=butter    # selected text
-role=field         color=cream
-role=focus         color=teal
-role=face          color=grey1     # dialog and settings body
-role=dialogband    color=teal
-role=disabled      color=grey3
-role=track         color=grey2
+# the colour. Each role has two values: color, the palette colour it is
+# in the light theme (the default), and dark, its 24-bit value in the
+# dark theme. rio and libux switch between the two at run time (see
+# README.md, Themes); a theme change is a change here.
+
+role=desktop       color=teal    dark=234747  # with sea dots: the Nine teal pattern
+role=window        color=paper   dark=292929  # window content, menus, the menu bar, label plates
+role=control       color=paper   dark=292929  # button and check box faces, scroll thumbs
+role=text          color=ink     dark=E4E4DA  # text, carets, check marks
+role=secondary     color=grey5   dark=ABABAB  # secondary text, list headers
+role=muted         color=grey4   dark=8E8E8E  # thumb grips, marks
+role=line          color=ink     dark=45453F  # outlines and frames
+role=shadow        color=ink     dark=000000  # window and menu shadows
+role=titlebar      color=butter  dark=9A9A60
+role=titlelight    color=cream   dark=B0B07E  # 1 px line along the bar's top
+role=titlerule     color=olive   dark=6A6A3C
+role=titletext     color=ink     dark=16160C
+role=titleoff      color=grey1   dark=353535  # inactive title bar
+role=titletextoff  color=grey4   dark=8E8E8E
+role=boxfill       color=paper   dark=B4B488  # close and zoom boxes
+role=select        color=navy    dark=3249B8  # selected objects
+role=selecttext    color=paper   dark=FFFFFF
+role=textselect    color=butter  dark=58582F  # selected text
+role=field         color=cream   dark=212119
+role=focus         color=teal    dark=4A9C9C
+role=face          color=grey1   dark=353535  # dialog and settings body
+role=dialogband    color=teal    dark=4A9C9C
+role=disabled      color=grey3   dark=626262
+role=track         color=grey2   dark=434343
+
+# Desktop patterns in the dark theme: each pattern letter whose colour
+# has a value here is drawn in that value (gen/patterns/NAME.dark.img).
+
+pattern=dark teal=234747 sea=356666 deep=163030 grey4=2E2E2E grey3=3A3A3A

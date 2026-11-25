@@ -90,6 +90,7 @@ feature desktop
 feature menubar
 feature drag
 feature chrome
+feature theme
 ```
 
 ## ctl (`/dev/ux/ctl`)
@@ -98,6 +99,7 @@ Reading returns the current settings, one per line:
 
 ```text
 mode on
+theme light
 cmdkey mod4
 clock on
 ```
@@ -107,6 +109,7 @@ Commands:
 | Command | Meaning |
 |---|---|
 | `mode on` / `mode off` | Turn 9/UX presentation and interception on or off |
+| `theme light` / `theme dark` | Draw the menu bar and window chrome in the light theme (the default) or the dark one, and tell the apps (a `theme` event). rio starts in the theme `$uxtheme` names. See [assets/README.md](../../assets/README.md#themes-light-and-dark) |
 | `cmdkey key` | Set the Command key: `mod4` (default), `alt`, `ctl`, or `none` (no shortcuts) |
 | `clock on` / `clock off` / `clock at text...` | Show the menu bar's clock (day and time, such as `Tue 09:41`, the default), hide it, or freeze it at `text` (the rest of the line) for screenshots and tests |
 | `chrome [winid] on` / `chrome [winid] edge` / `chrome [winid] off` | Turn classic chrome on or off for a window (default: the fid's own window); `edge` leaves the border to the window's app. See [Window chrome](#window-chrome) |
@@ -138,6 +141,7 @@ changes. Messages:
 | `desktop` | `win` | The desktop was claimed (`win=0`: released) |
 | `screen` | `rect` | The screen was resized |
 | `mode` | `ux` | The mode changed (`ux=on` or `ux=off`) |
+| `theme` | `mode` | The theme changed (`mode=light` or `mode=dark`). libux apps follow it unless they chose their own (uitree's `theme/pref`) |
 | `chrome` | `win`, `chrome` | A window's chrome was turned on or off (`chrome=on` or `chrome=off`) |
 | `close` | `win` | The close box in a window's chrome was clicked (see [Window chrome](#window-chrome)) |
 
