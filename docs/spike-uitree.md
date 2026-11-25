@@ -124,9 +124,51 @@ The first redraw includes parsing every SVG and rasterizing it once. Set
   `spacer`, and making any of this reachable through files. The spike is
   C API only.
 
+## uxkit: uitree's conformance suite
+
+`uxkit/` is a uitree host for the file protocol (draft 0.2): a lib9p
+server that serves `$ui` and runs a client in it, in the form uitree's
+conformance suite drives (`uitree-headless CMD ARGS`). It claims `layer
+core`, `layer components` and `profile core`, so the suite runs the 18
+scripts a core host must pass and skips the 10 that need other profiles
+or the transfer layer.
+
+```sh
+h9 --rc 'cd uxkit && mk'                              # or scripts/test.sh build
+UITREE=../scratch/uitree test/conformance/run.sh      # all 28; args go to uitree's run
+```
+
+**Result: 18 passed, 0 failed, 10 skipped.** The skips are 09 forms, 10
+navigation, 11 overlays, 12 data, 13 layout, 16 transfer, 21 tree
+documents (needs form and nav), 22 canvas, 25 trace (needs form) and 28
+feedback.
+
+| File | What |
+| --- | --- |
+| `uxkit/model.c` | The app state: windows, node trees, props, theme, keys, menus, snapshots, the core descriptors, style and value checks, tree printing |
+| `uxkit/cmd.c` | The ctl grammar (tokens, here-values, all or nothing), the node, window and app verbs, requests, batches, documents, keys, menus, `/debug/inject` |
+| `uxkit/ev.c` | Subscriptions at the three grains, coalescing state events, blocking reads, `gone`, error events and the loud stderr lines |
+| `uxkit/fs.c` | The 9P file tree, and `main`: mount at `/mnt/ui`, run the client, exit with its status |
+| `test/conformance/run.sh` | Copies the suite to `.local/conformance` and runs it with uxkit in h9 |
+
+Notes from getting there:
+
+- A ctl write is all or nothing by snapshot: the whole app state is
+  copied before the write and put back if a line fails, and the events
+  the write made are held until it succeeds. Node ids survive a restore,
+  so open fids stay good. Batches use the same snapshot. Copying is cheap
+  at app-screen sizes; it would want a journal for very large trees.
+- uxkit draws nothing yet. It is the protocol half. Drawing its tree with
+  the spike's libux layout, svg and styled-text is the next step, and
+  doesn't change what the suite sees.
+- Where the spec leaves a format open, uxkit follows the goldens and
+  uitree's `GAPS.md`. `style/words` lists valued words as `NAME value`,
+  because the 06 check reads the first field.
+
 ## Next, if this goes ahead
 
-1. Serve `style`, `src`, `text` and `runs` as files, and `new` over the
-   ux.md tree. That makes this reachable from rc.
-2. Run uitree's `08-elements.rc` conformance test against it.
-3. Add `img`, `icon`, `scroll` and `spacer` to finish `core`.
+1. Draw uxkit's tree in a window with the spike's libux code, so the
+   same host serves the suite headless and draws for real.
+2. Add the next profiles' descriptors and behavior (`form` first: it
+   unlocks 09, 21 and 25).
+3. Replace the spike's C API in libux with uxkit's tree.
