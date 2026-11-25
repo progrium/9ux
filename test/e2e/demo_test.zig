@@ -61,7 +61,7 @@ test "e2e: the v0.1 demo" {
     gpa.free(try s.rc("mkdir -p /tmp/f && bind /mnt/ux/apps/`{ls -p /mnt/ux/apps | grep '^desktop-' | sed 1q} /tmp/f"));
     try s.waitRc("! grep -s '^win=0 ' /dev/ux/desktop/state", 10_000);
     var db: [32]u8 = undefined;
-    const desk = try desktopWin(s, "grep -s '^desktop$' $w/kind", &db);
+    const desk = try desktopWin(s, "~ $w */main", &db);
     try waitItems(s, desk, "label=home icon=disk");
     // not attached yet, so shown offline until it's opened (the label
     // is quoted: 'label=remote (offline)')
@@ -114,12 +114,9 @@ test "e2e: the v0.1 demo" {
     const app_out = try s.rc("ls -p /mnt/ux/apps | grep '^sample-' | sed 1q");
     defer gpa.free(app_out);
     const app = std.mem.trim(u8, app_out, " \n");
-    const swin_out = try rcf(s, "ls -p /mnt/ux/apps/{s}/windows | sed 1q", .{app});
-    defer gpa.free(swin_out);
-    const swin = std.mem.trim(u8, swin_out, " \n");
-    const ctl = try std.fmt.allocPrint(gpa, "/mnt/ux/apps/{s}/windows/{s}/controls", .{ app, swin });
+    const ctl = try std.fmt.allocPrint(gpa, "/mnt/ux/apps/{s}/win/main", .{app});
     defer gpa.free(ctl);
-    try waitRcf(s, 10_000, "test -e {s}/status/value", .{ctl});
+    try waitRcf(s, 10_000, "test -e {s}/status/text", .{ctl});
     // the bar follows the sample's focus
     try waitRcf(s, 10_000, "sed 1q /dev/ux/menubar/menus | grep -s '^focus .*app={s}'", .{app});
     try s.settle();
@@ -129,7 +126,7 @@ test "e2e: the v0.1 demo" {
     s.click(file, .left);
     harness.sleepMs(200);
     s.click(pt(file.x + 6, bar_h + 9 + 18 * 1), .left); // New
-    try waitRcf(s, 10_000, "grep -s '^new$' {s}/status/value", .{ctl});
+    try waitRcf(s, 10_000, "grep -s '^new$' {s}/status/text", .{ctl});
     s.saveScreen("e2e-sample");
 
     // 6. From rc: the apps, a text field's value, and a button pressed through ctl.
@@ -137,12 +134,12 @@ test "e2e: the v0.1 demo" {
     defer gpa.free(apps);
     try std.testing.expect(std.mem.indexOf(u8, apps, "desktop-") != null);
     try std.testing.expect(std.mem.indexOf(u8, apps, app) != null);
-    gpa.free(try rcf(s, "echo 'set ''from rc''' >{s}/name/ctl", .{ctl}));
+    gpa.free(try rcf(s, "echo 'set name ''value=from rc''' >{s}/ctl", .{ctl}));
     try waitRcf(s, 5_000, "~ `{{cat {s}/name/value}} 'from rc'", .{ctl});
-    gpa.free(try rcf(s, "cat {s}/save/events >$work/events.tmp & sleep 0.3; echo activate >{s}/save/ctl", .{ ctl, ctl }));
-    try waitRcf(s, 10_000, "grep -s '^saved from rc' {s}/status/value", .{ctl});
+    gpa.free(try rcf(s, "cat {s}/save/events >$work/events.tmp & sleep 0.3; echo click >{s}/save/ctl", .{ ctl, ctl }));
+    try waitRcf(s, 10_000, "grep -s '^saved from rc' {s}/status/text", .{ctl});
     // the press was also seen by an independent events reader
-    try waitRcf(s, 5_000, "grep -s 'activate' $work/events.tmp", .{});
+    try waitRcf(s, 5_000, "grep -s '^click ' $work/events.tmp", .{});
 
     // 7. Stock behaviour still holds: acme has its windows, the rc
     // window still takes wctl and typing.

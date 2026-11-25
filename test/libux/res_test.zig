@@ -18,13 +18,13 @@ test "libux: icons and an alert from resources" {
     try s.waitRc("test -e /srv/ux.$user.sample", 10_000);
     _ = try s.rc("mkdir -p /tmp/sample && mount /srv/ux.$user.sample /tmp/sample");
     // a selected icon is drawn darkened through its mask
-    _ = try s.rc("echo select sample >/tmp/sample/windows/1/controls/icons/ctl");
+    _ = try s.rc("echo select sample >/tmp/sample/win/main/files/icons/ctl");
     try s.expectGolden("test/libux/golden/sample.png", .{ .rect = rect(20, 20, 520, 440) });
 
     // About Sample…: ALRT 129, with the system's note icon (ID 1)
-    _ = try s.rc("echo invoke about-sample >/tmp/sample/menus/file/ctl");
+    _ = try s.rc("echo menu 'item=about-sample' >/tmp/sample/debug/inject");
     const ids = try s.waitWindows(2);
     gpa.free(ids);
-    try s.waitRc("test -e /tmp/sample/windows/2/controls/item3", 10_000);
+    try s.waitRc("test -e /tmp/sample/win/dialog-1/item3", 10_000);
     try s.expectGolden("test/libux/golden/alert.png", .{ .rect = rect(150, 150, 490, 290) });
 }

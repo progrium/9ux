@@ -177,6 +177,7 @@ struct App {
 	int	*win;
 	int	nwin;
 	Help	*help;
+	int	uitree;	/* its tree is uitree's (policy.md), not ux.md's */
 };
 
 /* per-fid state */
@@ -194,6 +195,7 @@ struct Fx {
 	int	depth;
 	int	isevents;
 	int	redact;		/* events: strip sensitive values */
+	int	blank;		/* a uitree secret value: reads are empty */
 	char	*pend;		/* redacted events not yet read */
 	long	npend;
 

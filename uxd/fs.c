@@ -447,6 +447,72 @@ sensitive(App *a, char *dir, Op *op)
 	return r;
 }
 
+/*
+ * uitree apps (policy.md). A node is a directory under win/; its files
+ * are its props. Its flags are its secret and sensitive files.
+ */
+enum {
+	Fsecret = 1<<0,
+	Fsensitive = 1<<1,
+};
+
+/* if path is a file of a node (win/W/.../FILE), the node's dir; else nil */
+static char*
+nodedir(char *path)
+{
+	char *p;
+
+	if(strncmp(path, "win/", 4) != 0 || strchr(path+4, '/') == nil)
+		return nil;
+	p = estrdup9p(path);
+	*strrchr(p, '/') = 0;
+	return p;
+}
+
+/* the files that hold a node's contents */
+static int
+isvaluefile(char *base)
+{
+	return strcmp(base, "value") == 0 || strcmp(base, "items") == 0
+		|| strcmp(base, "rows") == 0 || strcmp(base, "query") == 0;
+}
+
+/*
+ * Fsecret|Fsensitive for the node at dir, or -1 if we can't tell. A
+ * node's flags are words on the first line of its tree document
+ * (core.md, Documents: TYPE NAME words... props...). A node that is
+ * gone has none.
+ */
+static int
+nodeflags(App *a, char *dir, Op *op)
+{
+	char *p, *s, *nl, *f[64];
+	int i, n, fl;
+
+	p = smprint("%s/tree", dir);
+	s = readapphead(a->c, a->rootfid, p, op);
+	free(p);
+	if(s == nil){
+		if(strstr(op->err, "not found") != nil || strstr(op->err, "does not exist") != nil){
+			op->err[0] = 0;
+			return 0;
+		}
+		return -1;
+	}
+	if((nl = strchr(s, '\n')) != nil)
+		*nl = 0;
+	n = tokenize(s, f, nelem(f));
+	fl = 0;
+	for(i = 2; i < n; i++){
+		if(strcmp(f[i], "secret") == 0 || strcmp(f[i], "secret=on") == 0 || strcmp(f[i], "secret=true") == 0)
+			fl |= Fsecret;
+		if(strcmp(f[i], "sensitive") == 0 || strcmp(f[i], "sensitive=on") == 0 || strcmp(f[i], "sensitive=true") == 0)
+			fl |= Fsensitive;
+	}
+	free(s);
+	return fl;
+}
+
 static int
 helpright(char *class)
 {
@@ -518,34 +584,133 @@ verbright(App *a, char *path, char *verb, Op *op)
 	return -1;
 }
 
+/*
+ * uitree's here-values (core.md, Commands): a line ending in
+ * prop=<<WORD, or <<WORD, takes the lines up to one holding only WORD
+ * as a value, and they aren't commands. Returns 1 for such a line;
+ * otherwise 0, after adding the line's own WORDs to wait (in order).
+ */
+typedef struct Here Here;
+struct Here {
+	char	*w[16];
+	int	n;
+};
+
+static int
+inhere(Here *h, char *line)
+{
+	char *cp, *w[64], *p;
+	int j, n;
+
+	if(h->n > 0){
+		if(strcmp(line, h->w[0]) == 0){
+			free(h->w[0]);
+			h->n--;
+			memmove(h->w, h->w+1, h->n*sizeof h->w[0]);
+		}
+		return 1;
+	}
+	cp = estrdup9p(line);
+	n = getfields(cp, w, nelem(w), 1, " \t");
+	for(j = 0; j < n; j++)
+		if((p = strstr(w[j], "<<")) != nil && (p == w[j] || p[-1] == '=') && p[2] != 0
+		&& h->n < nelem(h->w))
+			h->w[h->n++] = estrdup9p(p+2);
+	free(cp);
+	return 0;
+}
+
+static void
+herefree(Here *h)
+{
+	while(h->n > 0)
+		free(h->w[--h->n]);
+}
+
 /* check every line of a ctl write; nil if all are allowed */
 static char*
 checkctl(Fx *f, char *data, long count, Op *op)
 {
 	char *s, *lines[256], *tok[2];
 	int i, n, need, rights;
+	Here h;
 
 	rights = rightsfor(f->att, f->app);
-	if(rights == Rall)
-		return nil;	/* the session: the app decides */
+	/*
+	 * The session lets a ux.md app decide. A uitree host hands uxd its
+	 * whole tree, so author verbs are refused to every attach here.
+	 */
+	if(rights == Rall && !f->app->uitree)
+		return nil;
 	s = emalloc9p(count+1);
 	memmove(s, data, count);
 	s[count] = 0;
 	n = getfields(s, lines, nelem(lines), 1, "\n");
+	memset(&h, 0, sizeof h);
 	for(i = 0; i < n; i++){
+		/* a here-value's body: inhere copies the line, tokenize then cuts it */
+		if(f->app->uitree && inhere(&h, lines[i]))
+			continue;
 		if(tokenize(lines[i], tok, nelem(tok)) < 1)
 			continue;
 		need = verbright(f->app, f->path, tok[0], op);
 		if(need == -2){
+			herefree(&h);
 			free(s);
 			return op->err;
 		}
 		if(need < 0 || (rights & need) != need){
+			herefree(&h);
 			free(s);
 			return "permission denied";
 		}
 	}
+	herefree(&h);
 	free(s);
+	return nil;
+}
+
+/*
+ * What a uitree app's public view allows an open (policy.md, Rights):
+ * nil, or the error. ctl writes are checked line by line when written.
+ * Writes need edit for a value file or a window's bounds, and are
+ * author-only otherwise, for every attach: uxd holds the author's tree.
+ * A secret node's contents read empty, a sensitive one's need the
+ * sensitive right; trace and clip carry contents too.
+ */
+static char*
+uitreeopen(Op *op, Fx *f, int rd, int wr, int rights)
+{
+	char *base, *dir, *p;
+	int fl, win;
+
+	base = basename(f->path);
+	p = f->path;
+	win = strncmp(p, "win/", 4) == 0 && strchr(p+4, '/') == strrchr(p, '/');
+	if(wr && strcmp(base, "ctl") != 0){
+		if(strcmp(base, "value") == 0 || win && strcmp(base, "bounds") == 0){
+			if(!(rights & Redit))
+				return "permission denied";
+		}else
+			return "permission denied";
+	}
+	if(!rd || (f->qid.type & QTDIR))
+		return nil;
+	if(f->depth == 1 && (strcmp(base, "trace") == 0 || strcmp(base, "clip") == 0)){
+		if(!(rights & Rsensitive))
+			return "permission denied";
+		return nil;
+	}
+	if(!isvaluefile(base) || (dir = nodedir(p)) == nil)
+		return nil;
+	fl = nodeflags(f->app, dir, op);
+	free(dir);
+	if(fl < 0)
+		return op->err[0] ? op->err : "permission denied";
+	if(fl & Fsecret)
+		f->blank = 1;
+	else if((fl & Fsensitive) && !(rights & Rsensitive))
+		return "permission denied";
 	return nil;
 }
 
@@ -557,7 +722,7 @@ passopen(Op *op, Fx *f)
 {
 	Req *r;
 	App *a;
-	char *base, *dir;
+	char *base, *dir, *e;
 	int mode, rd, wr, rights, s;
 	Msg *m;
 
@@ -576,7 +741,12 @@ passopen(Op *op, Fx *f)
 	}
 	rights = rightsfor(f->att, a);
 	base = basename(f->path);
-	if(wr && strcmp(base, "ctl") != 0){
+	if(a->uitree){
+		if((e = uitreeopen(op, f, rd, wr, rights)) != nil){
+			reply(op, e);
+			return;
+		}
+	}else if(wr && strcmp(base, "ctl") != 0){
 		if(strcmp(base, "value") == 0){
 			if(!(rights & Redit)){
 				reply(op, "permission denied");
@@ -587,7 +757,7 @@ passopen(Op *op, Fx *f)
 			return;
 		}
 	}
-	if(rd && !(rights & Rsensitive)
+	if(!a->uitree && rd && !(rights & Rsensitive)
 	&& (strcmp(base, "value") == 0 || strcmp(base, "items") == 0 || strcmp(base, "selection") == 0)
 	&& (dir = ctldir(f->path)) != nil){
 		s = sensitive(a, dir, op);
@@ -633,7 +803,7 @@ fsopen(Op *op)
 	}
 	switch(f->q){
 	case Qversion:
-		f->buf = estrdup9p("ux 1.0\nfeature grants\n");
+		f->buf = estrdup9p("ux 1.0\nfeature grants\nfeature uitree\n");
 		break;
 	case Qrights:
 		f->buf = rightstr(attrights(f->att), " ");
@@ -776,6 +946,72 @@ redact(Fx *f, char *line, Op *op)
 	return t;
 }
 
+/*
+ * A uitree event line (core.md, Events: name key path attrs... seq=N)
+ * with a secret node's values left out, and a sensitive one's without
+ * the sensitive right. seq= stays last. nil: the line as it is.
+ */
+static char*
+redactui(Fx *f, char *line, Op *op)
+{
+	char *tok[64], *cp, *win, *dir, *s, *t, *q;
+	int i, n, has, fl, hide;
+
+	cp = estrdup9p(line);
+	n = tokenize(cp, tok, nelem(tok));
+	win = nil;
+	has = 0;
+	for(i = 3; i < n; i++){
+		if(strncmp(tok[i], "win=", 4) == 0)
+			win = tok[i]+4;
+		if(issecretattr(tok[i]) || strncmp(tok[i], "row=", 4) == 0 || strncmp(tok[i], "query=", 6) == 0)
+			has = 1;
+	}
+	if(!has || n < 3 || strcmp(tok[2], "-") == 0){
+		free(cp);
+		return nil;
+	}
+	if(win == nil)
+		dir = estrdup9p(tok[2]);
+	else if(strcmp(tok[2], ".") == 0)
+		dir = smprint("win/%s", win);
+	else
+		dir = smprint("win/%s/%s", win, tok[2]);
+	fl = nodeflags(f->app, dir, op);
+	free(dir);
+	/* can't tell: leave the values out */
+	hide = fl < 0 || (fl & Fsecret) || (fl & Fsensitive) && !(rightsfor(f->att, f->app) & Rsensitive);
+	if(!hide){
+		free(cp);
+		return nil;
+	}
+	s = estrdup9p("");
+	for(i = 0; i < n; i++){
+		if(i >= 3 && (issecretattr(tok[i]) || strncmp(tok[i], "row=", 4) == 0
+		|| strncmp(tok[i], "query=", 6) == 0 || strncmp(tok[i], "redacted=", 9) == 0))
+			continue;
+		if(strncmp(tok[i], "seq=", 4) == 0){
+			t = smprint("%s redacted=on", s);
+			free(s);
+			s = t;
+		}
+		q = qtok(tok[i]);
+		t = smprint("%s%s%s", s, *s ? " " : "", q);
+		free(q);
+		free(s);
+		s = t;
+	}
+	if(strstr(s, " redacted=on") == nil){
+		t = smprint("%s redacted=on", s);
+		free(s);
+		s = t;
+	}
+	t = smprint("%s\n", s);
+	free(s);
+	free(cp);
+	return t;
+}
+
 /* move whole lines from f->pend into the reply */
 static int
 servepend(Op *op, Fx *f)
@@ -819,6 +1055,11 @@ passread(Op *op, Fx *f)
 
 	r = op->r;
 	a = f->app;
+	if(f->blank){
+		r->ofcall.count = 0;
+		reply(op, nil);
+		return;
+	}
 	if(f->isevents && f->npend > 0){
 		if(servepend(op, f))
 			return;
@@ -837,7 +1078,7 @@ passread(Op *op, Fx *f)
 	n = m->f.count;
 	if(f->qid.type & QTDIR)
 		fixdir(a, (uchar*)data, n);
-	else if(f->isevents && n > 0 && !(rightsfor(f->att, a) & Rsensitive)){
+	else if(f->isevents && n > 0 && (a->uitree || !(rightsfor(f->att, a) & Rsensitive))){
 		lines = emalloc9p(n+1);
 		memmove(lines, data, n);
 		lines[n] = 0;
@@ -850,7 +1091,7 @@ passread(Op *op, Fx *f)
 				*nl++ = 0;
 			else
 				nl = l+strlen(l);
-			red = redact(f, l, op);
+			red = a->uitree ? redactui(f, l, op) : redact(f, l, op);
 			if(red == nil)
 				red = smprint("%s\n", l);
 			out = erealloc9p(out, len+strlen(red));

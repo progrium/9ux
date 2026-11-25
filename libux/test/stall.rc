@@ -1,46 +1,48 @@
 #!/bin/rc
-# A reader that stops reading loses events (lost n=N) and stalls nothing.
+# A reader that stops reading stalls nothing: state events coalesce,
+# action events queue (core.md, Two kinds of event).
 rfork ne
 suite=stall
 . test/lib.rc
 startsample
-c=$app/windows/1/controls
+m=$app/win/main
 
 test=stalled-reader
 {
-	# fd 4 is never read while 300 changes happen
-	{for(i in `{seq 300}) echo 'set v'^$i} >$c/name/ctl
+	# fd 4 is never read while 100 clicks and 100 moves happen
+	for(i in `{seq 100}){
+		echo click >$m/save/ctl
+		echo move tmp $i^,40 >$m/files/icons/ctl
+	}
 	# the UI still answers, and a live reader still gets new events
-	same $c/name/value 'v300
+	sleep 0.3
+	same $m/status/text 'saved  (100)
 '
 	{
-		echo 'set after' >$c/name/ctl
+		echo click >$m/save/ctl
+		sleep 0.2
 		drain 5 $out/live
-	} <[5]$c/name/events
+	} <[5]$m/save/events
 	drain 4 $out/stalled
-} <[4]$c/name/events
-want '^[0-9]+ value ctl=windows/1/controls/name value=after$' $out/live
-want '^[0-9]+ lost n=[0-9]+$' $out/stalled
-dontwant 'resync' $out/stalled
-
-test=lost-then-continues
-{
-	{for(i in `{seq 300}) echo 'set w'^$i} >$c/name/ctl
-	drain 4 $out/x
-	echo 'set final' >$c/name/ctl
-	drain 4 $out/y
-} <[4]$c/name/events
-want '^[0-9]+ lost n=' $out/x
-want 'value=final$' $out/y
+} <[4]$app/events
+want '^click - save via=ctl win=main seq=[0-9]+$' $out/live
+# every click is there; the moves are one, the last
+grep -c '^click ' $out/stalled >$out/n
+same $out/n '101
+'
+grep -c '^move ' $out/stalled >$out/n
+same $out/n '1
+'
+want '^move - files/icons item=tmp pos=100,40 ' $out/stalled
 
 test=flush
 # a blocked read is interrupted cleanly
 {
-	dd -quiet 1 -bs 8192 -count 1 -if /fd/4 >/dev/null	# resync
-	@{ sleep 0.3; echo 'set flushed' >$c/name/ctl } &
-	dd -quiet 1 -bs 8192 -count 1 -if /fd/4 >$out/f
-} <[4]$c/name/events
-want 'value=flushed' $out/f
+	drain 4 /dev/null	# resync
+	@{ sleep 0.3; echo click >$m/save/ctl } &
+	drain 4 $out/f
+} <[4]$m/save/events
+want '^click - save ' $out/f
 
 echo quit >$app/ctl
 done

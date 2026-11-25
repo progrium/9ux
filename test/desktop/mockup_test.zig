@@ -31,14 +31,14 @@ test "desktop: the desktop mockup" {
 
     // both folder windows open, plan9 in front with README selected,
     // and the sources list with its README row selected
-    const icons = "`{for(w in /tmp/f/windows/*) if(grep -s 'label=Notes ' $w/controls/icons/items) echo $w}";
-    const list = "`{for(w in /tmp/f/windows/*) if(test -e $w/controls/list) echo $w}";
+    const icons = "`{for(w in /tmp/f/win/folder-*) if(grep -s 'label=Notes ' $w/scroll/icons/items) echo $w}";
+    const list = "`{for(w in /tmp/f/win/folder-*) if(test -e $w/scroll/list) echo $w}";
     try waitTree(s, "~ " ++ icons ++ " /tmp/*");
     try waitTree(s, "~ " ++ list ++ " /tmp/*");
-    try waitTree(s, "grep -s '^README' " ++ list ++ "^/controls/list/items");
-    gpa.free(try s.rc("w=" ++ list ++ "; echo select `{grep -n '^README' $w/controls/list/items | sed 's/:.*//; s/$/-1/' | hoc} >$w/controls/list/ctl"));
-    gpa.free(try s.rc("w=" ++ icons ++ "; echo front >$w/ctl; echo select `{grep 'label=README ' $w/controls/icons/items | awk '{print $2}'} >$w/controls/icons/ctl"));
-    try waitTree(s, "w=" ++ icons ++ "; grep -s '^i[0-9]+$' $w/controls/icons/selection");
+    try waitTree(s, "grep -s '^[0-9]+\tREADME' " ++ list ++ "^/scroll/list/items");
+    gpa.free(try s.rc("w=" ++ list ++ "; echo set scroll/list 'value='^`{grep '^[0-9]+\tREADME' $w/scroll/list/items | awk '{print $1}'} >$w/ctl"));
+    gpa.free(try s.rc("w=" ++ icons ++ "; echo activate >$w/ctl; echo select `{grep 'label=README ' $w/scroll/icons/items | awk '{print $1}'} >$w/scroll/icons/ctl"));
+    try waitTree(s, "w=" ++ icons ++ "; grep -s 'selection=i[0-9]+ ' $w/scroll/icons/tree");
     try s.settle();
     s.saveScreen("desktop-mockup");
     try s.expectGolden("test/desktop/golden/desktop.png", .{});

@@ -1,9 +1,18 @@
 # ux: app control trees and `/mnt/ux`
 
-**Protocol:** `ux 1.0` · **Servers:** every libux app (its own tree),
-and uxd (`/mnt/ux`, aggregating them) · **Fake:**
+**Protocol:** `ux 1.0` · **Servers:** uxd (`/mnt/ux`, aggregating the
+apps' trees), and `test/fakes/fakeapp` · **Fake:**
 [`test/fakes/fakeapp`](../../test/fakes/) · **Conventions:**
 [README.md](README.md)
+
+> **libux apps now serve uitree trees.** Since migration step 4
+> ([spike-uitree.md](../spike-uitree.md#libux-on-the-tree)), libux,
+> and so Desktop, Run Command and every other libux app, serves its
+> windows and controls as a uitree node tree (`win/NAME/...`), which uxd
+> takes as described under § Registration, uitree apps and § Rights,
+> uitree apps. The app tree this document describes (`windows/N/controls/...`)
+> is what fakeapp still serves and uxd still accepts; `/mnt/ux` itself
+> is unchanged.
 
 Every 9/UX application serves its controls (windows, buttons, text
 fields, menus) as a 9P tree. The on-screen UI and a shell script see the
@@ -388,6 +397,16 @@ to 1 s), mounts that public service on `/mnt/ux` again (registering is
 open to every attach, so the app needs no more than that), and registers again with `id=` set to its old
 ID. Nothing in the app is lost, and its app ID normally doesn't change.
 
+**uitree apps.** A uitree host (libux, and so every libux app and
+uxkit) registers the same way, with a
+`version` whose first line is `uitree 1.x`; uxd accepts both, and also
+uitree's own form of the command, `register NAME srv=PATH [id=APPID]`
+([policy.md](https://github.com/progrium/scratch/blob/main/uitree/protocols/policy.md#registration)).
+Its tree under `apps/<appid>/` is uitree's (`win/NAME/...`), and its
+windows map by `winid` like any app's. uxd's `version` says
+`feature uitree`. Policy for these trees is below (§ Rights, uitree
+apps).
+
 **Without uxd**, an app runs normally and is simply not visible in
 `/mnt/ux`. For tests and debugging, libux can instead post its server
 permanently as `/srv/ux.$user.$name` (environment `uxpublic=1`), which
@@ -470,6 +489,26 @@ uxd included, so `value` always reads empty and its `value` events never
 carry a value. Its `value` events are still sent, with `redacted=on`,
 so watchers know it changed. Its `type`, `state`, `label` and `rect`
 stay visible.
+
+**uitree apps.** The same rights apply to a uitree app's tree, mapped
+onto uitree's shape (policy.md, Rights):
+
+- A `ctl` write anywhere (the app's, a window's, a node's, `over/`'s)
+  is checked line by line against that `ctl`'s help, `verb class` per
+  line, as above. The lines of a here-value (`prop=<<WORD` up to
+  `WORD`) are a value, not commands. Verbs of class `author` (`new`,
+  `delete`, `tree`, `window`, `begin`, ...) are refused on every
+  attach, the session's included: uxd holds the host's whole tree, so
+  the shape stays the app's own.
+- Other writes need `edit` for a node's `value` or a window's `bounds`,
+  and are refused otherwise, on every attach.
+- A node flagged `secret` (a word on the first line of its `tree`
+  document) reads empty in `value`, `items`, `rows` and `query`, on
+  every attach. A node flagged `sensitive` needs the `sensitive` right
+  for those. `trace` and `clip` need `sensitive` too.
+- Event lines from a secret node, and from a sensitive one without the
+  right, lose `value=`, `sel=`, `item=`, `items=`, `row=` and `query=`
+  and gain `redacted=on`, placed before `seq=`, which stays last.
 
 Display focus is not authority: a client's rights come only from how it
 attached, never from which window has focus.

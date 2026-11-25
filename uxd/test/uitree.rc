@@ -1,0 +1,146 @@
+#!/bin/rc
+# uitree apps beside ux.md apps (policy.md): uxkit registers its tree
+# with uxd, its windows map like any app's, rights come from each ctl's
+# help, author verbs are refused to every attach, secret values read
+# empty, and secret values in events are redacted.
+rfork ne
+suite=uitree
+. ../test/fakes/test/lib.rc
+. test/setup.rc
+uxkit=../uxkit/$O.out
+startuxd
+startapp 7
+waitfor /mnt/ux/apps/fake-1
+
+# the client: a login window, then it waits for uxkit to quit it
+cat >$out/login.rc <<'EOF'
+#!/bin/rc
+echo 'set . title=Login
+new button ok label=OK tag=ok
+new input name value=before
+new input pw secret value=hunter2' >$ui/win/main/ctl
+cat $ui/events >$ui^.events
+EOF
+srvname=uitree.$user.$pid
+mkdir -p $out/ui
+$uxkit -d -m $out/ui -s $srvname rc $out/login.rc >[2]$out/uxkit.err &
+waitfor /mnt/ux/apps/login-1
+mount /srv/$srvname $out/ui
+k=$out/ui
+u=/mnt/ux
+a=$u/apps/login-1
+m=$a/win/main
+p=$out/pubmnt
+mkdir -p $p
+mount /srv/uxd.$user $p
+pm=$p/apps/login-1/win/main
+
+test=coexist
+ls $u/apps >$out/l
+want '/fake-1$' $out/l
+want '/login-1$' $out/l
+sed 1q $a/version >$out/v
+same $out/v 'uitree 1.0
+'
+same $u/apps/fake-1/version 'ux 1.0
+feature menus
+feature value-write
+'
+want '^window win=7 app=fake-1$' $u/windows
+n=0
+while(! grep -s 'app=login-1' $u/windows && ! ~ $n 30){
+	sleep 0.1
+	n=`{echo $n+1 | hoc}
+}
+want '^window win=[0-9]+ app=login-1$' $u/windows
+
+test=public-reads
+same $pm/ok/label 'OK
+'
+same $pm/name/value 'before
+'
+want '^click activate$' $pm/ok/ctl
+want '^set edit$' $pm/ok/ctl
+want '^new author$' $pm/ctl
+
+test=secret
+# the author reads it; nobody through uxd does
+same $k/win/main/pw/value 'hunter2
+'
+same $pm/pw/value ''
+same $m/pw/value ''
+
+test=public-writes-refused
+fails 'permission denied' echo click >$pm/ok/ctl
+fails 'permission denied' echo set . 'label=x' >$pm/ok/ctl
+fails 'permission denied' rc -c 'echo x >'$pm/name/value
+fails 'permission denied' rc -c 'echo quit >'$p/apps/login-1/ctl
+fails 'permission denied' mkdir $pm/nope
+same $pm/name/value 'before
+'
+
+test=session
+# the session activates and edits, but the tree's shape is the author's
+echo click >$m/ok/ctl
+waitfor $k^.events
+n=0
+while(! grep -s '^click ok ok via=ctl win=main' $k^.events && ! ~ $n 30){
+	sleep 0.1
+	n=`{echo $n+1 | hoc}
+}
+want '^click ok ok via=ctl win=main' $k^.events
+echo set name 'value=after' >$m/ctl
+same $k/win/main/name/value 'after
+'
+fails 'permission denied' echo new button z >$m/ctl
+fails 'permission denied' echo delete ok >$m/ctl
+fails 'permission denied' rc -c 'echo z >'$m/ok/label
+fails 'permission denied' mkdir $m/nope
+# a here-value's body isn't a command
+echo 'set name value=<<END
+two words
+END' >$m/ctl
+same $k/win/main/name/value 'two words
+'
+
+test=grant
+token=`{<>[3]$u/grants/new {
+	echo grant 'rights=activate' 'app=login*' >[1=3]
+	dd -quiet 1 -bs 8192 -count 1 -if /fd/3
+}}
+g=$out/gmnt
+mkdir -p $g
+mount /srv/uxd.$user $g $token
+echo click >$g/apps/login-1/win/main/ok/ctl
+fails 'permission denied' echo set name 'value=x' >$g/apps/login-1/win/main/ctl
+unmount $g
+
+test=redact
+{
+	echo event change 'win=main' 'node=pw' 'value=s3cret' 'via=user' >$k/debug/inject
+	echo event change 'win=main' 'node=name' 'value=plain' 'via=user' >$k/debug/inject
+	sleep 0.3
+	drain 4 $out/e
+} <[4]$pm/events
+want '^change - pw via=user win=main redacted=on seq=[0-9]+$' $out/e
+dontwant s3cret $out/e
+want '^change - name value=plain via=user win=main seq=[0-9]+$' $out/e
+{
+	echo event change 'win=main' 'node=pw' 'value=s3cret' 'via=user' >$k/debug/inject
+	sleep 0.3
+	drain 4 $out/e2
+} <[4]$m/events
+want 'redacted=on' $out/e2
+dontwant s3cret $out/e2
+
+test=unregister
+echo quit >$k/ctl
+waitgone $a
+ls $u/apps >$out/l
+want '/fake-1$' $out/l
+dontwant login $u/windows
+
+unmount $p
+unmount $k >[2]/dev/null
+cleanup
+done

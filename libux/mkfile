@@ -9,16 +9,27 @@ OFILES=\
 	ctl.$O\
 	draw.$O\
 	drag.$O\
+	flex.$O\
+	stext.$O\
+	svg.$O\
 	ev.$O\
 	menu.$O\
 	obj.$O\
 	reg.$O\
 	res.$O\
-	srv.$O\
+	widget.$O\
 	win.$O\
 	uxglyphs.$O\
+	tapi.$O\
+	tcanvas.$O\
+	tcatalog.$O\
+	tcmd.$O\
+	tev.$O\
+	tfs.$O\
+	tmodel.$O\
+	trender.$O\
 
-HFILES=ux.h impl.h ../assets/gen/uxstyle.h ../assets/gen/uxglyphs.h
+HFILES=ux.h impl.h tree.h dx.h undx.h ../assets/gen/uxstyle.h ../assets/gen/uxglyphs.h
 CFLAGS=$CFLAGS -I../assets/gen
 
 all:V: $LIB

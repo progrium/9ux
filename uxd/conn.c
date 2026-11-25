@@ -478,7 +478,7 @@ tstat(Conn *c, ulong fid, Op *op)
  * ctl help. Returns nil with op->err set. The app may go away while
  * this waits on it, so it holds c until it's done.
  */
-static char *readapp1(Conn*, ulong, char*, Op*);
+static char *readapp1(Conn*, ulong, char*, Op*, long);
 
 char*
 readapp(Conn *c, ulong fid, char *path, Op *op)
@@ -490,13 +490,30 @@ readapp(Conn *c, ulong fid, char *path, Op *op)
 		return nil;
 	}
 	connhold(c);
-	s = readapp1(c, fid, path, op);
+	s = readapp1(c, fid, path, op, 64*1024);
 	connfree(c);
 	return s;
 }
 
+/* the same, but only the first 8K: for the head of a long file */
+char*
+readapphead(Conn *c, ulong fid, char *path, Op *op)
+{
+	char *s;
+
+	if(c == nil){
+		seterr(op, "gone");
+		return nil;
+	}
+	connhold(c);
+	s = readapp1(c, fid, path, op, -8192);
+	connfree(c);
+	return s;
+}
+
+/* max < 0: stop after -max bytes instead of failing */
 static char*
-readapp1(Conn *c, ulong fid, char *path, Op *op)
+readapp1(Conn *c, ulong fid, char *path, Op *op, long max)
 {
 	char *names[MAXWELEM], *p, *s;
 	ulong nf;
@@ -537,7 +554,7 @@ readapp1(Conn *c, ulong fid, char *path, Op *op)
 			freemsg(m);
 			break;
 		}
-		if(tot+n > 64*1024){
+		if(max > 0 && tot+n > max){
 			freemsg(m);
 			free(s);
 			tclunk(c, nf);
@@ -548,6 +565,8 @@ readapp1(Conn *c, ulong fid, char *path, Op *op)
 		memmove(s+tot, m->f.data, n);
 		tot += n;
 		freemsg(m);
+		if(max < 0 && tot >= -max)
+			break;
 	}
 	tclunk(c, nf);
 	if(s == nil)

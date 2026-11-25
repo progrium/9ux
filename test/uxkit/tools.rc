@@ -1,0 +1,48 @@
+#!/bin/rc
+# A uitree client for the rest: a sidebar, a toolbar with a tooltip, a
+# breadcrumb, a number input, a combobox and a canvas, drawn by uxkit.
+# It logs the app's events to $work/uxkit.events.
+r=$ui/win/main
+echo window main 'title=Projects' 'size=720,480' >$ui/ctl
+
+echo 'set . : h-flex items-stretch size-full bg=background
+new sidebar side
+new sidebar-group side/work label=Work
+new sidebar-item side/work/inbox tag=go:inbox label=Inbox active=on badge=3
+new sidebar-item side/work/sent tag=go:sent label=Sent
+new sidebar-group side/more label=More
+new sidebar-item side/more/arch tag=go:arch label=Archive
+new div main : v-flex flex-1 gap=10 p=12
+new toolbar main/tools
+new button main/tools/new tag=new label=New
+new button main/tools/del tag=del label=Delete
+new breadcrumb main/crumbs tag=crumbs
+new div main/row : h-flex items-center gap=8
+new text main/row/l text=Copies : w=70
+new number-input main/row/n tag=copies value=5 min=1 max=9
+new div main/row2 : h-flex items-center gap=8
+new text main/row2/l text=Country : w=70
+new combobox main/row2/c tag=country placeholder=Search…
+new canvas main/chart tag=chart : w=400 h=140' >$r/ctl
+
+echo 'home|Home
+proj|Projects
+uitree|uitree' | tr '|' '	' >$r/main/crumbs/items
+echo 'fr|France
+de|Germany
+fi|Finland
+jp|Japan' | tr '|' '	' >$r/main/row2/c/items
+echo 'rect   bg    0 0 400 140  fill=muted
+rect   card  20 20 120 80  fill=background radius=6 border=border
+path   spark M160,110 L200,70 L240,90 L280,40 L320,60  stroke=primary width=2
+circle dot   280 40 5  fill=primary
+text   lbl   30 44 ''Revenue''  size=13 color=foreground
+polygon tri  340 110 380 110 360 80  fill=accent' >$r/main/chart/ops
+echo mouse-down click >$r/main/chart/on
+
+echo 'new tooltip over/tip anchor=main/tools/del text=''Delete the selected project''' >$r/ctl
+
+>$work/uxkit.events
+cat $ui/events | while(l=`{read}){
+	echo $l >>$work/uxkit.events
+}

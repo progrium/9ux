@@ -37,10 +37,10 @@ fn slowDrag(s: *Session, from: harness.Point, to: harness.Point) void {
 /// Makes a Desktop window current with a click in its status line (as
 /// in stock rio, the click that makes a window current goes no further).
 fn activate(s: *Session, win: []const u8) !void {
-    const r = try c.two(s, "cat /tmp/f/windows/{s}/rect", .{win});
+    const r = try c.winRect(s, win, false);
     s.click(pt(r.x + 300, r.y + 12), .left);
-    c.waitRcf(s, 5_000, "grep -s current /tmp/f/windows/{s}/state", .{win}) catch |e| {
-        const d = s.rc("cat /dev/ux/drag/state /dev/ux/windows; cat /tmp/f/windows/*/state") catch null;
+    c.waitRcf(s, 5_000, "id=`{{awk '$1 == \"{s}\" {{print $2}}' /tmp/f/debug/windows}}; grep -s '^window win='^$id^' .*state=.*current' /dev/ux/windows", .{win}) catch |e| {
+        const d = s.rc("cat /dev/ux/drag/state /dev/ux/windows; cat /tmp/f/debug/windows") catch null;
         if (d) |x| {
             std.debug.print("rio and Desktop:\n{s}\n", .{x});
             gpa.free(x);
@@ -87,7 +87,7 @@ test "e2e: dragging files between Desktop windows and onto an app" {
     gpa.free(try s.rc("mkdir -p /tmp/f && bind /mnt/ux/apps/`{ls -p /mnt/ux/apps | grep '^desktop-' | sed 1q} /tmp/f"));
     try s.waitRc("! grep -s '^win=0 ' /dev/ux/desktop/state", 10_000);
     var db: [32]u8 = undefined;
-    const desk = try c.desktopWin(s, "grep -s '^desktop$' $w/kind", &db);
+    const desk = try c.desktopWin(s, "~ $w */main", &db);
     try c.waitItems(s, desk, "label=home icon=disk");
     try c.waitItems(s, desk, "label=other icon=disk");
     try s.settle();
@@ -110,12 +110,13 @@ test "e2e: dragging files between Desktop windows and onto an app" {
     {
         try activate(s, home);
         const from = try c.itemAt(s, home, "notes.txt");
-        const dr = try c.two(s, "cat /tmp/f/windows/{s}/rect", .{docs});
+        const dr = try c.winRect(s, docs, false);
         slowDrag(s, from, pt(dr.x + 200, dr.y + 200));
         try waitHost(s, "demo/home/docs/notes.txt", true);
         try waitHost(s, "demo/home/notes.txt", false);
         try c.waitItems(s, docs, "label=notes.txt ");
-        try c.waitRcf(s, 10_000, "! grep -s 'label=notes.txt ' /tmp/f/windows/{s}/controls/icons/items", .{home});
+        var ib: [128]u8 = undefined;
+        try c.waitRcf(s, 10_000, "! grep -s 'label=notes.txt ' /tmp/f/{s}/items", .{try c.iconsOf(home, &ib)});
         try s.settle();
     }
 
@@ -135,20 +136,18 @@ test "e2e: dragging files between Desktop windows and onto an app" {
     const app_out = try s.rc("ls -p /mnt/ux/apps | grep '^sample-' | sed 1q");
     defer gpa.free(app_out);
     const app = std.mem.trim(u8, app_out, " \n");
-    const sw_out = try c.rcf(s, "ls -p /mnt/ux/apps/{s}/windows | sed 1q", .{app});
-    defer gpa.free(sw_out);
-    const sw = std.mem.trim(u8, sw_out, " \n");
-    try c.waitRcf(s, 10_000, "test -e /mnt/ux/apps/{s}/windows/{s}/controls/notes/rect", .{ app, sw });
+    const sw = "main";
+    try c.waitRcf(s, 10_000, "test -e /mnt/ux/apps/{s}/win/{s}/notes/bounds", .{ app, sw });
     try s.settle();
     // the Notes field's centre: the window's drawable origin (rio's
-    // border inside the window's rect) plus the field's local rect
-    const wr = try c.two(s, "cat /mnt/ux/apps/{s}/windows/{s}/rect", .{ app, sw });
-    const nr = try c.two(s, "awk '{{print ($1+$3)/2, ($2+$4)/2}}' /mnt/ux/apps/{s}/windows/{s}/controls/notes/rect", .{ app, sw });
+    // border inside the window's rect) plus the field's local bounds
+    const wr = try c.two(s, "awk '$1 == \"{s}\" {{print $3, $4}}' /mnt/ux/apps/{s}/debug/windows", .{ sw, app });
+    const nr = try c.two(s, "awk '{{print $1+$3/2, $2+$4/2}}' /mnt/ux/apps/{s}/win/{s}/notes/bounds", .{ app, sw });
     const notes = pt(wr.x + 4 + nr.x, wr.y + 4 + nr.y);
     try activate(s, home);
     slowDrag(s, try c.itemAt(s, home, "third.txt"), notes);
-    try c.waitRcf(s, 10_000, "grep -s '^dropped third.txt' /mnt/ux/apps/{s}/windows/{s}/controls/status/value", .{ app, sw });
-    try c.waitRcf(s, 5_000, "grep -s '^a third file$' /mnt/ux/apps/{s}/windows/{s}/controls/notes/value", .{ app, sw });
+    try c.waitRcf(s, 10_000, "grep -s '^dropped third.txt' /mnt/ux/apps/{s}/win/{s}/status/text", .{ app, sw });
+    try c.waitRcf(s, 5_000, "grep -s '^a third file$' /mnt/ux/apps/{s}/win/{s}/notes/value", .{ app, sw });
     // a copy: the file is still in home
     try std.testing.expect(hostExists(s, "demo/home/third.txt"));
     try s.settle();

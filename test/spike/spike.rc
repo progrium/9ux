@@ -1,0 +1,7 @@
+#!/bin/rc
+# The uitree spike app from the tree, with the system resources from the
+# tree, publishing its UI tree at /srv/ux.$user.spike. Arguments go to it.
+cd /mnt/term/cwd/apps/spike
+O=`{sed -n 's/^O=//p' /$objtype/mkfile}
+resfs=../../resfs/$O.resfs uxsysres=../../assets/gen/system.rsrc uxpublic=1 uxspikedebug=1 \
+	exec ./$O.out $* >[2]$work/spike.err

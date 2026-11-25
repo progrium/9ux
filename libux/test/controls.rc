@@ -1,0 +1,232 @@
+#!/bin/rc
+# The controls the sample doesn't have, through test/ctlapp: the file
+# chooser (libux/types/file-chooser/spec), and the spike's select,
+# radios, slider, switch, tabs, svg, styled-text and divs, with style
+# words. Run from libux: rc test/controls.rc
+rfork ne
+suite=controls
+. test/lib.rc
+
+fn inject { echo $* >$app/debug/inject; sleep 0.2 }
+
+ctlout=$out/c
+ctldir=$out/dir
+mkdir -p $ctlout $ctldir/sub
+touch $ctldir/a.txt $ctldir/b.txt $ctldir/sub/c.txt
+srvname=ux.$user.ctlapp
+rm -f /srv/$srvname
+ctlout=$ctlout ctldir=$ctldir uxheadless=1 uxpublic=1 test/$O.ctlapp &
+for(i in `{seq 50}) if(! test -e /srv/$srvname) sleep 0.1
+app=$out/app
+mkdir -p $app
+mount -c /srv/$srvname $app
+m=$app/win/main
+f=$m/files
+w=$app/win/window-1
+
+test=chooser-node
+same $f/type 'file-chooser
+'
+same $f/dir $ctldir'
+'
+same $f/items '1 a.txt
+2 b.txt
+3 sub/
+'
+same $f/value ''
+want '^cd activate$' $f/ctl
+want '^choose activate$' $f/ctl
+want '^cancel activate$' $f/ctl
+
+test=chooser-cd
+{
+	echo cd sub >$f/ctl
+	sleep 0.2
+	drain 4 $out/e
+} <[4]$f/events
+same $f/dir $ctldir/sub'
+'
+same $f/items '1 c.txt
+'
+want '^change - files dir='^$ctldir^'/sub via=ctl win=main' $out/e
+echo cd .. >$f/ctl
+same $f/dir $ctldir'
+'
+fails 'not found' rc -c 'echo cd nosuch >'$f/ctl
+
+test=chooser-dir-prop
+# a script's write to dir goes there too
+echo set files 'dir='^$ctldir^'/sub' >$m/ctl
+same $f/items '1 c.txt
+'
+echo set files 'dir='^$ctldir >$m/ctl
+same $f/items '1 a.txt
+2 b.txt
+3 sub/
+'
+
+test=chooser-choose
+{
+	echo choose b.txt >$f/ctl
+	sleep 0.2
+	drain 4 $out/e
+} <[4]$f/events
+# the handler gets the path; the node's value is the name
+same $ctlout/chose $ctldir^'/b.txt in '^$ctldir^'
+'
+same $f/value 'b.txt
+'
+want '^choose - files value=b.txt via=ctl win=main' $out/e
+
+test=chooser-cancel
+echo cancel >$f/ctl
+sleep 0.2
+same $ctlout/cancelled 'cancelled
+'
+
+test=list-columns
+# libux/types/list/spec: columns in table's format; items with columns
+# are tab-separated fields, the id first
+l=$m/people
+same $l/columns '1 Name 100
+2 Age 40
+'
+same $l/items '1	Ann	31
+2	Bob	27
+'
+echo -n '1 Who 120
+2 Years 50
+3 City 80' >$l/columns
+same $l/columns '1 Who 120
+2 Years 50
+3 City 80
+'
+fails 'bad value' rc -c 'echo set people ''''''columns=1 Who wide'''''' >'$m/ctl
+same $l/columns '1 Who 120
+2 Years 50
+3 City 80
+'
+# a script's items reach the control: it has a third row to select
+echo -n '1	Ann	31	Oslo
+2	Bob	27	Rome
+3	Cy	45	Lima' >$l/items
+echo set people 'value=3' >$m/ctl
+inject event select 'win=main' 'node=people' 'via=ctl'
+same $ctlout/people.sel '2
+'
+
+test=spike-nodes
+same $w/type 'div
+'
+same $w/style 'v-flex p=12 gap=8
+'
+same $w/box/type 'div
+'
+same $w/box/style 'h-flex gap=6
+'
+same $w/row/style 'h-flex gap=4
+'
+same $w/box/fruit/type 'select
+'
+same $w/box/fruit/placeholder 'Fruit
+'
+# its style words survive moving into box
+same $w/box/fruit/style 'flex-1
+'
+same $w/box/fruit/items '1 Apple
+2 Banana
+3 Cherry
+'
+same $w/box/size/type 'radio-group
+'
+same $w/row/level/type 'slider
+'
+want '^ *slider level +max=10' $w/tree
+same $w/row/level/value '0
+'
+same $w/row/wifi/type 'switch
+'
+same $w/row/wifi/label 'Wi-Fi
+'
+same $w/row/wifi/value 'off
+'
+same $w/pages/type 'tabs
+'
+same $w/pages/tab-1/label 'One
+'
+same $w/pages/tab-2/label 'Two
+'
+same $w/pic/type 'svg
+'
+want '<rect' $w/pic/src
+same $w/para/type 'styled-text
+'
+same $w/para/text 'Hello world
+'
+same $w/para/runs '0 5 weight=bold
+'
+
+test=choice-values
+# a script's value reaches the control: the handler reads it back
+echo set box/fruit 'value=2' >$w/ctl
+inject event change 'win=window-1' 'node=box/fruit' 'via=ctl'
+same $ctlout/fruit.choice '1
+'
+echo set box/size 'value=3' >$w/ctl
+inject event change 'win=window-1' 'node=box/size' 'via=ctl'
+same $ctlout/size.choice '2
+'
+echo set row/level 'value=7' >$w/ctl
+inject event change 'win=window-1' 'node=row/level' 'via=ctl'
+same $ctlout/level.choice '7
+'
+same $w/row/level/value '7
+'
+echo set row/wifi 'value=on' >$w/ctl
+inject event change 'win=window-1' 'node=row/wifi' 'via=ctl'
+same $ctlout/wifi.choice '1
+'
+echo set pages 'value=tab-2' >$w/ctl
+inject event change 'win=window-1' 'node=pages' 'via=ctl'
+same $ctlout/pages.choice '1
+'
+
+test=choice-items
+# new items from the script, as the select's own
+echo -n '1 Kiwi
+2 Lime' >$w/box/fruit/items
+echo set box/fruit 'value=2' >$w/ctl
+inject event change 'win=window-1' 'node=box/fruit' 'via=ctl'
+same $ctlout/fruit.choice '1
+'
+same $w/box/fruit/items '1 Kiwi
+2 Lime
+'
+
+test=tabs-children
+# a new tab from the script is a new tab in the bar
+echo new tab pages/tab-3 'label=Three' >$w/ctl
+echo set pages 'value=tab-3' >$w/ctl
+inject event change 'win=window-1' 'node=pages' 'via=ctl'
+same $ctlout/pages.choice '2
+'
+
+test=style-words
+echo set box : v-flex 'gap=2' >$w/ctl
+same $w/box/style 'v-flex gap=2
+'
+echo set . : h-flex 'p=4' >$w/ctl
+same $w/style 'h-flex p=4
+'
+
+test=svg-and-text
+echo -n '<svg viewBox="0 0 4 4"><circle r="2"/></svg>' >$w/pic/src
+want '<circle' $w/pic/src
+echo set para 'text=Goodbye' '''runs=0 4 style=italic''' >$w/ctl
+same $w/para/text 'Goodbye
+'
+same $w/para/runs '0 4 style=italic
+'
+
+echo quit >$app/ctl
+done

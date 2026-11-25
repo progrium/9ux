@@ -1,6 +1,7 @@
 /*
- * Menus: served under menus/ (ux.md, Menus) and registered with rio's
- * menu bar through /dev/ux/menubar (devux.md, Menu bar). uxlk held
+ * Menus: the drawing layer's (the tree's menu/ is tapi.c's) and
+ * registered with rio's menu bar through /dev/ux/menubar (devux.md,
+ * Menu bar). uxlk held
  * unless noted.
  */
 #include <u.h>
@@ -11,6 +12,7 @@
 #include <thread.h>
 #include <fcall.h>
 #include <9p.h>
+#include "dx.h"
 #include "ux.h"
 #include "impl.h"
 
@@ -256,28 +258,26 @@ _menuwin(Uxwin *w, int add)
 		bar("unwindow %d\n", w->winid);
 }
 
+/* the tree hears of an action chosen here (tapi.c), on the UI thread */
+Uxfn	*_actionhook;
+
 /* an action chosen: from the bar, a shortcut, or ctl invoke */
 void
 _menuaction(char *action, int win, char *via)
 {
-	Uxmenu *m;
 	Action *a;
 	Uxev e;
-	char wbuf[16];
-	int i, j, v;
+	int v;
 
-	m = nil;
-	for(i = 0; i < ux.nmenu && m == nil; i++)
-		for(j = 0; j < ux.menu[i]->nitem; j++)
-			if(!ux.menu[i]->item[j].sep && strcmp(ux.menu[i]->item[j].action, action) == 0){
-				m = ux.menu[i];
-				break;
-			}
-	snprint(wbuf, sizeof wbuf, "%d", win);
-	if(m != nil)
-		_event(m, "action", "id", action, "win", wbuf, "via", via, nil);
-	else
-		_event(nil, "action", "id", action, "win", wbuf, "via", via, nil);
+	if(_actionhook != nil){
+		memset(&e, 0, sizeof e);
+		e.type = UXaction;
+		e.action = action;
+		e.text = via;
+		e.win = _findwin(win);
+		_notify(_actionhook, nil, &e);
+	}
+
 	if(strcmp(via, "key") == 0)
 		v = UXkey;
 	else if(strcmp(via, "ctl") == 0)
@@ -358,7 +358,6 @@ uxmenu(char *id, char *title)
 		_addobj(m, Omenu);
 		ux.menu = erealloc(ux.menu, (ux.nmenu+1)*sizeof(Uxmenu*));
 		ux.menu[ux.nmenu++] = m;
-		_event(nil, "new", "menu", id, nil);
 	}
 	free(m->title);
 	m->title = estrdup(title);
@@ -377,7 +376,6 @@ additem(Uxmenu *m, Item *it)
 	a = itemattrs(it);
 	bar("item %s %s%s\n", m->id, it->action, a);
 	free(a);
-	_event(m, "items", nil);
 }
 
 void
@@ -415,12 +413,11 @@ uxsep(Uxmenu *m, char *id)
 static void
 setitems(char *action, int what, int v)
 {
-	int i, j, ch;
+	int i, j;
 	Item *it;
 
 	qlock(&uxlk);
 	for(i = 0; i < ux.nmenu; i++){
-		ch = 0;
 		for(j = 0; j < ux.menu[i]->nitem; j++){
 			it = &ux.menu[i]->item[j];
 			if(it->sep || strcmp(it->action, action) != 0)
@@ -429,10 +426,7 @@ setitems(char *action, int what, int v)
 				it->enabled = v;
 			else
 				it->check = v;
-			ch = 1;
 		}
-		if(ch)
-			_event(ux.menu[i], "items", nil);
 	}
 	if(what == 0)
 		bar("set %s enabled=%s\n", action, v ? "on" : "off");
@@ -466,4 +460,121 @@ uxaction(char *action, Uxfn *fn, void *arg)
 	a->next = ux.actions;
 	ux.actions = a;
 	qunlock(&uxlk);
+}
+
+/*
+ * For the tree (tapi.c): the menus in uitree's menu/ grammar, and
+ * actions it hears of. These take uxlk.
+ */
+
+/* "file edit": the bar's menu IDs, malloc'd */
+char*
+_uitreebar(void)
+{
+	Fmt f;
+	int i;
+
+	fmtstrinit(&f);
+	qlock(&uxlk);
+	for(i = 0; i < ux.nmenu; i++)
+		fmtprint(&f, "%s%s", i > 0 ? " " : "", ux.menu[i]->id);
+	qunlock(&uxlk);
+	return fmtstrflush(&f);
+}
+
+static char*
+uitreeword(char *name, char *v)
+{
+	char *s, *q;
+
+	s = smprint("%s=%s", name, v);
+	if(v[0] != 0 && strpbrk(v, " \t'") == nil)
+		return s;
+	q = quotestrdup(s);
+	free(s);
+	return q;
+}
+
+/* menu i's items, malloc'd, and its ID in *id; nil past the last */
+char*
+_uitreemenu(int i, char **id)
+{
+	Fmt f;
+	Item *it;
+	char *w;
+	int j;
+
+	qlock(&uxlk);
+	if(i >= ux.nmenu){
+		qunlock(&uxlk);
+		return nil;
+	}
+	*id = estrdup(ux.menu[i]->id);
+	fmtstrinit(&f);
+	for(j = 0; j < ux.menu[i]->nitem; j++){
+		it = &ux.menu[i]->item[j];
+		if(it->sep){
+			fmtprint(&f, "sep\n");
+			continue;
+		}
+		w = uitreeword("label", it->label != nil ? it->label : "");
+		fmtprint(&f, "item %s %s", it->action, w);
+		free(w);
+		if(it->key != nil && it->key[0] != 0){
+			if(strlen(it->key) == 1)
+				fmtprint(&f, " key=cmd-%s", it->key);
+			else if(strcmp(it->key, "bs") == 0)
+				fmtprint(&f, " key=cmd-backspace");
+			else
+				fmtprint(&f, " key=cmd-%s", it->key);
+		}
+		if(!it->enabled)
+			fmtprint(&f, " enabled=off");
+		if(it->check)
+			fmtprint(&f, " check=%s", it->check == 2 ? "mixed" : "on");
+		fmtprint(&f, "\n");
+	}
+	qunlock(&uxlk);
+	return fmtstrflush(&f);
+}
+
+/* an action the tree sent (a script, or uxd's session): run its handler */
+void
+_uitreeaction(char *action, Uxwin *w, int via)
+{
+	Action *a;
+	Uxev e;
+
+	memset(&e, 0, sizeof e);
+	e.type = UXaction;
+	e.via = via;
+	e.action = action;
+	e.win = w;
+	qlock(&uxlk);
+	for(a = ux.actions; a != nil; a = a->next)
+		if(strcmp(a->id, action) == 0)
+			break;
+	_notify(a != nil ? a->fn : ux.fn, a != nil ? a->arg : ux.arg, &e);
+	qunlock(&uxlk);
+	if(ux.uikick)
+		nbsendul(ux.uikick, 1);
+}
+
+/* quit, from the tree: the app's handler, or quit if it has none */
+void
+_uitreequit(int via)
+{
+	Uxev e;
+
+	memset(&e, 0, sizeof e);
+	e.type = UXquit;
+	e.via = via;
+	qlock(&uxlk);
+	if(ux.fn != nil)
+		_notify(ux.fn, ux.arg, &e);
+	else
+		ux.quit = 1;
+	qunlock(&uxlk);
+	if(ux.uikick)
+		nbsendul(ux.uikick, 1);
 }

@@ -1,0 +1,21 @@
+type    list  tier=component  profile=data  since=1.0
+prop    items       data  file
+prop    fields      text  file
+prop    value       text  file
+prop    selectable  bool  default=off
+prop    multiple    bool  default=off
+prop    searchable  bool  default=off
+prop    loading     bool  default=off
+prop    query       text  file
+# 9ux: a list may show columns, as a Finder list view does, under these
+# headers (table's columns format, "id label width"); an item is then
+# tab-separated fields, its id and each column's text
+prop    columns     data  file
+word    selectable multiple searchable loading  kind=flag
+event   select           kind=state
+event   open             kind=action
+event   scrolled-to-end  kind=action
+slot    row
+child   none
+file    items  format=items
+file    columns  format=columns

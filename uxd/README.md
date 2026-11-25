@@ -29,7 +29,10 @@ entries go away when uxd exits; apps notice and register again when it
 comes back. `-D` traces 9P.
 
 The protocol is [ux.md](../docs/protocols/ux.md); uxd implements its
-`/mnt/ux` tree, registration, rights and grants.
+`/mnt/ux` tree, registration, rights and grants. It takes uitree apps
+too (uxkit's trees, `version` `uitree 1.x`): they sit beside ux.md apps
+under `/mnt/ux/apps`, with the same rights applied to their `win/...`
+paths and event lines (ux.md, Rights, uitree apps).
 
 ## How it works
 
@@ -77,5 +80,6 @@ h9 --rc 'cd uxd && mk test'
 rc tests in `test/` against [`fakeapp`](../test/fakes/): the tree and
 pass-through (`tree.rc`), rights and redaction (`policy.rc`), grants
 (`grants.rc`), registration by hand (`register.rc`), stalled readers and
-apps and flushes (`stall.rc`), and restarts of uxd and of apps
-(`restart.rc`).
+apps and flushes (`stall.rc`), restarts of uxd and of apps
+(`restart.rc`), and a uitree app from uxkit beside fakeapp
+(`uitree.rc`; build uxkit first).

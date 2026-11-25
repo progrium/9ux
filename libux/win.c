@@ -133,7 +133,6 @@ newsize(Uxwin *w, Rectangle old, Point oldsz)
 	if(!eqrect(old, w->r) || !eqpt(oldsz, sz)){
 		if(!eqrect(old, w->r)){
 			snprint(buf, sizeof buf, "%d,%d,%d,%d", w->r.min.x, w->r.min.y, w->r.max.x, w->r.max.y);
-			_event(w, "rect", "rect", buf, nil);
 		}
 		if(w->fn != nil){
 			memset(&e, 0, sizeof e);
@@ -356,7 +355,6 @@ _newwin(char *kind, char *title, Rectangle r)
 	ux.win = erealloc(ux.win, (ux.nwin+1)*sizeof(Uxwin*));
 	ux.win[ux.nwin++] = w;
 	w->dirty = 1;
-	_event(w, "new", "kind", kind, nil);
 	_regwin(w->winid, 1);
 	_menuwin(w, 1);
 	_chrome(w);
@@ -371,12 +369,8 @@ _delwin(Uxwin *w)
 
 	for(i = 0; i < w->nctl; i++){
 		c = w->ctl[i];
-		_event(c, "delete", nil);
-		_gone(c);
 		_delobj(c);
 	}
-	_event(w, "delete", nil);
-	_gone(w);
 	_delobj(w);
 	for(i = 0; i < ux.nwin; i++)
 		if(ux.win[i] == w){
@@ -435,7 +429,6 @@ _winstate(Uxwin *w, int state)
 		fprint(w->wctlfd, (state&Whidden) ? "hide" : "unhide");
 	w->state = state;
 	s = _flags(state, 1);
-	_event(w, "state", "state", s, nil);
 	free(s);
 }
 
@@ -529,6 +522,49 @@ ctlat(Uxwin *w, Point p)
 	return nil;
 }
 
+static int
+live(Uxwin *w, Uxctl *c)
+{
+	int i;
+
+	for(i = 0; i < w->nctl; i++)
+		if(w->ctl[i] == c)
+			return !c->dead;
+	return 0;
+}
+
+static void
+hovernote(Uxctl *c, int on)
+{
+	Uxev e;
+
+	memset(&e, 0, sizeof e);
+	e.type = UXhover;
+	e.via = UXui;
+	e.win = c->w;
+	e.ctl = c;
+	e.n = on;
+	_notify(c->fn, c->arg, &e);
+}
+
+/* spike: UXhover as the pointer moves between controls, and canvas moves */
+static void
+hovering(Uxwin *w, Mouse *m)
+{
+	Uxctl *c;
+
+	c = ctlat(w, m->xy);
+	if(c != w->hover){
+		if(w->hover != nil && live(w, w->hover))
+			hovernote(w->hover, 0);
+		w->hover = c;
+		if(c != nil)
+			hovernote(c, 1);
+	}
+	if(c != nil && _iscanvas(c))
+		_canvasmove(c, m);
+}
+
 void
 _wininput(Uxwin *w, Mouse *m)
 {
@@ -538,11 +574,17 @@ _wininput(Uxwin *w, Mouse *m)
 
 	down = (m->buttons & ~w->lastm.buttons) != 0;
 	w->lastm = *m;
+	if(w->pop != nil){
+		_popmouse(w, m, down);
+		return;
+	}
 	if(w->grab != nil){
 		if(w->grab->dead || !w->grab->t->mouse(w->grab, m))
 			w->grab = nil;
 		return;
 	}
+	if(m->buttons == 0)
+		hovering(w, m);
 	if(!down)
 		return;
 	mw = modal();

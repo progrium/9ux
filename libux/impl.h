@@ -3,7 +3,8 @@
  *
  * Locking: one QLock, uxlk, guards the whole model. The UI thread holds
  * it whenever it is not waiting for input or running app handlers; the
- * 9P proc and the responder proc take it briefly. Functions whose names
+ * tree (tapi.c) takes it, after the model lock, to drive the drawing
+ * layer. Functions whose names
  * start with _ expect it held. Handlers are never run with it held:
  * internal code queues them with _notify() and the UI thread runs them
  * after releasing the lock.
@@ -19,11 +20,47 @@ typedef struct Ctltype Ctltype;
 typedef struct Verb Verb;
 typedef struct Item Item;
 typedef struct Icon Icon;
-typedef struct Sub Sub;
-typedef struct Msg Msg;
-typedef struct Cmd Cmd;
 typedef struct Note Note;
 typedef struct Action Action;
+typedef struct Uxstyle Uxstyle;
+typedef struct Uxlen Uxlen;
+typedef struct Uxpop Uxpop;
+
+/* spike: uitree style words (flex.c) */
+enum {
+	Lnone,
+	Lpx,
+	Lpct,
+};
+
+struct Uxlen {
+	int	kind;
+	int	v;
+};
+
+enum { Dcol, Drow };
+enum { Astretch, Astart, Acenter, Aend };
+enum { Jstart, Jcenter, Jend, Jbetween };
+
+struct Uxstyle {
+	int	set;
+	int	dir;
+	int	grow, shrink, basis0;
+	int	align, justify;
+	int	gap;
+	int	pad[4], mar[4];	/* top right bottom left */
+	Uxlen	w, h, minw, minh, maxw, maxh;
+	int	abs;
+	int	inset[4];	/* top right bottom left, with hasinset bits */
+	int	hasinset;
+	ulong	bg, fg, bordercol;
+	int	hasbg, hasfg, hasbordercol;
+	int	border;
+	int	textsize;	/* 0 xs .. 5 3xl, -1 unset */
+	int	bold;	/* -1 unset */
+	int	textalign;	/* -1 unset, 0 left, 1 center, 2 right */
+	int	truncate;
+};
 
 enum {
 	Oapp,
@@ -69,9 +106,7 @@ enum {
 };
 
 enum {
-	Qlen	= 256,	/* event queue bound */
 	Maxvalue	= 1<<20,
-	Maxevvalue	= 1024,
 };
 
 struct Obj {
@@ -160,7 +195,19 @@ struct Uxctl {
 	int	lw;	/* console: the width it was wrapped to */
 	int	raw;	/* console: keys go straight to the app */
 	int	follow;	/* console: show the end at the next layout */
+	int	vmin, vmax, vstep, val;	/* spike: slider */
+	int	row;	/* spike: radios laid out in a row */
+	char	*ops;	/* spike: canvas display list */
 	Font	*cfont;	/* console: its own font, or nil for the body font */
+
+	/* spike: uitree layout, svg and styled-text */
+	Uxstyle	*st;	/* style words, or nil */
+	char	*svgsrc;	/* svg: the document */
+	void	*svg;	/* svg: parsed (svg.c) */
+	Image	*svgimg;	/* svg: drawn at its last size */
+	ulong	svgfg;	/* svg: in this currentColor */
+	char	*stext;	/* styled-text: the text */
+	char	*runs;	/* styled-text: the runs */
 };
 
 struct Uxwin {
@@ -201,6 +248,9 @@ struct Uxwin {
 	Image	*glyphw[32];	/* the glyphs' white layers */
 	Image	*hatch;	/* grey3 every other pixel, for open icons */
 	Rectangle	clip;	/* where the control being drawn may draw */
+	Uxstyle	*st;	/* spike: a root style: lay the window out by flexbox */
+	Uxpop	*pop;	/* spike: a pop-up menu over the window (widget.c) */
+	Uxctl	*hover;	/* spike: the control under the pointer, for UXhover */
 };
 
 struct Item {
@@ -227,33 +277,6 @@ struct Action {
 	Action	*next;
 };
 
-struct Msg {
-	ulong	seq;
-	char	*s;	/* without seq or newline */
-	Msg	*next;
-};
-
-/* one open of an events file */
-struct Sub {
-	int	kind;	/* Oapp, Owin, Octl, Omenu */
-	ulong	oid;
-	int	winid;
-	Msg	*head, *tail;
-	int	n;
-	int	gone;
-	Req	*r;	/* pending read */
-	Sub	*next;
-};
-
-/* a ctl write, or value-file apply, waiting for the UI thread */
-struct Cmd {
-	Req	*r;	/* nil for a value apply */
-	ulong	oid;
-	int	file;
-	char	*buf;
-	Cmd	*next;
-	char	*err;	/* result */
-};
 
 /* a handler call waiting for the lock to be released */
 struct Note {
@@ -269,7 +292,6 @@ struct App {
 	char	*title;
 	char	*id;	/* from uxd, or nil */
 	char	*user;
-	ulong	seq;
 	Obj	**obj;
 	int	nobj;
 	Uxwin	**win;
@@ -279,12 +301,8 @@ struct App {
 	Action	*actions;
 	Uxfn	*fn;
 	void	*arg;
-	Sub	*subs;
-	Cmd	*cmdq, **cmdtail;
-	Cmd	*doneq;
 	Note	*notes, **notetail;
 	Channel	*uikick;	/* wake the UI thread */
-	Channel	*rkick;	/* wake the responder */
 	int	quit;
 	int	headless;
 	int	nextwinid;	/* headless window IDs */
@@ -294,12 +312,12 @@ struct App {
 	Uxwin	*front;
 	int	hadmain;
 	int	regfd;	/* /mnt/ux/register, or -1 */
+	int	(*post)(char*);	/* uxpublish: serves the tree instead of libux */
 	char	*barid;	/* the app ID the menu bar knows us by */
 	int	rebar;	/* register with the bar again */
 	int	barreader;
 	int	evreader;
 	int	riooff;	/* rio's 9/UX mode is off: it paints its own border */
-	int	responding;	/* the responder is answering a batch */
 };
 
 extern QLock uxlk;
@@ -321,36 +339,20 @@ char*	estrdup(char*);
 void*	erealloc(void*, ulong);
 
 /* ev.c */
-void	_event(Obj*, char*, ...);
-Sub*	_subscribe(Obj*);
-void	_unsubscribe(Sub*);
-void	_gone(Obj*);
-void	_subflush(Req*);
-void	_subhangup(Srv*);
 void	_notify(Uxfn*, void*, Uxev*);
 void	_runnotes(void);
-char*	_via(int);
-int	_subfill(Sub*, Req*, char**);
-int	_subread(Sub*, Req*, char**);
-void	_startresponder(void);
-void	_flushdone(void);
 char*	_attr(char*, char*);
 char*	_quote(char*);
-
-/* srv.c */
-int	_newsrv(char*);
 
 /* cmd.c */
 char*	_runcmd(Obj*, int, char*);
 char*	_ctlhelp(Obj*);
-void	_docmds(void);
 
 /* ctl.c */
 extern Ctltype *ctltypes[];
 Uxctl*	_newctl(Uxwin*, char*, Ctltype*, char*, Rectangle);
 void	_ctlevent(Uxctl*, int, int);
 char*	_ctlread(Uxctl*, char*);
-int	_hasfile(Uxctl*, char*);
 char*	_settext(Uxctl*, char*, int);
 void	_setfocus(Uxwin*, Uxctl*, int);
 void	_activate(Uxctl*, int);
@@ -420,6 +422,35 @@ char*	_consedit(Uxctl*, char*);
 
 /* drag.c */
 int	_dragstart(Uxdrag*, Uxctl*);
+
+/* flex.c, svg.c, stext.c: the spike */
+extern Ctltype	_divtype, _svgtype, _stexttype;
+/* spike: widget.c */
+int	_iswidget(Uxctl*);
+Point	_widgetsize(Uxctl*, int);
+void	_drawwidget(Uxctl*, Rectangle);
+void	_popopen(Uxwin*, Point, char**, int, int, void(*)(Uxwin*, int, void*), void*);
+void	_popclose(Uxwin*, int);
+void	_popmouse(Uxwin*, Mouse*, int);
+void	_drawpop(Uxwin*);
+int	_iscanvas(Uxctl*);
+void	_drawcanvas(Uxctl*, Rectangle);
+void	_canvasmove(Uxctl*, Mouse*);
+int	_parsecolor(char*, ulong*);
+int	_spikemouse(Uxctl*, Mouse*);
+void	_styledefault(Uxstyle*);
+char*	_parsestyle(Uxstyle*, char*);
+void	_flexlayout(Uxwin*);
+Point	_flexnatural(Uxwin*, int);
+Font*	_stylefont(Uxwin*, Uxstyle*, int);
+Font*	_font(Uxwin*, int, int, int);
+Image*	_anycolor(Uxwin*, ulong);
+void	_drawdiv(Uxctl*, Rectangle);
+Point	_svgsize(Uxctl*);
+void	_drawsvg(Uxctl*, Rectangle);
+void	_svgfree(Uxctl*);
+Point	_stextsize(Uxctl*, int);
+void	_drawstext(Uxctl*, Rectangle);
 
 /* reg.c */
 void	_register(void);

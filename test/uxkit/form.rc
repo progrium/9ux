@@ -1,0 +1,62 @@
+#!/bin/rc
+# A uitree client in the form, data and overlay profiles: an account
+# settings screen with fields, checkboxes, a list, a table and a
+# confirm dialog, drawn by uxkit with libux's own controls. It logs the
+# app's events to $work/uxkit.events.
+r=$ui/win/main
+echo window main 'title=Account' 'size=720,520' >$ui/ctl
+
+echo 'set . : h-flex items-stretch size-full gap=12 p=12 bg=background
+new div side : v-flex w=160 gap=6
+new text side/head text=Folders : font-bold
+new list side/folders : flex-1
+new div main : v-flex flex-1 gap=8
+new text main/title text=''Account settings'' : text-xl font-bold
+new div main/name : h-flex items-center gap=8
+new text main/name/l text=Name : w=60
+new input main/name/f tag=name placeholder=''Your name''
+new div main/mail : h-flex items-center gap=8
+new text main/mail/l text=Email : w=60
+new input main/mail/f tag=email value=''ken@example.com''
+new checkbox main/notify tag=notify label=''Email me about new mail'' value=on
+new switch main/away tag=away label=''Away''
+new text main/files-head text=''Attachments'' : font-bold
+new table main/files tag=files : h=96
+new div main/buttons : h-flex justify-end gap=8
+new button main/buttons/delete tag=delete label=''Delete account''
+new button main/buttons/save tag=save label=Save
+new text main/status text='''' : text-sm' >$r/ctl
+
+echo '# Mail
+inbox|Inbox
+sent|Sent
+-
+# Archive
+2025|2025
+2024|2024' | tr '|' '	' >$r/side/folders/items
+echo 'name|Name|200
+size|Size|80|align=right' | tr '|' '	' >$r/main/files/columns
+echo '1|plan.txt|2 KB
+2|logo.svg|5 KB
+3|notes.md|1 KB' | tr '|' '	' >$r/main/files/rows
+
+echo 'new alert-dialog over/confirm title=''Delete this account?'' description=''Your mail and settings go too. This cannot be undone.'' confirm=Delete cancel=Keep variant=danger tag=confirm-delete' >$r/ctl
+
+# the event loop: Delete asks first; the dialog's answer is the status line
+>$work/uxkit.events
+cat $ui/events | while(l=`{read}){
+	echo $l >>$work/uxkit.events
+	switch($l(1)){
+	case click
+		switch($l(2)){
+		case delete
+			echo open >$r/over/confirm/ctl
+		case save
+			echo Saved `{cat $r/main/name/f/value} >$r/main/status/text
+		}
+	case confirm
+		echo 'Account deleted' >$r/main/status/text
+	case cancel
+		echo 'Kept the account' >$r/main/status/text
+	}
+}

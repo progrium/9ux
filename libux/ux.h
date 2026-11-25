@@ -1,11 +1,11 @@
 /*
  * libux: the 9/UX Toolbox.
  *
- * An app made with libux serves its controls as a 9P tree (see
- * docs/protocols/ux.md) while drawing them in rio windows. All state
- * lives in one model guarded by libux; the UI thread (the one that
- * calls uxmain) changes it and runs handlers, a separate 9P proc reads
- * it, and nothing a 9P client does can block the UI thread.
+ * An app made with libux serves its controls as a uitree node tree
+ * over 9P (docs/spike-uitree.md) while drawing them in rio windows.
+ * All state lives in that tree, guarded by libux; the UI thread (which
+ * uxmain starts) draws and runs handlers, 9P procs serve the tree, and
+ * nothing a 9P client does can block the UI thread.
  *
  * Every function here may be called from any thread or proc of the
  * app. Handlers run on the UI thread with no libux lock held, so they
@@ -42,6 +42,9 @@ enum {
 	UXdrop,		/* dropped on a drop target (Uxev.text type, .action op, .pt, .drag) */
 	UXdragend,	/* our drag ended: Uxev.text the op the target did, nil if cancelled */
 	UXinterrupt,	/* console: Delete typed, or ctl interrupt */
+	UXcontext,	/* spike: a right-button press on a div, svg or styled-text (Uxev.pt, window-local) */
+	UXhover,	/* spike: the pointer came onto (Uxev.n 1) or left (0) the control */
+	UXpointer,	/* spike: canvas: Uxev.n 0 down, 1 up, 2 drag, 3 move; .pt node space, .item, .text button */
 };
 
 /* how an event came about; Uxev.via */
@@ -79,6 +82,7 @@ enum {
 
 /* app */
 void	uxinit(char *name, char *title);
+void	uxpublish(int (*post)(char *name));
 void	uxmain(void);		/* runs the UI; returns when the app quits */
 void	uxquit(void);		/* ends uxmain */
 void	uxapphandler(Uxfn*, void*);	/* UXquit, and actions with no handler */
@@ -175,6 +179,35 @@ char*	uxchooserdir(Uxctl*);		/* malloc'd */
  * keeps the end in view; its rect's width and height are its own.
  * Edit commands (uxedit) work on it: output can be copied, not cut.
  */
+/*
+ * Spike: uitree's portable style words and flexbox layout, and its
+ * div, svg and styled-text elements. A window with a root style is
+ * laid out on every redraw; its controls' rectangles come from the
+ * layout. Errors as uitree spells them, in errstr.
+ */
+int	uxwinstyle(Uxwin*, char *words);
+int	uxstyle(Uxctl*, char *words);
+Uxctl*	uxdiv(Uxwin*, char *id);
+Uxctl*	uxsvg(Uxwin*, char *id, char *src);	/* SVG text, or a file */
+Uxctl*	uxstyledtext(Uxwin*, char *id, char *text, char *runs);
+int	uxsetstyle(Uxctl*, char *words);	/* replaces; uxstyle adds */
+int	uxwinsetstyle(Uxwin*, char *words);
+void	uxsetsvg(Uxctl*, char *src);
+void	uxsetstext(Uxctl*, char *text, char *runs);
+Rectangle	uxctlrect(Uxctl*);
+Uxctl*	uxpopup(Uxwin*, char *id, char *placeholder);	/* spike: a pop-up menu button; uxsetitems */
+Uxctl*	uxradios(Uxwin*, char *id, int row);	/* radio buttons, one per item */
+Uxctl*	uxslider(Uxwin*, char *id, int min, int max, int step);
+Uxctl*	uxswitch(Uxwin*, char *id, char *label);
+Uxctl*	uxtabbar(Uxwin*, char *id);	/* a tab per item */
+void	uxsetrange(Uxctl*, int min, int max, int step);
+int	uxchoice(Uxctl*);	/* the chosen item, -1 none; a slider's value; a switch's 0/1 */
+void	uxsetchoice(Uxctl*, int);
+Uxctl*	uxcanvas(Uxwin*, char *id);	/* spike: uitree ops */
+void	uxsetops(Uxctl*, char *ops);
+void	uxpopmenu(Uxwin*, Point, char **items, int n, Uxfn*, void*);	/* "-" is a separator; UXaction, Uxev.n */
+void	uxcall(Uxfn*, void*);	/* fn(nil event, arg) on the UI thread */	/* window-local, from the last layout */
+
 Uxctl*	uxconsole(Uxwin*, char *id, Rectangle r);
 void	uxconswrite(Uxctl*, char *s, long n);	/* output, before what's typed; \b erases */
 void	uxconsraw(Uxctl*, int);

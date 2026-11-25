@@ -239,12 +239,15 @@ idnum(char *id, char *name)
 	return atoi(id+n+1);
 }
 
-/* "register name=... srv=... [title=...] [id=...] [win=...]..." */
+/*
+ * "register name=... srv=... [title=...] [id=...] [win=...]...", or
+ * policy.md's "register NAME srv=... [id=...]" from a uitree host.
+ */
 static char*
 doregister(Reg *g, char **f, int nf, Op *op)
 {
 	char *name, *srv, *title, *id, *v, *e;
-	int wins[64], nw, i, fd, want;
+	int wins[64], nw, i, fd, want, uitree;
 	Conn *c;
 	Fcall tx;
 	Msg *m;
@@ -255,8 +258,13 @@ doregister(Reg *g, char **f, int nf, Op *op)
 	name = srv = title = id = nil;
 	nw = 0;
 	for(i = 1; i < nf; i++){
-		if((v = strchr(f[i], '=')) == nil)
+		if((v = strchr(f[i], '=')) == nil){
+			if(i == 1){
+				name = f[i];
+				continue;
+			}
 			return "bad syntax";
+		}
 		*v++ = 0;
 		if(strcmp(f[i], "name") == 0)
 			name = v;
@@ -312,7 +320,12 @@ doregister(Reg *g, char **f, int nf, Op *op)
 	freemsg(m);
 	if((v = readapp(c, 0, "version", op)) == nil)
 		goto Err;
-	if(strncmp(v, "ux 1.", 5) != 0){
+	/* ux.md's tree, or uitree's */
+	if(strncmp(v, "ux 1.", 5) == 0)
+		uitree = 0;
+	else if(strncmp(v, "uitree 1.", 9) == 0)
+		uitree = 1;
+	else{
 		free(v);
 		strcpy(op->err, "version mismatch");
 		goto Err;
@@ -346,6 +359,7 @@ doregister(Reg *g, char **f, int nf, Op *op)
 	a->serial = ++serial;
 	a->name = estrdup9p(name);
 	a->title = estrdup9p(title ? title : "");
+	a->uitree = uitree;
 	a->c = c;
 	a->rootfid = 0;
 	a->rootqid = qid;

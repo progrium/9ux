@@ -61,7 +61,7 @@ register1(void)
 {
 	char name[128], path[160], buf[128], *t, *id;
 	Fmt f;
-	int fd, sfd, n, i;
+	int fd, n, i;
 	ulong n0, n1;
 
 	n0 = truerand();
@@ -71,8 +71,7 @@ register1(void)
 	fd = open("/mnt/ux/register", ORDWR);
 	if(fd < 0)
 		return -1;
-	sfd = _newsrv(name);
-	if(sfd < 0){
+	if(ux.post == nil || ux.post(name) < 0){
 		close(fd);
 		return -1;
 	}
@@ -91,7 +90,8 @@ register1(void)
 	qunlock(&uxlk);
 	n = write(fd, t, strlen(t));
 	free(t);
-	close(sfd);	/* uxd has taken it, or it is no use */
+	/* uxd has taken it, or it is no use */
+	remove(path);
 	if(n < 0){
 		fprint(2, "libux: register: %r\n");
 		close(fd);
@@ -115,7 +115,12 @@ register1(void)
 	}else
 		free(id);
 	ux.regfd = fd;
-	/* windows made while registering */
+	/*
+	 * windows made while registering: uxd takes a window line for a
+	 * window the app already has as a no-op, so send them all
+	 */
+	for(i = 0; i < ux.nwin; i++)
+		_regwin(ux.win[i]->winid, 1);
 	qunlock(&uxlk);
 	/* blocks until the registration ends */
 	read(fd, buf, sizeof buf);
@@ -143,6 +148,16 @@ regproc(void*)
 	}
 }
 
+/*
+ * Serve the app's tree some other way: post(name) posts a 9P server as
+ * /srv/name and returns 0, or -1. uxkit serves its uitree this way.
+ */
+void
+uxpublish(int (*post)(char*))
+{
+	ux.post = post;
+}
+
 void
 _register(void)
 {
@@ -153,7 +168,7 @@ _register(void)
 		free(s);
 		snprint(name, sizeof name, "ux.%s.%s", ux.user, ux.name);
 		/* the entry stays while the app runs */
-		if(_newsrv(name) < 0)
+		if(ux.post == nil || ux.post(name) < 0)
 			fprint(2, "libux: can't post /srv/%s: %r\n", name);
 		return;
 	}

@@ -1,0 +1,53 @@
+#!/bin/rc
+# A uitree client for the controls Toolbox didn't have: tabs, select,
+# radio-group, slider, switch, a popover and a context menu, drawn by
+# uxkit with libux's widget.c. It logs the app's events to
+# $work/uxkit.events.
+r=$ui/win/main
+echo window main 'title=Preferences' 'size=560,420' >$ui/ctl
+
+echo 'set . : v-flex size-full gap=10 p=12 bg=background
+new text title text=Preferences : text-xl font-bold
+new tabs tabs tag=tabs : flex-1
+new tab tabs/general label=General
+new tab tabs/look label=Appearance
+new div tabs/general/lang : h-flex items-center gap=8
+new text tabs/general/lang/l text=Language : w=90
+new select tabs/general/lang/f tag=lang placeholder=Choose…
+new div tabs/general/size : h-flex items-center gap=8
+new text tabs/general/size/l text=''Text size'' : w=90
+new slider tabs/general/size/f tag=size min=8 max=24 step=1 value=12
+new div tabs/general/when : h-flex gap=8
+new text tabs/general/when/l text=''Check mail'' : w=90
+new radio-group tabs/general/when/f tag=when
+new switch tabs/general/sound tag=sound label=''Play a sound for new mail''
+new div tabs/general/foot : h-flex items-center gap=8
+new button tabs/general/foot/more tag=more label=''More…''
+new div tabs/general/foot/box tag=box : flex-1 p=8 border-1 border-color=border
+new text tabs/general/foot/box/t text=''Right-click here for a menu''
+new text tabs/look/t text=''Appearance settings go here.''
+new text status text='''' : text-sm' >$r/ctl
+
+echo 'en|English
+fr|Français
+ja|日本語' | tr '|' '	' >$r/tabs/general/lang/f/items
+echo en >$r/tabs/general/lang/f/value
+echo 'auto|Every 5 minutes
+hourly|Every hour
+manual|Manually' | tr '|' '	' >$r/tabs/general/when/f/items
+echo auto >$r/tabs/general/when/f/value
+
+echo 'new popover over/info anchor=tabs/general/foot/more placement=bottom-start
+new text over/info/t text=''Advanced settings live in $home/lib/mail.''
+new context-menu over/cm anchor=tabs/general/foot/box' >$r/ctl
+echo 'item copy label=Copy
+item paste label=Paste
+sep
+item reset label=''Reset all''' >$r/over/cm/menu
+
+>$work/uxkit.events
+cat $ui/events | while(l=`{read}){
+	echo $l >>$work/uxkit.events
+	if(~ $l(1) action)
+		echo Chose $l(2) >$r/status/text
+}

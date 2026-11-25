@@ -1,5 +1,6 @@
 /*
- * Control types: their files, verbs and behavior (ux.md, Control types).
+ * Control types of the drawing layer: their verbs and behavior. The
+ * tree (tapi.c) mirrors them as uitree nodes.
  * Everything here runs with uxlk held.
  */
 #include <u.h>
@@ -37,7 +38,6 @@ note(Uxctl *c, int type, int via)
 void
 _activate(Uxctl *c, int via)
 {
-	_event(c, "activate", "via", _via(via), nil);
 	note(c, UXactivate, via);
 }
 
@@ -50,32 +50,7 @@ vactivate(Uxctl *c, int, char**)
 
 /* text field */
 
-static void
-valueevent(Uxctl *c)
-{
-	char *s;
 
-	if(c->state & UXsecret){
-		_event(c, "value", "redacted", "on", nil);
-		return;
-	}
-	s = _runestr(c->text, c->ntext);
-	if(strlen(s) <= Maxevvalue && strchr(s, '\n') == nil)
-		_event(c, "value", "value", s, nil);
-	else
-		_event(c, "value", nil);
-	free(s);
-}
-
-static void
-selevent(Uxctl *c)
-{
-	char a[16], b[16];
-
-	snprint(a, sizeof a, "%d", c->q0);
-	snprint(b, sizeof b, "%d", c->q1);
-	_event(c, "select", "q0", a, "q1", b, nil);
-}
 
 /* replace runes q0..q1 with s */
 static void
@@ -112,7 +87,6 @@ _settext(Uxctl *c, char *s, int via)
 	if(strlen(s) > Maxvalue)
 		return "too large";
 	replace(c, 0, c->ntext, s);
-	valueevent(c);
 	note(c, UXvalue, via);
 	return nil;
 }
@@ -131,8 +105,6 @@ vinsert(Uxctl *c, int, char **argv)
 	if(c->state & UXreadonly)
 		return "bad value: readonly";
 	replace(c, c->q0, c->q1, argv[1]);
-	valueevent(c);
-	selevent(c);
 	note(c, UXvalue, UXctl);
 	return nil;
 }
@@ -155,7 +127,6 @@ _tfedit(Uxctl *c, char *cmd)
 		c->q0 = 0;
 		c->q1 = c->ntext;
 		dirty(c);
-		selevent(c);
 		return nil;
 	}
 	if(strcmp(cmd, "copy") == 0 || strcmp(cmd, "cut") == 0){
@@ -172,8 +143,6 @@ _tfedit(Uxctl *c, char *cmd)
 		}
 		if(cmd[1] == 'u' && c->q1 > c->q0){
 			replace(c, c->q0, c->q1, "");
-			valueevent(c);
-			selevent(c);
 			note(c, UXvalue, UXui);
 		}
 		return nil;
@@ -186,8 +155,6 @@ _tfedit(Uxctl *c, char *cmd)
 			return "failed: can't read the clipboard";
 		replace(c, c->q0, c->q1, s);
 		free(s);
-		valueevent(c);
-		selevent(c);
 		note(c, UXvalue, UXui);
 		return nil;
 	}
@@ -215,27 +182,19 @@ vselect(Uxctl *c, int, char **argv)
 	c->q0 = q0;
 	c->q1 = q1;
 	dirty(c);
-	selevent(c);
 	return nil;
 }
 
 void
 _setfocus(Uxwin *w, Uxctl *c, int)
 {
-	char *p;
-
 	if(w->focus == c)
 		return;
 	if(w->focus)
 		dirty(w->focus);
 	w->focus = c;
-	if(c){
+	if(c)
 		dirty(c);
-		p = _ctlpath(c);
-		_event(w, "focus", "ctl", p, nil);
-		free(p);
-	}else
-		_event(w, "focus", nil);
 }
 
 static char*
@@ -248,7 +207,6 @@ vfocus(Uxctl *c, int, char**)
 static void
 submit(Uxctl *c, int via)
 {
-	_event(c, "submit", "via", _via(via), nil);
 	note(c, UXsubmit, via);
 }
 
@@ -287,20 +245,17 @@ tfkey(Uxctl *c, Rune r)
 			c->q0--;
 		c->q1 = c->q0;
 		dirty(c);
-		selevent(c);
 		return 1;
 	case Kright:
 		if(c->q1 < c->ntext)
 			c->q1++;
 		c->q0 = c->q1;
 		dirty(c);
-		selevent(c);
 		return 1;
 	case Khome:
 	case Kend:
 		c->q0 = c->q1 = r == Khome ? 0 : c->ntext;
 		dirty(c);
-		selevent(c);
 		return 1;
 	}
 	if(c->state & UXreadonly)
@@ -327,7 +282,6 @@ tfkey(Uxctl *c, Rune r)
 		replace(c, c->q0, c->q1, buf);
 	}else
 		return 0;
-	valueevent(c);
 	note(c, UXvalue, UXui);
 	return 1;
 }
@@ -354,7 +308,6 @@ tfmouse(Uxctl *c, Mouse *m)
 	}
 	c->q0 = c->q1 = q;
 	dirty(c);
-	selevent(c);
 	return 0;
 }
 
@@ -365,7 +318,6 @@ _setcheck(Uxctl *c, int v, int via)
 {
 	c->check = v;
 	dirty(c);
-	_event(c, "value", "value", v == 2 ? "mixed" : v ? "on" : "off", nil);
 	note(c, UXvalue, via);
 }
 
@@ -416,7 +368,6 @@ _setsel(Uxctl *c, uchar *sel, int via)
 	memmove(c->sel, sel, c->nitems);
 	dirty(c);
 	s = _listsel(c, ',');
-	_event(c, "select", "sel", s, nil);
 	free(s);
 	memset(&e, 0, sizeof e);
 	e.type = UXselection;
@@ -456,7 +407,6 @@ _listopen(Uxctl *c, int n, int via)
 	Uxev e;
 
 	snprint(buf, sizeof buf, "%d", n);
-	_event(c, "open", "item", buf, "via", _via(via), nil);
 	memset(&e, 0, sizeof e);
 	e.type = UXopen;
 	e.via = via;
@@ -595,7 +545,6 @@ _iconsel(Uxctl *c, int via)
 
 	dirty(c);
 	s = iconsel(c, ',');
-	_event(c, "select", "sel", s, nil);
 	free(s);
 	memset(&e, 0, sizeof e);
 	e.type = UXselection;
@@ -627,7 +576,6 @@ _iconopen(Uxctl *c, char *items, int via)
 	Uxev e;
 	char *p;
 
-	_event(c, "open", "items", items, "via", _via(via), nil);
 	/* one handler call per item */
 	items = estrdup(items);
 	for(p = strtok(items, ","); p != nil; p = strtok(nil, ",")){
@@ -687,7 +635,6 @@ viconmove(Uxctl *c, int, char **argv)
 		return "bad syntax";
 	c->icons[i].pt = p;
 	dirty(c);
-	_event(c, "items", nil);
 	memset(&e, 0, sizeof e);
 	e.type = UXmove;
 	e.via = UXctl;
@@ -712,7 +659,6 @@ viconrename(Uxctl *c, int, char **argv)
 	free(c->icons[i].label);
 	c->icons[i].label = estrdup(argv[2]);
 	dirty(c);
-	_event(c, "items", nil);
 	memset(&e, 0, sizeof e);
 	e.type = UXrename;
 	e.via = UXctl;
@@ -782,7 +728,6 @@ moved(Uxctl *c)
 	Uxev e;
 	int i;
 
-	_event(c, "items", nil);
 	for(i = 0; i < c->nicons; i++){
 		if(!c->icons[i].sel)
 			continue;
@@ -935,7 +880,6 @@ _setorigin(Uxctl *c, Point p, int via)
 	c->origin = p;
 	dirty(c);
 	snprint(buf, sizeof buf, "%d,%d", p.x, p.y);
-	_event(c, "origin", "pt", buf, nil);
 	memset(&e, 0, sizeof e);
 	e.type = UXscroll;
 	e.via = via;
@@ -1165,14 +1109,25 @@ _chooserload(Uxctl *c)
 	dirty(c);
 }
 
+/* the tree hears of a chooser's new directory (tapi.c), on the UI thread */
+Uxfn	*_chooserhook;
+
 static void
-chooserevent(Uxctl *c, char *ev, char *path, int type, int via)
+chooserevent(Uxctl *c, char *path, int type, int via)
 {
 	Uxev e;
 
-	_event(c, ev, "path", path, nil);
-	if(type == 0)
+	if(type == 0){
+		if(_chooserhook != nil){
+			memset(&e, 0, sizeof e);
+			e.via = via;
+			e.win = c->w;
+			e.ctl = c;
+			e.text = path;
+			_notify(_chooserhook, nil, &e);
+		}
 		return;
+	}
 	memset(&e, 0, sizeof e);
 	e.type = type;
 	e.via = via;
@@ -1203,7 +1158,7 @@ choosercd(Uxctl *c, char *path, int via)
 	free(c->dir);
 	c->dir = p;
 	_chooserload(c);
-	chooserevent(c, "dir", c->dir, 0, via);
+	chooserevent(c, c->dir, 0, via);
 	return nil;
 }
 
@@ -1225,8 +1180,7 @@ choose(Uxctl *c, char *path, int via)
 	cleanname(p);
 	free(c->name);
 	c->name = estrdup(utfrrune(p, '/') ? utfrrune(p, '/')+1 : p);
-	_event(c, "value", "value", c->name, nil);
-	chooserevent(c, "choose", p, UXchoose, via);
+	chooserevent(c, p, UXchoose, via);
 	free(p);
 	return nil;
 }
@@ -1242,7 +1196,6 @@ vccancel(Uxctl *c, int, char**)
 {
 	Uxev e;
 
-	_event(c, "cancel", nil);
 	memset(&e, 0, sizeof e);
 	e.type = UXcancel;
 	e.via = UXctl;
@@ -1407,19 +1360,11 @@ Ctltype *ctltypes[] = {
 	&scrolltype,
 	&choosertype,	/* 8 */
 	&_constype,	/* 9: cons.c */
+	&_divtype,	/* 10: flex.c, the spike */
+	&_svgtype,	/* 11: svg.c */
+	&_stexttype,	/* 12: stext.c */
 	nil,
 };
-
-int
-_hasfile(Uxctl *c, char *name)
-{
-	char **f;
-
-	for(f = c->t->files; *f; f++)
-		if(strcmp(*f, name) == 0)
-			return 1;
-	return 0;
-}
 
 static char*
 ctlstate(Uxctl *c)
@@ -1537,7 +1482,6 @@ _newctl(Uxwin *w, char *id, Ctltype *t, char *label, Rectangle r)
 	w->ctl[w->nctl++] = c;
 	w->dirty = 1;
 	p = _ctlpath(c);
-	_event(w, "new", "ctl", p, "type", t->name, nil);
 	free(p);
 	return c;
 }

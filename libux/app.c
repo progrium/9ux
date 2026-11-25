@@ -9,6 +9,7 @@
 #include <thread.h>
 #include <fcall.h>
 #include <9p.h>
+#include "dx.h"
 #include "ux.h"
 #include "impl.h"
 
@@ -37,9 +38,7 @@ uxinit(char *name, char *title)
 	free(s);
 	ux.uikick = chancreate(sizeof(ulong), 1);
 	ux.menuc = chancreate(sizeof(char*), 32);
-	ux.cmdtail = &ux.cmdq;
 	ux.notetail = &ux.notes;
-	_startresponder();
 }
 
 enum { Akick, Amenu, Nfixed };
@@ -53,9 +52,15 @@ setalt(Alt *a, Channel *c, void *v, int op)
 	a->op = op;
 }
 
+/*
+ * The UI loop draws (layout, SVG, styled text) and runs handlers, which
+ * can go deep: it gets its own stack, not threadmain's, which is 8K
+ * unless the app sets mainstacksize.
+ */
+enum { Uistack = 64*1024 };
 
-void
-uxmain(void)
+static void
+uiloop(void)
 {
 	Alt *a;
 	Mouse m;
@@ -73,7 +78,6 @@ uxmain(void)
 	ws = nil;
 	for(;;){
 		qlock(&uxlk);
-		_docmds();
 		if(ux.rebar){
 			ux.rebar = 0;
 			_menuregister();
@@ -81,7 +85,6 @@ uxmain(void)
 		qunlock(&uxlk);
 		_runnotes();
 		qlock(&uxlk);
-		_docmds();
 		_drawdirty();
 		if(ux.quit){
 			qunlock(&uxlk);
@@ -139,11 +142,25 @@ uxmain(void)
 	}
 	free(a);
 	free(ws);
-	/* answer what's done before the app exits */
-	qlock(&uxlk);
-	_docmds();
-	qunlock(&uxlk);
-	_flushdone();
+}
+
+static void
+uithread(void *v)
+{
+	threadsetname("uxui");
+	uiloop();
+	sendul(v, 0);
+}
+
+void
+uxmain(void)
+{
+	Channel *c;
+
+	c = chancreate(sizeof(ulong), 0);
+	threadcreate(uithread, c, Uistack);
+	recvul(c);
+	chanfree(c);
 }
 
 void
@@ -181,7 +198,6 @@ uxsettitle(char *t)
 	qlock(&uxlk);
 	free(ux.title);
 	ux.title = estrdup(t);
-	_event(nil, "title", "title", t, nil);
 	if(ux.menufd >= 0)
 		{
 		char *q = _quote(t);
@@ -237,7 +253,6 @@ uxwinsettitle(Uxwin *w, char *t)
 	free(w->title);
 	w->title = estrdup(t);
 	if(!w->dead){
-		_event(w, "title", "title", t, nil);
 		if(w->main && w->img){
 			fd = open("/dev/label", OWRITE|OTRUNC);
 			if(fd >= 0){
@@ -479,8 +494,6 @@ uxdelete(Uxctl *c)
 		w->def = nil;
 	if(w->grab == c)
 		w->grab = nil;
-	_event(c, "delete", nil);
-	_gone(c);
 	_delobj(c);
 	w->dirty = 1;
 	qunlock(&uxlk);
@@ -515,7 +528,6 @@ uxsetrect(Uxctl *c, Rectangle r)
 	if(!eqrect(r, c->r)){
 		c->r = r;
 		snprint(buf, sizeof buf, "%d,%d,%d,%d", r.min.x, r.min.y, r.max.x, r.max.y);
-		_event(c, "rect", "rect", buf, nil);
 		c->w->dirty = 1;
 	}
 	qunlock(&uxlk);
@@ -550,7 +562,6 @@ uxsetvalue(Uxctl *c, char *v)
 	qlock(&uxlk);
 	if(c->t == ctltypes[2]){
 		c->check = strcmp(v, "on") == 0 ? 1 : strcmp(v, "mixed") == 0 ? 2 : 0;
-		_event(c, "value", "value", c->check == 2 ? "mixed" : c->check ? "on" : "off", nil);
 		c->w->dirty = 1;
 	}else if(c->t == ctltypes[1] || c->t == ctltypes[3]){
 		free(c->text);
@@ -562,12 +573,6 @@ uxsetvalue(Uxctl *c, char *v)
 			c->q1 = c->ntext;
 		c->org = 0;
 		c->w->dirty = 1;
-		if(c->state & UXsecret)
-			_event(c, "value", "redacted", "on", nil);
-		else if(strlen(v) <= Maxevvalue && strchr(v, '\n') == nil)
-			_event(c, "value", "value", v, nil);
-		else
-			_event(c, "value", nil);
 	}
 	qunlock(&uxlk);
 	kick();
@@ -580,7 +585,6 @@ uxsetlabel(Uxctl *c, char *l)
 	free(c->label);
 	c->label = estrdup(l);
 	c->w->dirty = 1;
-	_event(c, "label", "label", l, nil);
 	qunlock(&uxlk);
 	kick();
 }
@@ -592,7 +596,6 @@ stateevent(Uxctl *c)
 
 	s = _ctlread(c, "state");
 	s[strlen(s)-1] = 0;
-	_event(c, "state", "state", s, nil);
 	free(s);
 }
 
@@ -664,7 +667,6 @@ uxsetitems(Uxctl *c, char **items, int n)
 	c->sel = emalloc(n+1);
 	c->top = 0;
 	c->w->dirty = 1;
-	_event(c, "items", nil);
 	qunlock(&uxlk);
 	kick();
 }
@@ -742,7 +744,6 @@ uxiconadd(Uxctl *c, char *id, char *label, char *icon, Point pt)
 	ic->icon = estrdup(icon);
 	ic->pt = pt;
 	c->w->dirty = 1;
-	_event(c, "items", nil);
 	qunlock(&uxlk);
 	kick();
 }
@@ -767,7 +768,6 @@ uxicondel(Uxctl *c, char *id)
 			memmove(c->icons+i, c->icons+i+1, (c->nicons-i-1)*sizeof(Icon));
 			c->nicons--;
 			c->w->dirty = 1;
-			_event(c, "items", nil);
 			break;
 		}
 	qunlock(&uxlk);
@@ -784,7 +784,6 @@ uxiconclear(Uxctl *c)
 		freeicon(&c->icons[i]);
 	c->nicons = 0;
 	c->w->dirty = 1;
-	_event(c, "items", nil);
 	qunlock(&uxlk);
 	kick();
 }
@@ -810,7 +809,6 @@ uxiconset(Uxctl *c, char *id, char *label, char *icon, Point pt)
 		}
 		ic->pt = pt;
 		c->w->dirty = 1;
-		_event(c, "items", nil);
 		break;
 	}
 	qunlock(&uxlk);
@@ -870,7 +868,6 @@ uxiconselect(Uxctl *c, char **ids, int n)
 			sep = ",";
 		}
 	s = fmtstrflush(&f);
-	_event(c, "select", "sel", s, nil);
 	free(s);
 	c->w->dirty = 1;
 	qunlock(&uxlk);
@@ -885,7 +882,6 @@ uxsetextent(Uxctl *c, Rectangle r)
 	qlock(&uxlk);
 	c->extent = r;
 	snprint(buf, sizeof buf, "%d,%d,%d,%d", r.min.x, r.min.y, r.max.x, r.max.y);
-	_event(c, "extent", "rect", buf, nil);
 	_clamporigin(c, UXui);
 	c->w->dirty = 1;
 	qunlock(&uxlk);
@@ -901,7 +897,6 @@ uxsetorigin(Uxctl *c, Point p)
 	p = _clampedorigin(c, p);
 	c->origin = p;
 	snprint(buf, sizeof buf, "%d,%d", p.x, p.y);
-	_event(c, "origin", "pt", buf, nil);
 	c->w->dirty = 1;
 	qunlock(&uxlk);
 	kick();
@@ -927,4 +922,47 @@ uxchooserdir(Uxctl *c)
 	s = estrdup(c->dir);
 	qunlock(&uxlk);
 	return s;
+}
+
+/* for the tree (tapi.c): select list items, by index, without a handler call */
+void
+_dxlistsel(Uxctl *c, int *idx, int n)
+{
+	int i;
+
+	qlock(&uxlk);
+	if(c->sel != nil){
+		memset(c->sel, 0, c->nitems);
+		for(i = 0; i < n; i++)
+			if(idx[i] >= 0 && idx[i] < c->nitems)
+				c->sel[idx[i]] = 1;
+		c->w->dirty = 1;
+	}
+	qunlock(&uxlk);
+	kick();
+}
+
+/* for the tree (tapi.c): a text field's selection */
+void
+_dxtextsel(Uxctl *c, int *q0, int *q1)
+{
+	qlock(&uxlk);
+	*q0 = c->q0;
+	*q1 = c->q1;
+	qunlock(&uxlk);
+}
+
+/* for the tree: a list's or chooser's items, "N item" lines from 1, malloc'd */
+char*
+_dxitems(Uxctl *c)
+{
+	Fmt f;
+	int i;
+
+	fmtstrinit(&f);
+	qlock(&uxlk);
+	for(i = 0; i < c->nitems; i++)
+		fmtprint(&f, "%s%d %s", i > 0 ? "\n" : "", i+1, c->items[i]);
+	qunlock(&uxlk);
+	return fmtstrflush(&f);
 }

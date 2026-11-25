@@ -37,7 +37,7 @@ fn reap {
 
 tests=$*
 if(~ $#tests 0)
-	tests=(test/tree.rc test/policy.rc test/grants.rc test/register.rc test/stall.rc test/restart.rc)
+	tests=(test/tree.rc test/policy.rc test/grants.rc test/register.rc test/stall.rc test/restart.rc test/uitree.rc)
 for(t in $tests){
 	rm -f $sf
 	@{

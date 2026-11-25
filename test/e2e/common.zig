@@ -98,11 +98,12 @@ pub fn two(s: *Session, comptime fmt: []const u8, args: anytype) !harness.Point 
     return pt(x, y);
 }
 
-/// The Desktop window whose title is `title` (or of kind desktop).
+/// The Desktop window `sel` picks, as an rc condition on $w (a
+/// window's directory): its title, or `~ $w */main` for the desktop.
 pub fn desktopWin(s: *Session, sel: []const u8, buf: []u8) ![]const u8 {
-    const cmd = try std.fmt.allocPrint(gpa, "for(w in /tmp/f/windows/*) if({s}) basename $w", .{sel});
+    const cmd = try std.fmt.allocPrint(gpa, "for(w in /tmp/f/win/*) if({s}) basename $w; status=()", .{sel});
     defer gpa.free(cmd);
-    try waitRcf(s, 15_000, "~ `{{{s}}} [0-9]*", .{cmd});
+    try waitRcf(s, 15_000, "~ `{{{s}}} ?*", .{cmd});
     const out = try s.rc(cmd);
     defer gpa.free(out);
     const w = std.mem.trim(u8, out, " \n");
@@ -110,15 +111,30 @@ pub fn desktopWin(s: *Session, sel: []const u8, buf: []u8) ![]const u8 {
     return buf[0..w.len];
 }
 
+/// A window's place on the screen: x0 y0 (or x1 y1, with `max`).
+pub fn winRect(s: *Session, win: []const u8, max: bool) !harness.Point {
+    if (max)
+        return two(s, "awk '$1 == \"{s}\" {{print $5, $6}}' /tmp/f/debug/windows", .{win});
+    return two(s, "awk '$1 == \"{s}\" {{print $3, $4}}' /tmp/f/debug/windows", .{win});
+}
+
+/// A window's icon view, under /tmp/f: a folder's is in its scroll view.
+pub fn iconsOf(win: []const u8, buf: []u8) ![]const u8 {
+    if (std.mem.eql(u8, win, "main"))
+        return std.fmt.bufPrint(buf, "win/main/icons", .{});
+    return std.fmt.bufPrint(buf, "win/{s}/scroll/icons", .{win});
+}
+
 /// Where an item's icon is on the screen (as test/desktop does it).
 pub fn itemAt(s: *Session, win: []const u8, label: []const u8) !harness.Point {
-    const r = try two(s, "cat /tmp/f/windows/{s}/rect", .{win});
-    const rmax = try two(s, "awk '{{print $3, $4}}' /tmp/f/windows/{s}/rect", .{win});
+    const r = try winRect(s, win, false);
+    const rmax = try winRect(s, win, true);
     // The icon view's top, and the window's drawable width: a folder
     // window's scroll view is that outset by 1; the desktop's icon view is it.
-    const cv = try two(s, "c=/tmp/f/windows/{s}/controls; awk '{{print $2}}' $c/icons/rect; if(test -e $c/scroll) awk '{{print $3-1}}' $c/scroll/rect; if not awk '{{print $3}}' $c/icons/rect", .{win});
+    const cv = try two(s, "c=/tmp/f/win/{s}; if(test -e $c/scroll){{ awk '{{print $2}}' $c/scroll/icons/bounds; awk '{{print $1+$3-1}}' $c/scroll/bounds }}; if not {{ awk '{{print $2}}' $c/icons/bounds; awk '{{print $1+$3}}' $c/icons/bounds }}", .{win});
     const border = @divTrunc((rmax.x - r.x) - cv.y, 2);
-    const p = try two(s, "grep 'label={s} ' /tmp/f/windows/{s}/controls/icons/items | sed 's/.*pos=([0-9]+),([0-9]+).*/\\1 \\2/'", .{ label, win });
+    var ib: [128]u8 = undefined;
+    const p = try two(s, "grep 'label={s} ' /tmp/f/{s}/items | sed 's/.*pos=([0-9]+),([0-9]+).*/\\1 \\2/'", .{ label, try iconsOf(win, &ib) });
     return pt(r.x + border + p.x, r.y + border + cv.x + p.y);
 }
 
@@ -129,7 +145,8 @@ pub fn doubleClick(s: *Session, p: harness.Point) void {
 }
 
 pub fn waitItems(s: *Session, win: []const u8, needle: []const u8) !void {
-    try waitRcf(s, 15_000, "grep -s -- '{s}' /tmp/f/windows/{s}/controls/icons/items", .{ needle, win });
+    var ib: [128]u8 = undefined;
+    try waitRcf(s, 15_000, "grep -s -- '{s}' /tmp/f/{s}/items", .{ needle, try iconsOf(win, &ib) });
 }
 
 /// The x centres of the menu bar's titles, from the screen: runs of

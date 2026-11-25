@@ -7,7 +7,7 @@ suite=clip
 . test/lib.rc
 
 fn waitfile { for(i in `{seq 50}) if(! test -s $1) sleep 0.1 }
-fn press { echo activate >$ctl/$1/ctl; sleep 0.2 }
+fn press { echo click >$ctl/$1/ctl; sleep 0.2 }
 
 dragout=$out/d
 mkdir -p $dragout
@@ -23,27 +23,41 @@ for(i in `{seq 50}) if(! test -e /srv/$srvname) sleep 0.1
 app=$out/app
 mkdir -p $app
 mount -c /srv/$srvname $app
-ctl=$app/windows/1/controls
+ctl=$app/win/main
 f=$ctl/field
 
+# the selection prop (libux/types/input/spec) picks what's copied
 test=copy-to-snarf
-echo focus >$f/ctl
-echo set '''hello world''' >$f/ctl
-echo select 0 5 >$f/ctl
+echo field >$ctl/focus
+echo set field '''value=hello world''' >$ctl/ctl
+echo set field '''selection=0 5''' >$ctl/ctl
+same $f/selection '0 5
+'
 press copy
 same $uxsnarf 'hello'
-echo select 5 11 >$f/ctl
+# pasting over the selection: the caret ends after it
 press paste
-same $f/value 'hellohello
+same $f/value 'hello world
+'
+same $f/selection '5 5
+'
+echo set field '''selection=6 11''' >$ctl/ctl
+press paste
+same $f/value 'hello hello
+'
+press selectall
+press copy
+same $uxsnarf 'hello hello'
+press paste
+same $f/value 'hello hello
 '
 
 test=cut
-echo select 0 5 >$f/ctl
 echo -n x >$uxsnarf
+press selectall
 press cut
-same $uxsnarf 'hello'
-same $f/value 'hello
-'
+same $uxsnarf 'hello hello'
+same $f/value ''
 
 test=legacy-copy
 echo -n 'from acme' >$uxsnarf

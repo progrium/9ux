@@ -41,14 +41,14 @@ for(i in `{seq 1 300})
 # Open the home volume (or boot.rc's -v volume), as a double-click on it
 # would, unless the screen is small.
 f=/mnt/ux/apps/`{ls -p /mnt/ux/apps | grep '^desktop-' | sed 1q}
-d=$f/windows/1/controls/icons
+d=$f/win/main/icons
 for(i in `{seq 1 100})
 	if(! grep -s 'label='$vol' ' $d/items)
 		sleep 0.1
 if(~ $#small 0){
-	echo open `{sed -n 's/^item ([^ ]+) label='$vol' .*/\1/p' $d/items} >$d/ctl
+	echo open `{sed -n 's/^([^ ]+) label='$vol' .*/\1/p' $d/items} >$d/ctl
 	for(i in `{seq 1 100})
-		if(! test -e $f/windows/2)
+		if(! test -e $f/win/folder-1)
 			sleep 0.1
 }
 
@@ -68,7 +68,7 @@ if(~ $debug -d){
 	# and what's in it.
 	if(! ~ $vol home){
 		echo debug: volume $vol
-		for(w in $f/windows/*/title){
+		for(w in $f/win/*/title){
 			cat $w
 			echo
 		}
@@ -82,18 +82,18 @@ if(~ $debug -d){
 	sleep 1
 	cat /dev/ux/windows
 	echo debug: windows
-	echo open `{sed -n 's/^item ([^ ]+) label=Applications .*/\1/p' $d/items} >$d/ctl
+	echo open `{sed -n 's/^([^ ]+) label=Applications .*/\1/p' $d/items} >$d/ctl
 	w=()
 	for(i in `{seq 1 100})
 		if(~ $#w 0){
-			w=`{grep -l '^Applications$' $f/windows/*/title >[2]/dev/null | sed 1q}
+			w=`{grep -l '^Applications$' $f/win/*/title >[2]/dev/null | sed 1q}
 			sleep 0.1
 		}
-	a=`{basename -d $w}^/controls/icons
+	a=`{basename -d $w}^/scroll/icons
 	for(i in `{seq 1 100})
 		if(! grep -s 'label=Sample ' $a/items)
 			sleep 0.1
-	echo open `{sed -n 's/^item ([^ ]+) label=Sample .*/\1/p' $a/items} >$a/ctl
+	echo open `{sed -n 's/^([^ ]+) label=Sample .*/\1/p' $a/items} >$a/ctl
 	while(! ls -p /mnt/ux/apps | grep -s '^sample-')
 		sleep 0.5
 	echo debug: sample
