@@ -7,7 +7,7 @@ suite=clip
 . test/lib.rc
 
 fn waitfile { for(i in `{seq 50}) if(! test -s $1) sleep 0.1 }
-fn press { echo activate >$ctl/$1/ctl; sleep 0.2 }
+fn press { echo click >$ctl/$1/ctl; sleep 0.2 }
 
 dragout=$out/d
 mkdir -p $dragout
@@ -23,27 +23,26 @@ for(i in `{seq 50}) if(! test -e /srv/$srvname) sleep 0.1
 app=$out/app
 mkdir -p $app
 mount -c /srv/$srvname $app
-ctl=$app/windows/1/controls
+ctl=$app/win/main
 f=$ctl/field
 
+# uitree's input has no selection to set: these select all of it
 test=copy-to-snarf
-echo focus >$f/ctl
-echo set '''hello world''' >$f/ctl
-echo select 0 5 >$f/ctl
+echo field >$ctl/focus
+echo set field '''value=hello world''' >$ctl/ctl
+press selectall
 press copy
-same $uxsnarf 'hello'
-echo select 5 11 >$f/ctl
+same $uxsnarf 'hello world'
 press paste
-same $f/value 'hellohello
+same $f/value 'hello world
 '
 
 test=cut
-echo select 0 5 >$f/ctl
 echo -n x >$uxsnarf
+press selectall
 press cut
-same $uxsnarf 'hello'
-same $f/value 'hello
-'
+same $uxsnarf 'hello world'
+same $f/value ''
 
 test=legacy-copy
 echo -n 'from acme' >$uxsnarf

@@ -44,3 +44,4 @@
 #define uxitemenable	dxitemenable
 #define uxitemcheck	dxitemcheck
 #define uxsetorigin	dxsetorigin
+#define uxfocus	dxfocus

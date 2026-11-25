@@ -25,10 +25,10 @@ for(i in `{seq 50}) if(! test -e /srv/$srvname) sleep 0.1
 app=$out/app
 mkdir -p $app
 mount -c /srv/$srvname $app
-ctl=$app/windows/1/controls
+ctl=$app/win/main
 
 test=start-needs-button
-echo activate >$ctl/src/ctl
+echo click >$ctl/src/ctl
 waitfile $dragout/starterr
 want 'no button down' $dragout/starterr
 rm -f $dragout/starterr
@@ -36,7 +36,7 @@ rm -f $dragout/starterr
 test=drop-file
 {
 	fake press 1 'pt=10,10'
-	echo activate >$ctl/src/ctl
+	echo click >$ctl/src/ctl
 	for(i in `{seq 50}) if(! grep -s 'state=over' /dev/ux/drag/state) sleep 0.1
 	cat /dev/ux/drag/state >$out/s
 	want '^drag id=1 win=1 app=dragapp-[0-9]+ types=file,text ops=copy,move ''label=a file'' state=over target=1$' $out/s
@@ -69,7 +69,7 @@ test=refused
 rm -f $dragout/end
 {
 	fake press 1 'pt=10,10'
-	echo activate >$ctl/src/ctl
+	echo click >$ctl/src/ctl
 	for(i in `{seq 50}) if(! grep -s 'state=over' /dev/ux/drag/state) sleep 0.1
 	fake move 1 'pt=150,150'
 	for(i in `{seq 50}) if(! grep -s 'type=file' /dev/ux/drag/state) sleep 0.1

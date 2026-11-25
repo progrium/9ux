@@ -39,3 +39,4 @@
 #undef uxitemenable
 #undef uxitemcheck
 #undef uxsetorigin
+#undef uxfocus

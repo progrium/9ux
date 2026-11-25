@@ -78,6 +78,7 @@ struct Cw {
 	Uxfn	*fn;
 	void	*arg;
 	char	*title;
+	int	focus;	/* the node the control has focus for */
 	Cw	*next;
 };
 
@@ -121,6 +122,8 @@ static Cc	*ccs;
 static Cw	*cws;
 static Call	*calls, **calltail = &calls;
 static int	inapi;	/* the API is writing: its events don't reach handlers */
+static Uxfn	*directfn;	/* the handler for the drawing layer's event (orig) */
+static void	*directarg;
 static Uxev	*orig;	/* the drawing layer's event being emitted */
 static int	usedmain;
 
@@ -418,16 +421,17 @@ hook(char *name, char *key, char *path, char *attrs, char *win)
 	}
 	if(fn == nil)
 		return;
+	/* the drawing layer's own event: its handler runs now, with it */
+	if(orig != nil){
+		directfn = fn;
+		directarg = arg;
+		return;
+	}
 	k = emalloc(sizeof *k);
 	memset(k, 0, sizeof *k);
 	k->fn = fn;
 	k->arg = arg;
-	if(orig != nil){
-		k->ev = *orig;
-		k->ev.action = k->s[0] = strornil(orig->action);
-		k->ev.item = k->s[1] = strornil(orig->item);
-		k->ev.text = k->s[2] = strornil(orig->text);
-	}else if(!synth(k, name, attrs, w, c)){
+	if(!synth(k, name, attrs, w, c)){
 		free(k);
 		return;
 	}
@@ -631,6 +635,8 @@ listvalue(Cc *c)
 static void
 capictlev(Uxev *e, void *arg)
 {
+	Uxfn *fn;
+	void *darg;
 	Cc *c;
 	Node *n;
 	char *name, *attrs, *v, *q, **ids;
@@ -759,16 +765,24 @@ capictlev(Uxev *e, void *arg)
 	fmtprint(&f, "via=%s", viaword(e->via));
 	attrs = fmtstrflush(&f);
 	orig = e;
+	directfn = nil;
 	emitnode(name, winofnode(n), n, attrs, state);
 	orig = nil;
 	free(attrs);
 	sweep();
+	fn = directfn;
+	darg = directarg;
+	directfn = nil;
 	unlockmodel();
+	if(fn != nil)
+		fn(e, darg);
 }
 
 static void
 capiwinev(Uxev *e, void *arg)
 {
+	Uxfn *fn;
+	void *darg;
 	Win *w;
 	char *name, *attrs;
 	int state;
@@ -819,11 +833,17 @@ capiwinev(Uxev *e, void *arg)
 	if(attrs == nil)
 		attrs = smprint("via=%s", viaword(e->via));
 	orig = e;
+	directfn = nil;
 	emitnode(name, w, w->root, attrs, state);
 	orig = nil;
 	free(attrs);
 	sweep();
+	fn = directfn;
+	darg = directarg;
+	directfn = nil;
 	unlockmodel();
+	if(fn != nil)
+		fn(e, darg);
 }
 
 /*
@@ -1640,6 +1660,22 @@ listsel(Cc *c, char *v)
 }
 
 void
+uxfocus(Uxctl *c)
+{
+	Cc *cc;
+	Cw *w;
+	Win *mw;
+
+	dxfocus(c);
+	lockmodel();
+	if((cc = ccbyctl(c)) != nil && (w = cwbyname(cc->win)) != nil && (mw = winbyname(w->name)) != nil){
+		mw->focus = cc->node;
+		w->focus = cc->node;
+	}
+	unlockmodel();
+}
+
+void
 uxsetorigin(Uxctl *c, Point p)
 {
 	Node *n;
@@ -1780,6 +1816,11 @@ capisync1(void)
 		if(w->title == nil || strcmp(w->title, mw->title) != 0){
 			setstr(&w->title, mw->title);
 			dxwinsettitle(w->w, mw->title);
+		}
+		if(mw->focus != w->focus){
+			w->focus = mw->focus;
+			if((c = ccbynode(w->focus)) != nil)
+				dxfocus(c->c);
 		}
 	}
 	for(c = ccs; c != nil; c = c->next){
