@@ -332,6 +332,10 @@ Then the rest of step 4:
   takes it), and a `file-chooser` type (`dir`, `value`, `items`; verbs
   `cd`, `choose`, `cancel`; events `change dir=`, `choose value=`,
   `cancel`).
+- **A list's columns.** `list` gets a `columns` prop in table's
+  format (`id label width`), and an item with columns is a line of
+  tab-separated fields, its id first; both go to the control from a
+  script.
 - **The spike's controls** carry their props both ways: select and
   radio-group `items` and `value` (item keys from 1), slider `min`,
   `max`, `step` and `value`, switch `value` on/off, tabs as `tab`

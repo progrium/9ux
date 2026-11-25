@@ -338,6 +338,10 @@ char *catalog[] = {
 	"prop    searchable  bool  default=off\n"
 	"prop    loading     bool  default=off\n"
 	"prop    query       text  file\n"
+	"# 9ux: a list may show columns, as a Finder list view does: each item's\n"
+	"# text is its fields, tab-separated, under these headers (\"id label\n"
+	"# width\", table's columns format)\n"
+	"prop    columns     data  file\n"
 	"word    selectable multiple searchable loading  kind=flag\n"
 	"event   select           kind=state\n"
 	"event   open             kind=action\n"
@@ -345,6 +349,7 @@ char *catalog[] = {
 	"slot    row\n"
 	"child   none\n"
 	"file    items  format=items\n"
+	"file    columns  format=columns\n"
 	,
 	"number-input",
 	"type    number-input  tier=component  profile=form  since=1.0\n"

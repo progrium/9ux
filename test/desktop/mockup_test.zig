@@ -35,8 +35,8 @@ test "desktop: the desktop mockup" {
     const list = "`{for(w in /tmp/f/win/folder-*) if(test -e $w/scroll/list) echo $w}";
     try waitTree(s, "~ " ++ icons ++ " /tmp/*");
     try waitTree(s, "~ " ++ list ++ " /tmp/*");
-    try waitTree(s, "grep -s '^[0-9]+ README' " ++ list ++ "^/scroll/list/items");
-    gpa.free(try s.rc("w=" ++ list ++ "; echo set scroll/list 'value='^`{grep '^[0-9]+ README' $w/scroll/list/items | awk '{print $1}'} >$w/ctl"));
+    try waitTree(s, "grep -s '^[0-9]+\tREADME' " ++ list ++ "^/scroll/list/items");
+    gpa.free(try s.rc("w=" ++ list ++ "; echo set scroll/list 'value='^`{grep '^[0-9]+\tREADME' $w/scroll/list/items | awk '{print $1}'} >$w/ctl"));
     gpa.free(try s.rc("w=" ++ icons ++ "; echo activate >$w/ctl; echo select `{grep 'label=README ' $w/scroll/icons/items | awk '{print $1}'} >$w/scroll/icons/ctl"));
     try waitTree(s, "w=" ++ icons ++ "; grep -s 'selection=i[0-9]+ ' $w/scroll/icons/tree");
     try s.settle();

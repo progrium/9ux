@@ -1924,7 +1924,11 @@ uxshow(Uxctl *c, int on)
 	dxshow(c, on);
 }
 
-/* list items: "N text", N from 1; a tab between columns stays */
+/*
+ * list items: "N text", N from 1. An item with columns is a line of
+ * tab-separated fields (components.md, Data file formats): N, then
+ * each column's text.
+ */
 void
 uxsetitems(Uxctl *c, char **items, int ni)
 {
@@ -1942,7 +1946,8 @@ uxsetitems(Uxctl *c, char **items, int ni)
 	else if(n != nil){
 		fmtstrinit(&f);
 		for(i = 0; i < ni; i++)
-			fmtprint(&f, "%s%d %s", i > 0 ? "\n" : "", i+1, items[i]);
+			fmtprint(&f, "%s%d%c%s", i > 0 ? "\n" : "", i+1,
+				strchr(items[i], '\t') != nil ? '\t' : ' ', items[i]);
 		s = fmtstrflush(&f);
 		setprop(n, "items", s, 0);
 		setstr(&cc->data, s);
@@ -1958,20 +1963,22 @@ void
 uxsetcolumns(Uxctl *c, char **titles, int *widths, int nc)
 {
 	Node *n;
+	Cc *cc;
 	Fmt f;
 	char *q;
 	int i;
 
 	lockmodel();
-	if((n = nodeof(c, nil)) != nil){
+	if((n = nodeof(c, &cc)) != nil){
 		fmtstrinit(&f);
 		for(i = 0; i < nc; i++){
 			q = quoteval(titles[i]);
-			fmtprint(&f, "%s%d %s width=%d", i > 0 ? "\n" : "", i+1, q, widths != nil ? widths[i] : 0);
+			fmtprint(&f, "%s%d %s %d", i > 0 ? "\n" : "", i+1, q, widths != nil ? widths[i] : 0);
 			free(q);
 		}
 		q = fmtstrflush(&f);
 		setprop(n, "columns", q, 0);
+		setstr(&cc->data2, q);
 		free(q);
 	}
 	unlockmodel();
@@ -2461,6 +2468,58 @@ syncchoice(Cc *c, Node *n)
 	}
 }
 
+/*
+ * A list's items and columns from the script: items are "N text", or
+ * N and each column's text as tab-separated fields; columns are
+ * uitree's format, "id label width" (components.md). Model held.
+ */
+static void
+synclist(Cc *c, Node *n)
+{
+	char *v, *s, **l, **titles, *f[4];
+	int i, ni, nf, *widths;
+
+	v = getprop(n, "items");
+	if(v != nil && !streq(v, c->data)){
+		setstr(&c->data, v);
+		s = estrdup(v);
+		l = emalloc((strlen(s)/2+2)*sizeof(char*));
+		ni = s[0] != 0 ? getfields(s, l, strlen(s)/2+2, 0, "\n") : 0;
+		for(i = 0; i < ni; i++)
+			if(strchr(l[i], '\t') != nil)
+				l[i] = strchr(l[i], '\t')+1;
+			else if(strchr(l[i], ' ') != nil)
+				l[i] = strchr(l[i], ' ')+1;
+		dxsetitems(c->c, l, ni);
+		free(l);
+		free(s);
+	}
+	v = getprop(n, "columns");
+	if(v != nil && !streq(v, c->data2)){
+		setstr(&c->data2, v);
+		s = estrdup(v);
+		l = emalloc((strlen(s)/2+2)*sizeof(char*));
+		ni = s[0] != 0 ? getfields(s, l, strlen(s)/2+2, 0, "\n") : 0;
+		titles = emalloc((ni+1)*sizeof(char*));
+		widths = emalloc((ni+1)*sizeof(int));
+		for(i = 0; i < ni; i++){
+			if(strchr(l[i], '\t') != nil)
+				nf = getfields(l[i], f, nelem(f), 0, "\t");
+			else
+				nf = tokenize(l[i], f, nelem(f));
+			titles[i] = estrdup(nf > 1 ? f[1] : "");
+			widths[i] = nf > 2 ? atoi(f[2]) : 0;
+		}
+		dxsetcolumns(c->c, titles, widths, ni);
+		for(i = 0; i < ni; i++)
+			free(titles[i]);
+		free(titles);
+		free(widths);
+		free(l);
+		free(s);
+	}
+}
+
 static void
 capisync1(void)
 {
@@ -2515,6 +2574,7 @@ capisync1(void)
 			}
 		}
 		if(c->kind == Klist){
+			synclist(c, n);
 			v = getprop(n, "value");
 			if(v == nil)
 				v = "";

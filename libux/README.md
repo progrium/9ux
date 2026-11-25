@@ -209,7 +209,8 @@ registration, clicks and shortcuts against `test/fakes/fakedevux`, drag
 and drop and the clipboard (copying a text field's selection), the
 menus, strings and an alert coming from the sample's resources, and
 (through [test/ctlapp.c](test/ctlapp.c)) the file chooser's props and
-verbs and the spike controls' props, values and style words.
+verbs, a list's columns, and the spike controls' props, values and
+style words.
 [test/libux/res_test.zig](../test/libux/res_test.zig) (the GUI harness,
 `scripts/test.sh gui`) checks what the resources draw against golden
 images: `icl8` icons from the app's and the system's resources, a
@@ -224,16 +225,16 @@ view, icon view, file chooser), and `console`, a shell window's text
 registration, menu bar registration, the sample app, and menus,
 dialogs, alerts, strings and icons from resources (S10).
 
-Beyond uitree's own types, libux's catalog adds two things of its own
+Beyond uitree's own types, libux's catalog adds three things of its own
 ([types/](types/README.md)): a `selection` prop on `input` and
-`textarea` (rune offsets `Q0 Q1`), and a `file-chooser` type with `dir`,
-`value` and `items` and the verbs `cd`, `choose` and `cancel`. The
+`textarea` (rune offsets `Q0 Q1`), a `columns` prop on `list` (table's
+format, `id label width`; an item with columns is then tab-separated
+fields, its id first), and a `file-chooser` type with `dir`, `value`
+and `items` and the verbs `cd`, `choose` and `cancel`. The
 spike's controls carry their props (select and radio-group `items` and
 `value`, slider `min`/`max`/`step`/`value`, switch `label`/`value`,
 tabs with a `tab` child per tab, svg `src`, styled-text `text` and
 `runs`, canvas `ops`) and their style words, both ways.
-
-Not yet in the tree: list columns' layout.
 
 Not yet:
 

@@ -245,7 +245,7 @@ echo close > $g/ctl
 test=list
 choose bylist $f
 sleep 0.3
-has $f/scroll/list/items '^[0-9]+ c\.txt	(text|file)	' '^[0-9]+ docs	folder	--$'
+has $f/scroll/list/items '^[0-9]+	c\.txt	(text|file)	' '^[0-9]+	docs	folder	--$'
 has $a/menu/view '^item bylist .*check=on'
 waitfor $ws 'view=list'
 choose byicon $f

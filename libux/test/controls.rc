@@ -84,6 +84,37 @@ sleep 0.2
 same $ctlout/cancelled 'cancelled
 '
 
+test=list-columns
+# libux/types/list/spec: columns in table's format; items with columns
+# are tab-separated fields, the id first
+l=$m/people
+same $l/columns '1 Name 100
+2 Age 40
+'
+same $l/items '1	Ann	31
+2	Bob	27
+'
+echo -n '1 Who 120
+2 Years 50
+3 City 80' >$l/columns
+same $l/columns '1 Who 120
+2 Years 50
+3 City 80
+'
+fails 'bad value' rc -c 'echo set people ''''''columns=1 Who wide'''''' >'$m/ctl
+same $l/columns '1 Who 120
+2 Years 50
+3 City 80
+'
+# a script's items reach the control: it has a third row to select
+echo -n '1	Ann	31	Oslo
+2	Bob	27	Rome
+3	Cy	45	Lima' >$l/items
+echo set people 'value=3' >$m/ctl
+inject event select 'win=main' 'node=people' 'via=ctl'
+same $ctlout/people.sel '2
+'
+
 test=spike-nodes
 same $w/type 'div
 '

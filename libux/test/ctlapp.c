@@ -1,8 +1,8 @@
 /*
  * ctlapp: a libux app for test/controls.rc, with the controls the
- * sample doesn't have: a file chooser, and the spike's laid out by
- * style words (select, radios, slider, switch, tabs, svg, styled-text,
- * divs). It writes what its handlers get to $ctlout/NAME.
+ * sample doesn't have: a file chooser, a list with columns, and the
+ * spike's laid out by style words (select, radios, slider, switch,
+ * tabs, svg, styled-text, divs). It writes what its handlers get to $ctlout/NAME.
  */
 #include <u.h>
 #include <libc.h>
@@ -45,6 +45,24 @@ chooserev(Uxev *e, void*)
 		note("cancelled", "cancelled\n");
 }
 
+/* the rows the drawing layer has selected, from 0 */
+static void
+listev(Uxev *e, void*)
+{
+	int *sel, n, i;
+	char buf[128], *p;
+
+	if(e->type != UXselection)
+		return;
+	n = uxgetsel(e->ctl, &sel);
+	p = buf;
+	buf[0] = 0;
+	for(i = 0; i < n && p < buf+sizeof buf-16; i++)
+		p = seprint(p, buf+sizeof buf, "%s%d", i > 0 ? " " : "", sel[i]);
+	free(sel);
+	note("people.sel", "%s\n", buf);
+}
+
 static void
 choiceev(Uxev *e, void*)
 {
@@ -63,6 +81,9 @@ threadmain(int, char**)
 	Uxctl *c, *box, *row;
 	char *fruit[] = { "Apple", "Banana", "Cherry" };
 	char *tabs[] = { "One", "Two" };
+	char *cols[] = { "Name", "Age" };
+	int widths[] = { 100, 40 };
+	char *people[] = { "Ann\t31", "Bob\t27" };
 
 	out = getenv("ctlout");
 	if(out == nil)
@@ -71,6 +92,10 @@ threadmain(int, char**)
 	w = uxwindow("window", "Choose", Rect(0, 0, 300, 240));
 	c = uxfilechooser(w, "files", getenv("ctldir"), Rect(10, 10, 290, 200));
 	uxhandler(c, chooserev, nil);
+	c = uxlist(w, "people", Rect(10, 205, 290, 235));
+	uxsetcolumns(c, cols, widths, nelem(cols));
+	uxsetitems(c, people, nelem(people));
+	uxhandler(c, listev, nil);
 	w2 = uxwindow("window", "Spike", Rect(0, 0, 400, 300));
 	uxwinstyle(w2, "v-flex p=12 gap=8");
 	box = uxdiv(w2, "box");
