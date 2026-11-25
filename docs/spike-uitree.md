@@ -205,21 +205,34 @@ These types are drawn with libux's own controls, inside the flex layout:
 | `table` | list with column headers, from `columns` and `rows` | `select row=ID via=user` |
 | `alert-dialog` in `over/` | a modal dialog window: title, description, cancel and confirm buttons | `confirm` or `cancel` (Enter, Esc, the close box), then it closes |
 | `dialog`, `sheet` in `over/` | a modal dialog window holding the overlay's children | `close` as a request; the app closes it with `ctl close` |
+| `select` | a pop-up menu button (`libux/widget.c`) | `change value=ID via=user` |
+| `radio-group` | radio buttons, in a column or a row (`dir`) | `change value=ID via=user` |
+| `slider` | a slider with `min`, `max` and `step` | `change value=N via=user` while dragging, `commit` on release |
+| `switch` | a sliding switch | `change value=on\|off via=user` |
+| `tabs` | a tab bar over the chosen tab's panel | `change value=TAB via=user`; the panel follows `value` |
+| `popover` in `over/` | a box placed by its anchor, over the window | `open` and `close` when its anchor is clicked |
+| `context-menu` in `over/` | a pop-up menu at the pointer on a right-button press on its anchor | `action ID over/NAME via=user` |
 
-`test/uxkit/form.rc` is an account settings screen built from these.
-The second uxkit test types in a field, unchecks a box, picks a list
+libux didn't have a pop-up menu button, radio buttons, a slider, a
+switch or tabs, so `libux/widget.c` adds them in the classic look, plus
+a pop-up menu over a window that takes the mouse until it's done (press,
+drag and release, or two clicks). select and context menus both use it.
+
+Three clients drive these in `test/uxkit/`. `form.rc` is an account
+settings screen: its test types in a field, unchecks a box, picks a list
 item, saves, then opens the alert dialog with Delete and confirms it
-with Enter, checking each event and the client's answer.
+with Enter. `widgets.rc` is a preferences window: its test picks from
+the select's menu, a radio button, the slider's end, the switch, opens
+and closes the popover, chooses from the context menu and changes tab.
+Each test checks every event and the client's answer to it.
 
-Still drawn as plain divs: select, radio-group, slider, number-input,
-tabs and the other nav types, popover, tooltip and context-menu,
-canvas ops, and the layout and feedback types (they lay out, but
-without their own look). A switch looks like a checkbox.
+Still drawn as plain divs: number-input, combobox, sidebar, breadcrumb,
+toolbar, tooltip and hover-card, canvas ops, and the layout and feedback
+types (they lay out, but without their own look).
 
 ## Next, if this goes ahead
 
-1. Draw the rest of form and nav (select as a popup, radio-group,
-   slider, tabs), popovers and context menus anchored to their node,
-   and canvas ops.
+1. Paint canvas ops, and give the nav, layout and feedback types their
+   own look.
 2. The transfer layer (drag and drop), the last skipped script.
 3. Replace the spike's C API in libux with uxkit's tree.

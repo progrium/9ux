@@ -1292,8 +1292,14 @@ client(void *v)
 		sysfatal("exec %s: %r", cmd);
 	}
 	while((w = wait()) != nil){
-		if(w->pid == pid)
+		if(w->pid == pid){
+			/*
+			 * Hold the model while the other procs are killed, so
+			 * none is stopped halfway through changing it.
+			 */
+			lockmodel();
 			threadexitsall(w->msg[0] != 0 ? w->msg : nil);
+		}
 		free(w);
 	}
 	threadexitsall("no client");
