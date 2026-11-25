@@ -285,6 +285,8 @@ char*	tracetext(void);
 int	issecret(Node*);
 int	isfileprop(Pdesc*);
 void	startresponder(void);
+void	treeserve(char*, char*);
+int	treepost(char*);
 extern int	srvpid;
 
 /* canvas.c */

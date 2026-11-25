@@ -7,7 +7,7 @@
 #include <fcall.h>
 #include <thread.h>
 #include <9p.h>
-#include "dat.h"
+#include "tree.h"
 
 App	*app;
 Type	*types;

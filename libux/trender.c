@@ -13,8 +13,8 @@
 #include <fcall.h>
 #include <thread.h>
 #include <9p.h>
-#include <ux.h>
-#include "dat.h"
+#include "ux.h"
+#include "tree.h"
 
 int	drawing;
 

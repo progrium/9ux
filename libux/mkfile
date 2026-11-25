@@ -21,8 +21,15 @@ OFILES=\
 	widget.$O\
 	win.$O\
 	uxglyphs.$O\
+	tcanvas.$O\
+	tcatalog.$O\
+	tcmd.$O\
+	tev.$O\
+	tfs.$O\
+	tmodel.$O\
+	trender.$O\
 
-HFILES=ux.h impl.h ../assets/gen/uxstyle.h ../assets/gen/uxglyphs.h
+HFILES=ux.h impl.h tree.h ../assets/gen/uxstyle.h ../assets/gen/uxglyphs.h
 CFLAGS=$CFLAGS -I../assets/gen
 
 all:V: $LIB
