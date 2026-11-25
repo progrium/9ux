@@ -6,10 +6,71 @@ char *profiles[] = {
 	"core",
 	"form",
 	"nav",
+	"feedback",
+	"layout",
+	"data",
+	"overlay",
+	"canvas",
 	nil,
 };
 
 char *catalog[] = {
+	"accordion-item",
+	"type    accordion-item  tier=component  profile=layout  since=1.0\n"
+	"prop    title     text  file\n"
+	"prop    icon      word\n"
+	"prop    disabled  bool  default=off\n"
+	"word    disabled  kind=flag\n"
+	"child   any\n"
+	,
+	"accordion",
+	"type    accordion  tier=component  profile=layout  since=1.0\n"
+	"prop    multiple  bool  default=off\n"
+	"prop    value     text  file\n"
+	"word    multiple  kind=flag\n"
+	"word    xs sm md lg  kind=size\n"
+	"event   change  kind=state\n"
+	"child   accordion-item\n"
+	,
+	"alert-dialog",
+	"type    alert-dialog  tier=overlay  profile=overlay  since=1.0\n"
+	"prop    title        text  file\n"
+	"prop    description  text  file\n"
+	"prop    confirm      text  default=OK  file\n"
+	"prop    cancel       text  file\n"
+	"prop    variant      enum=default,danger  default=default\n"
+	"prop    width        number\n"
+	"prop    open         bool  default=off  readonly\n"
+	"verb    open   class=activate\n"
+	"verb    close  class=activate\n"
+	"event   confirm  kind=action\n"
+	"event   cancel   kind=action\n"
+	"child   any\n"
+	,
+	"alert",
+	"type    alert  tier=component  profile=feedback  since=1.0\n"
+	"prop    title     text  file\n"
+	"prop    text      text  file\n"
+	"prop    variant   enum=info,success,warning,error  default=info\n"
+	"prop    closable  bool  default=off\n"
+	"prop    banner    bool  default=off\n"
+	"prop    icon      word\n"
+	"word    closable banner  kind=flag\n"
+	"word    info success warning error  kind=variant\n"
+	"word    xs sm md lg  kind=size\n"
+	"event   close  kind=action\n"
+	"child   none\n"
+	,
+	"badge",
+	"type    badge  tier=component  profile=feedback  since=1.0\n"
+	"prop    count  number\n"
+	"prop    dot    bool  default=off\n"
+	"prop    max    number  default=99\n"
+	"prop    icon   word\n"
+	"word    dot  kind=flag\n"
+	"word    xs sm md lg  kind=size\n"
+	"child   any\n"
+	,
 	"breadcrumb",
 	"type    breadcrumb  tier=component  profile=nav  since=1.0\n"
 	"prop    items  data  file\n"
@@ -35,6 +96,24 @@ char *catalog[] = {
 	"slot    suffix  accepts=icon,svg,text\n"
 	"child   any\n"
 	,
+	"canvas",
+	"type    canvas  tier=element  profile=canvas  since=1.0\n"
+	"prop    ops     data  file\n"
+	"prop    pixels  bytes  file\n"
+	"prop    scale   number  readonly\n"
+	"verb    update  ID GEOMETRY... [ATTR=VALUE...]  class=edit\n"
+	"verb    add     KIND ID GEOMETRY... [ATTR=VALUE...]  class=edit\n"
+	"verb    del     ID...  class=edit\n"
+	"verb    raise   ID  class=edit\n"
+	"verb    lower   ID  class=edit\n"
+	"event   mouse-down  kind=action\n"
+	"event   mouse-up    kind=action\n"
+	"event   click       kind=action\n"
+	"event   move        kind=state\n"
+	"event   drag        kind=state\n"
+	"child   none\n"
+	"file    ops  format=ops\n"
+	,
 	"checkbox",
 	"type    checkbox  tier=component  profile=form  since=1.0\n"
 	"prop    label       text  file\n"
@@ -46,8 +125,63 @@ char *catalog[] = {
 	"event   change  kind=state\n"
 	"child   none\n"
 	,
+	"collapsible",
+	"type    collapsible  tier=component  profile=layout  since=1.0\n"
+	"prop    open  bool  default=off\n"
+	"word    open  kind=flag\n"
+	"event   change  kind=state\n"
+	"slot    trigger\n"
+	"slot    content\n"
+	"child   none\n"
+	,
+	"context-menu",
+	"type    context-menu  tier=overlay  profile=overlay  since=1.0\n"
+	"prop    anchor  path\n"
+	"prop    menu    data  file\n"
+	"prop    open    bool  default=off  readonly\n"
+	"verb    open   class=activate\n"
+	"verb    close  class=activate\n"
+	"event   action  kind=action\n"
+	"child   none\n"
+	"file    menu  format=menu\n"
+	,
+	"description-list",
+	"type    description-list  tier=component  profile=data  since=1.0\n"
+	"prop    items        data  file\n"
+	"prop    columns      number  default=3\n"
+	"prop    bordered     bool  default=off\n"
+	"prop    labels       enum=side,top  default=side\n"
+	"prop    label-width  number\n"
+	"word    bordered  kind=flag\n"
+	"word    xs sm md lg  kind=size\n"
+	"child   none\n"
+	"file    items  format=desc-items\n"
+	,
+	"dialog",
+	"type    dialog  tier=overlay  profile=overlay  since=1.0\n"
+	"prop    title             text  file\n"
+	"prop    description       text  file\n"
+	"prop    width             number\n"
+	"prop    modal             bool\n"
+	"prop    overlay-closable  bool\n"
+	"prop    keyboard          bool\n"
+	"prop    open              bool  default=off  readonly\n"
+	"word    modal overlay-closable keyboard  kind=flag\n"
+	"verb    open   class=activate\n"
+	"verb    close  class=activate\n"
+	"event   open   kind=action\n"
+	"event   close  kind=request\n"
+	"child   any\n"
+	,
 	"div",
 	"type    div  tier=element  profile=core  since=1.0\n"
+	"child   any\n"
+	,
+	"empty",
+	"type    empty  tier=component  profile=feedback  since=1.0\n"
+	"prop    title        text  file\n"
+	"prop    description  text  file\n"
+	"prop    icon         word\n"
 	"child   any\n"
 	,
 	"field",
@@ -67,6 +201,19 @@ char *catalog[] = {
 	"word    xs sm md lg  kind=size\n"
 	"event   submit  kind=action\n"
 	"child   field\n"
+	,
+	"grid",
+	"type    grid  tier=component  profile=layout  since=1.0\n"
+	"prop    cols  number\n"
+	"prop    rows  number\n"
+	"prop    gap   number\n"
+	"child   any\n"
+	,
+	"group-box",
+	"type    group-box  tier=component  profile=layout  since=1.0\n"
+	"prop    title  text  file\n"
+	"word    normal fill outline  kind=variant\n"
+	"child   any\n"
 	,
 	"icon",
 	"type    icon  tier=element  profile=core  since=1.0\n"
@@ -102,6 +249,11 @@ char *catalog[] = {
 	"slot    suffix\n"
 	"child   none\n"
 	,
+	"kbd",
+	"type    kbd  tier=component  profile=feedback  since=1.0\n"
+	"prop    key  word\n"
+	"child   none\n"
+	,
 	"link",
 	"type    link  tier=component  profile=nav  since=1.0\n"
 	"prop    label     text  file\n"
@@ -110,6 +262,24 @@ char *catalog[] = {
 	"word    disabled  kind=flag\n"
 	"event   click  kind=action\n"
 	"child   none\n"
+	,
+	"list",
+	"type    list  tier=component  profile=data  since=1.0\n"
+	"prop    items       data  file\n"
+	"prop    fields      text  file\n"
+	"prop    value       text  file\n"
+	"prop    selectable  bool  default=off\n"
+	"prop    multiple    bool  default=off\n"
+	"prop    searchable  bool  default=off\n"
+	"prop    loading     bool  default=off\n"
+	"prop    query       text  file\n"
+	"word    selectable multiple searchable loading  kind=flag\n"
+	"event   select           kind=state\n"
+	"event   open             kind=action\n"
+	"event   scrolled-to-end  kind=action\n"
+	"slot    row\n"
+	"child   none\n"
+	"file    items  format=items\n"
 	,
 	"number-input",
 	"type    number-input  tier=component  profile=form  since=1.0\n"
@@ -130,6 +300,32 @@ char *catalog[] = {
 	"slot    suffix\n"
 	"child   none\n"
 	,
+	"panel",
+	"type    panel  tier=component  profile=layout  since=1.0\n"
+	"prop    size  number\n"
+	"prop    min   number\n"
+	"prop    max   number\n"
+	"child   any\n"
+	,
+	"popover",
+	"type    popover  tier=overlay  profile=overlay  since=1.0\n"
+	"prop    anchor     path\n"
+	"prop    placement  enum=top-start,top,top-end,bottom-start,bottom,bottom-end,left-start,left,left-end,right-start,right,right-end  default=bottom-start\n"
+	"prop    trigger    enum=click,hover  default=click\n"
+	"prop    open       bool  default=off  readonly\n"
+	"verb    open   class=activate\n"
+	"verb    close  class=activate\n"
+	"event   open   kind=action\n"
+	"event   close  kind=action\n"
+	"child   any\n"
+	,
+	"progress",
+	"type    progress  tier=component  profile=feedback  since=1.0\n"
+	"prop    value    number  min=0 max=100\n"
+	"prop    variant  enum=bar,circle  default=bar\n"
+	"word    xs sm md lg  kind=size\n"
+	"child   none\n"
+	,
 	"radio-group",
 	"type    radio-group  tier=component  profile=form  since=1.0\n"
 	"prop    items       data  file\n"
@@ -142,6 +338,12 @@ char *catalog[] = {
 	"event   change  kind=state\n"
 	"child   none\n"
 	"file    items  format=items\n"
+	,
+	"resizable",
+	"type    resizable  tier=component  profile=layout  since=1.0\n"
+	"prop    dir  enum=row,col  default=row\n"
+	"event   resize  kind=state\n"
+	"child   panel\n"
 	,
 	"scroll",
 	"type    scroll  tier=element  profile=core  since=1.0\n"
@@ -161,6 +363,25 @@ char *catalog[] = {
 	"event   change  kind=state\n"
 	"child   none\n"
 	"file    items  format=items\n"
+	,
+	"separator",
+	"type    separator  tier=component  profile=layout  since=1.0\n"
+	"prop    dir    enum=row,col  default=row\n"
+	"prop    label  text  file\n"
+	"child   none\n"
+	,
+	"sheet",
+	"type    sheet  tier=overlay  profile=overlay  since=1.0\n"
+	"prop    side              enum=left,right,top,bottom  default=right\n"
+	"prop    size              number  default=350\n"
+	"prop    title             text  file\n"
+	"prop    overlay-closable  bool\n"
+	"prop    open              bool  default=off  readonly\n"
+	"word    overlay-closable  kind=flag\n"
+	"verb    open   class=activate\n"
+	"verb    close  class=activate\n"
+	"event   close  kind=request\n"
+	"child   any\n"
 	,
 	"sidebar-group",
 	"type    sidebar-group  tier=component  profile=nav  since=1.0\n"
@@ -207,6 +428,11 @@ char *catalog[] = {
 	"type    spacer  tier=element  profile=core  since=1.0\n"
 	"child   none\n"
 	,
+	"spinner",
+	"type    spinner  tier=component  profile=feedback  since=1.0\n"
+	"word    xs sm md lg  kind=size\n"
+	"child   none\n"
+	,
 	"styled-text",
 	"type    styled-text  tier=element  profile=core  since=1.0\n"
 	"prop    text        text  file\n"
@@ -242,6 +468,31 @@ char *catalog[] = {
 	"event   close  kind=request\n"
 	"child   any\n"
 	,
+	"table",
+	"type    table  tier=component  profile=data  since=1.0\n"
+	"prop    columns     data  file\n"
+	"prop    rows        data  file\n"
+	"prop    value       text  file\n"
+	"prop    sort        text  file\n"
+	"prop    widths      text  file\n"
+	"prop    stripe      bool  default=off\n"
+	"prop    selectable  enum=row,cell,off  default=row\n"
+	"prop    resizable   bool  default=off\n"
+	"prop    sortable    bool  default=off\n"
+	"prop    sorted      bool  default=off\n"
+	"prop    loading     bool  default=off\n"
+	"prop    bordered    bool  default=on\n"
+	"word    stripe resizable sortable sorted loading bordered  kind=flag\n"
+	"word    xs sm md lg  kind=size\n"
+	"event   select           kind=state\n"
+	"event   sort             kind=action\n"
+	"event   open             kind=action\n"
+	"event   resize           kind=state\n"
+	"event   scrolled-to-end  kind=action\n"
+	"child   none\n"
+	"file    columns  format=columns\n"
+	"file    rows  format=rows\n"
+	,
 	"tabs",
 	"type    tabs  tier=component  profile=nav  since=1.0\n"
 	"prop    value  child\n"
@@ -249,6 +500,16 @@ char *catalog[] = {
 	"word    xs sm md lg  kind=size\n"
 	"event   change  kind=state\n"
 	"child   tab\n"
+	,
+	"tag",
+	"type    tag  tier=component  profile=feedback  since=1.0\n"
+	"prop    label     text  file\n"
+	"prop    closable  bool  default=off\n"
+	"word    closable  kind=flag\n"
+	"word    primary secondary danger success warning info outline amber black blue cyan emerald fuchsia gray green indigo lime neutral orange pink purple red rose sky teal violet white yellow  kind=variant\n"
+	"word    xs sm md lg  kind=size\n"
+	"event   close  kind=action\n"
+	"child   none\n"
 	,
 	"text",
 	"type    text  tier=element  profile=core  since=1.0\n"
@@ -284,6 +545,31 @@ char *catalog[] = {
 	"word    disabled  kind=flag\n"
 	"word    xs sm md lg  kind=size\n"
 	"child   any\n"
+	,
+	"tooltip",
+	"type    tooltip  tier=overlay  profile=overlay  since=1.0\n"
+	"prop    anchor      path\n"
+	"prop    text        text  file\n"
+	"prop    placement   enum=top-start,top,top-end,bottom-start,bottom,bottom-end,left-start,left,left-end,right-start,right,right-end  default=top\n"
+	"prop    open-delay  number  default=500  min=0\n"
+	"prop    open        bool  default=off  readonly\n"
+	"verb    open   class=activate\n"
+	"verb    close  class=activate\n"
+	"child   none\n"
+	,
+	"tree",
+	"type    tree  tier=component  profile=data  since=1.0\n"
+	"prop    items       data  file\n"
+	"prop    expanded    text  file\n"
+	"prop    value       text  file\n"
+	"prop    selectable  bool  default=off\n"
+	"prop    multiple    bool  default=off\n"
+	"word    selectable multiple  kind=flag\n"
+	"event   select  kind=state\n"
+	"event   expand  kind=action\n"
+	"event   open    kind=action\n"
+	"child   none\n"
+	"file    items  format=tree-items\n"
 	,
 	nil,
 };

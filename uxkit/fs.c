@@ -85,7 +85,6 @@ static Tab tab[] = {
 	"inner",	Qinner,	-1,	0,
 	"state",	Qstate,	-1,	0,
 	"focus",	Qfocus,	-1,	0,
-	"over",	Qoverdir,	-1,	1,
 };
 
 static char *mtpt = "/mnt/ui";
@@ -257,7 +256,7 @@ fswalk1(Fid *fid, char *name, Qid *qid)
 			a->name = estrdup(name);
 			break;
 		}
-		if((c = kidbyname(n, name)) == nil)
+		if((c = walkkid(n, name)) == nil)
 			return "not found";
 		a->node = c->id;
 		break;
@@ -387,9 +386,12 @@ dirlist(Faux *a)
 		n = nodebyid(a->node);
 		if(n == nil)
 			break;
-		for(i = 0; i < nelem(tab); i++)
+		/* over/ lists only its overlays */
+		for(i = 0; strcmp(n->type, "@over") != 0 && i < nelem(tab); i++)
 			if(tab[i].parent == Qnode || (tab[i].parent == -1 && n->parent == nil))
 				dadd(l, tab[i].k, n->id, nil);
+		if(n->parent == nil && n->win->over != nil)
+			dadd(l, Qnode, n->win->over->id, nil);
 		p = nil;
 		for(i = 0; typebyname(n->type) != nil && i < typebyname(n->type)->np; i++){
 			p = &typebyname(n->type)->p[i];
@@ -666,6 +668,10 @@ buffered(Faux *a)
 		/* text, bytes and data apply at close; the rest as written */
 		if((n = nodebyid(a->node)) == nil || (p = pdesc(typebyname(n->type), a->name)) == nil)
 			return 1;
+		/* except a value that names children: accordion's open items */
+		if(strcmp(a->name, "value") == 0 && strcmp(p->form, "text") == 0
+		&& typebyname(n->type) != nil && typebyname(n->type)->child == 2)
+			return 0;
 		return strcmp(p->form, "text") == 0 || strcmp(p->form, "bytes") == 0 || strcmp(p->form, "data") == 0;
 	case Qtree: case Qkeys: case Qtokens: case Qclip:
 		return 1;

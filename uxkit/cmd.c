@@ -232,7 +232,7 @@ resolve(Node *base, char *path, Node **np)
 				return path;
 			}
 		}
-		if((x = kidbyname(x, f[i])) == nil){
+		if((x = walkkid(x, f[i])) == nil){
 			free(buf);
 			return smprint("not found: %s", path);
 		}
@@ -531,6 +531,7 @@ tick(int secs)
 static int	creating;
 static void	echovalue(Node*, Pdesc*, char*);
 static int	hasitem(char*, char*);
+static char*	checkkids(Node*, char*);
 
 char*
 setnodeprop(Node *n, char *name, char *v)
@@ -568,6 +569,9 @@ setnodeprop(Node *n, char *name, char *v)
 	&& strcmp(p->form, "word") == 0 && getprop(n, "items") != nil && getprop(n, "items")[0] != 0
 	&& !hasitem(getprop(n, "items"), v))
 		return smprint("not found: no item %s", v);
+	if(strcmp(name, "value") == 0 && strcmp(p->form, "text") == 0
+	&& (e = checkkids(n, v)) != nil)
+		return e;
 	if(strcmp(p->form, "bool") == 0)
 		setprop(n, name, v, strcmp(v, "on") == 0);
 	else
@@ -575,6 +579,33 @@ setnodeprop(Node *n, char *name, char *v)
 	if(strcmp(name, "value") == 0 && !creating)
 		echovalue(n, p, v);
 	return nil;
+}
+
+/*
+ * A text value on a type whose children are listed (accordion's open
+ * items) names those children, each one.
+ */
+static char*
+checkkids(Node *n, char *v)
+{
+	Type *t;
+	char *s, *f[64];
+	int i, nf;
+	char *e;
+
+	t = typebyname(n->type);
+	if(t == nil || t->child != 2 || n->nkid == 0)
+		return nil;
+	s = estrdup(v);
+	nf = tokenize(s, f, nelem(f));
+	e = nil;
+	for(i = 0; i < nf; i++)
+		if(kidbyname(n, f[i]) == nil){
+			e = smprint("not found: no child %s", f[i]);
+			break;
+		}
+	free(s);
+	return e;
 }
 
 /* a client's write to a value is echoed as a change with via=ctl */
@@ -1128,6 +1159,12 @@ typeverb(Node *n, Tok *t, int nt)
 		d = getprop(n, "disabled");
 		if(d != nil && strcmp(d, "on") == 0)
 			return smprint("disabled: %s", n->name);
+		/* an overlay's open and close show and hide it */
+		if(ty->overlay && (strcmp(t[0].s, "open") == 0 || strcmp(t[0].s, "close") == 0)){
+			setprop(n, "open", strcmp(t[0].s, "open") == 0 ? "on" : "off", strcmp(t[0].s, "open") == 0);
+			uisync();
+			return nil;
+		}
 		if(strcmp(ty->vclass[i], "activate") == 0){
 			for(r = n; r->parent != nil; r = r->parent)
 				;
@@ -1149,6 +1186,9 @@ cmd(Node *base, Line *l)
 	t = l->t;
 	nt = l->n;
 	v = t[0].s;
+	if(base != nil && strcmp(base->type, "canvas") == 0
+	&& (e = canvasverb(base, t, nt)) != (char*)-1)
+		return e;
 	if(strcmp(v, "set") == 0 && (base != nil || (nt >= 2 && strncmp(t[1].s, "win/", 4) == 0))){
 		if(nt < 2)
 			return smprint("bad syntax: set PATH");
@@ -1163,7 +1203,7 @@ cmd(Node *base, Line *l)
 			return smprint("bad syntax: delete PATH");
 		if((e = resolvein(base, t[1].s, &n)) != nil)
 			return e;
-		if(n->parent == nil)
+		if(n->parent == nil || strcmp(n->type, "@over") == 0)
 			return smprint("bad value: a window's root");
 		delnode(n);
 		return nil;
@@ -1500,7 +1540,7 @@ injevent(Tok *t, int nt)
 	if((e = injwin(t+2, nt-2, &w, &n, 0)) != nil)
 		return e;
 	via = attr(t+2, nt-2, "via");
-	if(strcmp(name, "close") == 0 && w != nil){
+	if(strcmp(name, "close") == 0 && w != nil && (n == nil || n == w->root)){
 		request(Aclose, w, via != nil ? via : "user");
 		return nil;
 	}

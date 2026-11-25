@@ -49,10 +49,12 @@ struct Node {
 	int	fixed;	/* type can't change: a frame was drawn */
 	Win	*win;
 };
+/* a window's over/ holds its overlays: a node of type @over, beside the root */
 
 struct Win {
 	char	*name;
 	Node	*root;
+	Node	*over;
 	char	*title;
 	int	w, h;
 	int	minw, minh, maxw, maxh;
@@ -105,6 +107,7 @@ struct Pdesc {
 	char	*dflt;
 	char	*min;
 	char	*max;
+	char	*fmt;	/* a data file's format: items, columns, tree-items... */
 };
 
 struct Type {
@@ -124,6 +127,7 @@ struct Type {
 	int	child;	/* 0: none, 1: any, 2: the list */
 	char	**childok;
 	int	nchildok;
+	int	overlay;	/* tier=overlay: lives in over/ */
 };
 
 /* a token of a ctl line */
@@ -213,6 +217,7 @@ Win*	winbyname(char*);
 Node*	newnode(Node*, char*, char*);
 void	delnode(Node*);
 Node*	kidbyname(Node*, char*);
+Node*	walkkid(Node*, char*);
 char*	relpath(Node*);
 char*	uipath(Node*);
 Type*	typebyname(char*);
@@ -225,6 +230,7 @@ char*	checkcolor(char*);
 char*	checkon(char*);
 char*	checkstroke(char*);
 char*	checkvalue(Node*, Pdesc*, char*);
+char*	checkdata(char*, char*);
 int	isnodefile(char*, int);
 char*	printtree(Node*);
 char*	quoteval(char*);
@@ -280,6 +286,10 @@ int	issecret(Node*);
 int	isfileprop(Pdesc*);
 void	startresponder(void);
 extern int	srvpid;
+
+/* canvas.c */
+char*	checkopsline(char**, int);
+char*	canvasverb(Node*, Tok*, int);
 
 /* fs.c */
 void	lockmodel(void);

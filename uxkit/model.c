@@ -91,7 +91,9 @@ parsespec(Type *t)
 		n = getfields(line, f, nelem(f), 1, " \t");
 		if(n < 1 || f[0][0] == 0 || f[0][0] == '#')
 			continue;
-		if(strcmp(f[0], "prop") == 0 && n >= 3){
+		if(strcmp(f[0], "type") == 0)
+			t->overlay = hasfield(f+1, n-1, "tier=overlay");
+		else if(strcmp(f[0], "prop") == 0 && n >= 3){
 			t->p = erealloc(t->p, (t->np+1)*sizeof(Pdesc));
 			pd = &t->p[t->np++];
 			memset(pd, 0, sizeof *pd);
@@ -115,6 +117,12 @@ parsespec(Type *t)
 				t->wkind[t->nword] = kind;
 				t->nword++;
 			}
+		}else if(strcmp(f[0], "file") == 0 && n >= 2){
+			for(i = 0; i < t->np; i++)
+				if(strcmp(t->p[i].name, f[1]) == 0){
+					free(t->p[i].fmt);
+					t->p[i].fmt = attrof(f+2, n-2, "format");
+				}
 		}else if(strcmp(f[0], "verb") == 0 && n >= 2){
 			t->verb = erealloc(t->verb, (t->nverb+1)*sizeof(char*));
 			t->vclass = erealloc(t->vclass, (t->nverb+1)*sizeof(char*));
@@ -415,6 +423,98 @@ winof(Node *n)
 }
 
 /* a prop's value, checked against its descriptor */
+/*
+ * A data file, by its format (components.md § Data file formats): a
+ * malformed line refuses the whole file.
+ */
+static int
+isnum(char *s)
+{
+	char *e;
+
+	strtod(s, &e);
+	return e != s && *e == 0;
+}
+
+static char*
+checkline(char *fmt, char **f, int n, char **ids, int nids)
+{
+	int i, j;
+
+	if(strcmp(fmt, "items") == 0){
+		if(f[0][0] == '#' || (n == 1 && strcmp(f[0], "-") == 0))
+			return nil;
+		if(f[0][0] == 0)
+			return smprint("bad value: an item needs an id");
+	}else if(strcmp(fmt, "columns") == 0){
+		if(f[0][0] == 0)
+			return smprint("bad value: a column needs an id");
+		if(n >= 3 && f[2][0] != 0 && !isnum(f[2]))
+			return smprint("bad value: width %s", f[2]);
+		for(i = 3; i < n; i++)
+			if(strcmp(f[i], "sort") != 0 && strcmp(f[i], "fixed") != 0
+			&& strcmp(f[i], "align=left") != 0 && strcmp(f[i], "align=center") != 0
+			&& strcmp(f[i], "align=right") != 0)
+				return smprint("bad value: column flag %s", f[i]);
+	}else if(strcmp(fmt, "tree-items") == 0){
+		if(f[0][0] == 0 || n < 2)
+			return smprint("bad value: a tree item is id parent label");
+		if(strcmp(f[1], "-") != 0){
+			for(j = 0; j < nids; j++)
+				if(strcmp(ids[j], f[1]) == 0)
+					break;
+			if(j == nids)
+				return smprint("not found: parent %s", f[1]);
+		}
+	}else if(strcmp(fmt, "ops") == 0){
+		return checkopsline(f, n);
+	}else if(strcmp(fmt, "desc-items") == 0){
+		if(f[0][0] == 0)
+			return smprint("bad value: an item needs a label");
+	}
+	return nil;
+}
+
+char*
+checkdata(char *fmt, char *v)
+{
+	char *buf, *line, *nl, *f[64], *e, **ids, *cp;
+	int n, nids, pass;
+
+	e = nil;
+	ids = nil;
+	nids = 0;
+	cp = nil;
+	/* the first pass gathers ids, so a parent may come after its child */
+	for(pass = 0; pass < 2 && e == nil; pass++){
+		free(cp);
+		cp = buf = estrdup(v);
+		for(line = buf; line != nil && *line && e == nil; line = nl){
+			nl = strchr(line, '\n');
+			if(nl != nil)
+				*nl++ = 0;
+			if(line[0] == 0)
+				continue;
+			if(strchr(line, '\t') != nil)
+				n = getfields(line, f, nelem(f), 0, "\t");
+			else
+				n = tokenize(line, f, nelem(f));
+			if(n < 1)
+				continue;
+			if(pass == 0){
+				ids = erealloc(ids, (nids+1)*sizeof(char*));
+				ids[nids++] = estrdup(f[0]);
+			}else
+				e = checkline(fmt, f, n, ids, nids);
+		}
+	}
+	free(cp);
+	while(nids > 0)
+		free(ids[--nids]);
+	free(ids);
+	return e;
+}
+
 char*
 checkvalue(Node *n, Pdesc *p, char *v)
 {
@@ -425,6 +525,8 @@ checkvalue(Node *n, Pdesc *p, char *v)
 
 	if(p->readonly)
 		return smprint("bad value: %s is read-only", p->name);
+	if(strcmp(p->form, "data") == 0 && p->fmt != nil)
+		return checkdata(p->fmt, v);
 	f = p->form;
 	if(strcmp(f, "word") == 0){
 		if(v[0] == 0 || strpbrk(v, " \t\n") != nil)
@@ -433,6 +535,9 @@ checkvalue(Node *n, Pdesc *p, char *v)
 		if(strcmp(v, "on") != 0 && strcmp(v, "off") != 0)
 			return smprint("bad value: %s is on or off", p->name);
 	}else if(strcmp(f, "number") == 0){
+		/* an empty value is unset: progress's indeterminate */
+		if(v[0] == 0 && strcmp(p->name, "value") == 0)
+			return nil;
 		d = strtod(v, &e);
 		if(e == v || *e != 0)
 			return smprint("bad value: %s is a number", p->name);
@@ -569,6 +674,19 @@ kidbyname(Node *n, char *name)
 	return nil;
 }
 
+/* a child, or a window root's over/ */
+Node*
+walkkid(Node *n, char *name)
+{
+	Node *c;
+
+	if((c = kidbyname(n, name)) != nil)
+		return c;
+	if(n->parent == nil && n->win != nil && n->win->over != nil && strcmp(name, "over") == 0)
+		return n->win->over;
+	return nil;
+}
+
 static Node*
 findid(Node *n, int id)
 {
@@ -592,7 +710,8 @@ nodebyid(int id)
 	if(id <= 0)
 		return nil;
 	for(i = 0; i < app->nwin; i++)
-		if((n = findid(app->win[i]->root, id)) != nil)
+		if((n = findid(app->win[i]->root, id)) != nil
+		|| (n = findid(app->win[i]->over, id)) != nil)
 			return n;
 	return nil;
 }
@@ -726,6 +845,14 @@ canhold(Node *n, char *t, char *name)
 	Type *pt;
 	int i;
 
+	/* overlays live in over/, and over/ holds only overlays */
+	if(strcmp(n->type, "@over") == 0){
+		if(typebyname(t) == nil || !typebyname(t)->overlay)
+			return smprint("unknown type: over/ holds only overlays, not %s", t);
+		return nil;
+	}
+	if(typebyname(t) != nil && typebyname(t)->overlay)
+		return smprint("unknown type: %s lives in over/", t);
 	pt = typebyname(n->type);
 	if(pt == nil)
 		return nil;
@@ -807,6 +934,9 @@ newwin(char *name)
 	w->ask = -1;
 	w->root = newnode(nil, "root", "div");
 	w->root->win = w;
+	w->over = newnode(nil, "over", "@over");
+	w->over->parent = w->root;
+	w->over->win = w;
 	app->win = erealloc(app->win, (app->nwin+1)*sizeof(Win*));
 	app->win[app->nwin++] = w;
 	return w;
@@ -816,6 +946,7 @@ static void
 freewin(Win *w)
 {
 	freenode(w->root);
+	freenode(w->over);
 	free(w->name);
 	free(w->title);
 	free(w->pos);
@@ -889,6 +1020,7 @@ appcopy(App *a)
 		w->titlebar = estrdup(ow->titlebar);
 		w->state = estrdup(ow->state);
 		w->root = nodecopy(ow->root, nil, w);
+		w->over = nodecopy(ow->over, w->root, w);
 		c->win[i] = w;
 	}
 	for(i = 0; i < Ntok; i++)

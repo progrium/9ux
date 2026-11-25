@@ -146,15 +146,75 @@ reaches(Sub *s, char *win, int *anc, int nanc)
 	return 0;
 }
 
+/* split attrs at spaces outside '' quotes */
+static int
+attrsplit(char *s, char **f, int nf)
+{
+	int n, q;
+
+	n = 0;
+	while(*s != 0 && n < nf){
+		while(*s == ' ')
+			*s++ = 0;
+		if(*s == 0)
+			break;
+		f[n++] = s;
+		for(q = 0; *s != 0 && (q || *s != ' '); s++)
+			if(*s == '\'')
+				q = !q;
+	}
+	return n;
+}
+
+static int
+attrcmp(void *a, void *b)
+{
+	char *x, *y;
+	int lx, ly, r;
+
+	x = *(char**)a;
+	y = *(char**)b;
+	lx = strcspn(x, "=");
+	ly = strcspn(y, "=");
+	r = strncmp(x, y, lx < ly ? lx : ly);
+	if(r != 0)
+		return r;
+	return lx - ly;
+}
+
+/* an event's attrs and win=, sorted by name */
+static char*
+attrline(char *attrs, char *win)
+{
+	char *buf, *f[64], *w;
+	int n, i;
+	Fmt fm;
+
+	buf = estrdup(attrs != nil ? attrs : "");
+	n = attrsplit(buf, f, nelem(f)-1);
+	w = nil;
+	if(win != nil){
+		w = smprint("win=%s", win);
+		f[n++] = w;
+	}
+	qsort(f, n, sizeof f[0], attrcmp);
+	fmtstrinit(&fm);
+	for(i = 0; i < n; i++)
+		fmtprint(&fm, " %s", f[i]);
+	free(buf);
+	free(w);
+	return fmtstrflush(&fm);
+}
+
 static void
 deliver(Pend *p)
 {
-	char *line;
+	char *line, *a;
 	Sub *s;
 
-	line = smprint("%s %s %s%s%s%s%s seq=%d\n", p->name, p->key, p->path,
-		p->attrs != nil && p->attrs[0] ? " " : "", p->attrs != nil ? p->attrs : "",
-		p->win != nil ? " win=" : "", p->win != nil ? p->win : "", p->seq);
+	a = attrline(p->attrs, p->win);
+	line = smprint("%s %s %s%s seq=%d\n", p->name, p->key, p->path, a, p->seq);
+	free(a);
 	for(s = subs; s != nil; s = s->next)
 		if(!s->gone && reaches(s, p->win, p->anc, p->nanc))
 			enqueue(s, line, p->name, p->win, p->nanc > 0 ? p->anc[0] : 0, p->state);
