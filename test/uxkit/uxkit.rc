@@ -1,8 +1,15 @@
 #!/bin/rc
-# uxkit drawing a uitree client: demo.rc builds a mail screen through
-# $ui, and uxkit draws it with libux. The tree is also posted at
-# /srv/uitree.$user, so a test can mount it. Arguments go to demo.rc.
+# uxkit drawing a uitree client: a client script (demo.rc unless the
+# first argument names another in this directory) builds a screen
+# through $ui, and uxkit draws it with libux. The tree is also posted at
+# /srv/uitree.$user, so a test can mount it. Other arguments go to the
+# client.
 cd /mnt/term/cwd/uxkit
 O=`{sed -n 's/^O=//p' /$objtype/mkfile}
+client=demo.rc
+if(! ~ $#* 0){
+	client=$1
+	shift
+}
 resfs=../resfs/$O.resfs uxsysres=../assets/gen/system.rsrc uxpublic=1 \
-	exec ./$O.out -d -s uitree.$user rc /mnt/term/cwd/test/uxkit/demo.rc $* >[2]$work/uxkit.err
+	exec ./$O.out -d -s uitree.$user rc /mnt/term/cwd/test/uxkit/$client $* >[2]$work/uxkit.err

@@ -192,15 +192,34 @@ Two things it took:
   caused by the UI thread wake a responder proc that answers pending
   reads.
 
-What `-d` doesn't draw yet: form controls are plain divs (no native
-button, input or select look), overlays in `over/` aren't shown, canvas
-ops aren't painted, and data files (list items, table rows) aren't laid
-out. The protocol for all of them is there and conformance-tested; the
-drawing is the remaining work.
+### Native controls
+
+These types are drawn with libux's own controls, inside the flex layout:
+
+| uitree type | libux control | What comes back |
+| --- | --- | --- |
+| `button` | button | `click` (none while `disabled`) |
+| `input`, `textarea` | text field (one line or multiline; `secret` masks) | `change value=V via=user`, mirrored in `value`; `submit` on Enter |
+| `checkbox`, `switch` | checkbox | `change value=on\|off via=user` |
+| `list` | list, from `items` (groups and separators aren't rows) | `select value=ID via=user`; `open` |
+| `table` | list with column headers, from `columns` and `rows` | `select row=ID via=user` |
+| `alert-dialog` in `over/` | a modal dialog window: title, description, cancel and confirm buttons | `confirm` or `cancel` (Enter, Esc, the close box), then it closes |
+| `dialog`, `sheet` in `over/` | a modal dialog window holding the overlay's children | `close` as a request; the app closes it with `ctl close` |
+
+`test/uxkit/form.rc` is an account settings screen built from these.
+The second uxkit test types in a field, unchecks a box, picks a list
+item, saves, then opens the alert dialog with Delete and confirms it
+with Enter, checking each event and the client's answer.
+
+Still drawn as plain divs: select, radio-group, slider, number-input,
+tabs and the other nav types, popover, tooltip and context-menu,
+canvas ops, and the layout and feedback types (they lay out, but
+without their own look). A switch looks like a checkbox.
 
 ## Next, if this goes ahead
 
-1. Draw the form, data and overlay types for real in `-d`, starting
-   with button, input, list and dialog.
+1. Draw the rest of form and nav (select as a popup, radio-group,
+   slider, tabs), popovers and context menus anchored to their node,
+   and canvas ops.
 2. The transfer layer (drag and drop), the last skipped script.
 3. Replace the spike's C API in libux with uxkit's tree.

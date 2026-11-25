@@ -63,3 +63,72 @@ test "uxkit: a uitree mail screen drawn by libux, and a click" {
     try s.settle();
     s.saveScreen("uxkit-mail-clicked");
 }
+
+fn clickNode(s: *harness.Session, wr: harness.Rect, path: []const u8) !void {
+    const b = try bounds(s, path);
+    s.click(harness.pt(wr.min.x + 1 + b[0] + @divTrunc(b[2], 2), wr.min.y + 4 + b[1] + @divTrunc(b[3], 2)), .left);
+}
+
+fn waitEvent(s: *harness.Session, pattern: []const u8) !void {
+    const cmd = try std.fmt.allocPrint(gpa, "grep -s '{s}' $work/uxkit.events", .{pattern});
+    defer gpa.free(cmd);
+    s.waitRc(cmd, 5_000) catch |e| {
+        const dbg = try s.rc("cat $work/uxkit.events; cat $work/uxkit.err");
+        defer gpa.free(dbg);
+        std.debug.print("waiting for {s}\n{s}\n", .{ pattern, dbg });
+        return e;
+    };
+}
+
+test "uxkit: form, list, table and an alert dialog drawn with libux controls" {
+    var s = try harness.Session.start(.{ .name = "uxkit-form", .rio_args = &.{"-u"} });
+    defer s.stop();
+    try s.openWindow(rect(40, 40, 760, 560), "rc /mnt/term/cwd/test/uxkit/uxkit.rc form.rc");
+    gpa.free(try s.waitWindows(1));
+    s.waitRc("test -e /srv/uitree.$user", 15_000) catch |e| {
+        s.saveScreen("uxkit-form-fail");
+        s.rcQuiet("cat $work/uxkit.err") catch {};
+        return e;
+    };
+    _ = try s.rc("mkdir -p /n/ui && mount /srv/uitree.$user /n/ui");
+    try s.waitRc("test -e $work/uxkit.events", 15_000);
+    try s.settle();
+    s.saveScreen("uxkit-form");
+
+    const ids = try s.windows();
+    defer gpa.free(ids);
+    const wr = try s.windowRect(ids[0]);
+
+    // typing in a field is a change with the new value, mirrored in value
+    try clickNode(s, wr, "main/name/f");
+    try s.settle();
+    try s.typeText("Ken");
+    try waitEvent(s, "^change name main/name/f .*value=Ken");
+    try s.waitRc("grep -s '^Ken$' /n/ui/win/main/main/name/f/value", 5_000);
+
+    // a checkbox click is a change to off
+    try clickNode(s, wr, "main/notify");
+    try waitEvent(s, "^change notify main/notify .*value=off");
+
+    // a list click selects an item by its id
+    const fl = try bounds(s, "side/folders");
+    s.click(harness.pt(wr.min.x + 1 + fl[0] + 30, wr.min.y + 4 + fl[1] + 24), .left);
+    try waitEvent(s, "^select - side/folders .*value=sent");
+
+    // Save is a click; the client answers in the status line
+    try clickNode(s, wr, "main/buttons/save");
+    try waitEvent(s, "^click save main/buttons/save");
+    try s.waitRc("grep -s 'Saved Ken' /n/ui/win/main/main/status/text", 5_000);
+
+    // Delete opens the alert dialog as a second window; Enter confirms it
+    try clickNode(s, wr, "main/buttons/delete");
+    gpa.free(try s.waitWindows(2));
+    try s.settle();
+    s.saveScreen("uxkit-form-dialog");
+    try s.key('\n');
+    try waitEvent(s, "^confirm confirm-delete over/confirm");
+    try s.waitRc("grep -s 'Account deleted' /n/ui/win/main/main/status/text", 5_000);
+    gpa.free(try s.waitWindows(1));
+    try s.settle();
+    s.saveScreen("uxkit-form-done");
+}
