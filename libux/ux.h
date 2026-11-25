@@ -82,6 +82,7 @@ enum {
 
 /* app */
 void	uxinit(char *name, char *title);
+void	uxpublish(int (*post)(char *name));
 void	uxmain(void);		/* runs the UI; returns when the app quits */
 void	uxquit(void);		/* ends uxmain */
 void	uxapphandler(Uxfn*, void*);	/* UXquit, and actions with no handler */

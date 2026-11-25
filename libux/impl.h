@@ -348,6 +348,7 @@ struct App {
 	Uxwin	*front;
 	int	hadmain;
 	int	regfd;	/* /mnt/ux/register, or -1 */
+	int	(*post)(char*);	/* uxpublish: serves the tree instead of libux */
 	char	*barid;	/* the app ID the menu bar knows us by */
 	int	rebar;	/* register with the bar again */
 	int	barreader;

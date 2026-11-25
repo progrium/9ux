@@ -249,6 +249,17 @@ test "uxkit: sidebar, toolbar, tooltip, breadcrumb, number input, combobox and c
     try waitEvent(s, "^mouse-down chart main/chart .*item=card");
     try waitEvent(s, "^click chart main/chart .*item=card");
 
+    // uxd has the app, with rio's id for its window, and a click on
+    // Delete through uxd reaches the client
+    try s.waitRc("mkdir -p /n/ux; test -e /n/ux/windows || mount /srv/uxd.$user.admin /n/ux; grep -s 'app=tools-1' /n/ux/windows", 10_000);
+    const wl = try s.rc("grep 'app=tools-1' /n/ux/windows");
+    defer gpa.free(wl);
+    const want = try std.fmt.allocPrint(gpa, "window win={d} app=tools-1", .{ids[0]});
+    defer gpa.free(want);
+    try std.testing.expectEqualStrings(want, std.mem.trim(u8, wl, " \n"));
+    _ = try s.rc("echo click >/n/ux/apps/tools-1/win/main/main/tools/del/ctl");
+    try waitEvent(s, "^click del main/tools/del via=ctl");
+
     // the pointer over Delete shows its tooltip
     const del = try bounds(s, "main/tools/del");
     s.move(ptIn(wr, del, @divTrunc(del[2], 2), @divTrunc(del[3], 2)));

@@ -302,6 +302,6 @@ void	quitrequest(char*);
 /* ui.c */
 extern int	drawing;
 void	uisync(void);
-void	uistart(void);
+void	uistart(char*, int(*)(char*));
 void	uirun(void);
 char*	uibounds(Node*);

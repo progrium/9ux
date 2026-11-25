@@ -460,6 +460,10 @@ version(void)
 	return fmtstrflush(&f);
 }
 
+/*
+ * ctl help: "verb class", where the class is the right it needs in the
+ * public view (policy.md, Rights); author verbs no grant can give.
+ */
 static char*
 helptext(Node *n)
 {
@@ -468,15 +472,15 @@ helptext(Node *n)
 
 	fmtstrinit(&f);
 	if(n == nil){
-		fmtprint(&f, "window core\nquit core\nask core\nkeep core\nbegin core\ncommit core\nabort core\ntheme core\n");
-		fmtprint(&f, "set core\nnew core\ndelete core\ntree core\n");
+		fmtprint(&f, "window author\nquit activate\nask author\nkeep author\nbegin author\ncommit author\nabort author\ntheme author\n");
+		fmtprint(&f, "set edit\nnew author\ndelete author\ntree author\n");
 	}else{
-		fmtprint(&f, "set core\nnew core\ndelete core\ntree core\n");
+		fmtprint(&f, "set edit\nnew author\ndelete author\ntree author\n");
 		if(typebyname(n->type) != nil)
 			for(i = 0; i < typebyname(n->type)->nverb; i++)
 				fmtprint(&f, "%s %s\n", typebyname(n->type)->verb[i], typebyname(n->type)->vclass[i]);
 		if(n->parent == nil)
-			fmtprint(&f, "show window\nactivate window\nstate window\nnotify window\nclose window\ndestroy window\nask window\nkeep window\n");
+			fmtprint(&f, "show activate\nactivate activate\nstate edit\nnotify activate\nclose activate\ndestroy author\nask author\nkeep author\n");
 	}
 	return fmtstrflush(&f);
 }
@@ -1225,38 +1229,235 @@ fswstat(Req *r)
 	respond(r, nil);
 }
 
-static void
-fsstart(Srv*)
-{
-	startresponder();
-}
-
-static Srv fs = {
-	.start = fsstart,
-	.attach = fsattach,
-	.walk1 = fswalk1,
-	.clone = fsclone,
-	.open = fsopen,
-	.create = fscreate,
-	.read = fsread,
-	.write = fswrite,
-	.remove = fsremove,
-	.stat = fsstat,
-	.wstat = fswstat,
-	.flush = fsflush,
-	.destroyfid = fsdestroyfid,
-};
+/*
+ * The model lock. uxkit serves two kinds of connection: the author's,
+ * mounted at $ui, and one for each registration with uxd. lib9p locks
+ * each connection apart (Srv.slock), so the model has a lock of its
+ * own, taken around every request of either, and by the UI thread. It
+ * nests within a thread: a reply inside a request can destroy a fid,
+ * and that takes it again.
+ */
+static QLock	modellk;
+static int	mowner = -1;
+static int	mdepth;
 
 void
 lockmodel(void)
 {
-	srvacquire(&fs);
+	if(mowner == threadid()){
+		mdepth++;
+		return;
+	}
+	qlock(&modellk);
+	mowner = threadid();
+	mdepth = 1;
 }
 
 void
 unlockmodel(void)
 {
-	srvrelease(&fs);
+	if(--mdepth > 0)
+		return;
+	mowner = -1;
+	qunlock(&modellk);
+}
+
+static void
+lfsattach(Req *r)
+{
+	lockmodel();
+	fsattach(r);
+	unlockmodel();
+}
+
+static void
+lfsopen(Req *r)
+{
+	lockmodel();
+	fsopen(r);
+	unlockmodel();
+}
+
+static void
+lfscreate(Req *r)
+{
+	lockmodel();
+	fscreate(r);
+	unlockmodel();
+}
+
+static void
+lfsread(Req *r)
+{
+	lockmodel();
+	fsread(r);
+	unlockmodel();
+}
+
+static void
+lfswrite(Req *r)
+{
+	lockmodel();
+	fswrite(r);
+	unlockmodel();
+}
+
+static void
+lfsremove(Req *r)
+{
+	lockmodel();
+	fsremove(r);
+	unlockmodel();
+}
+
+static void
+lfsstat(Req *r)
+{
+	lockmodel();
+	fsstat(r);
+	unlockmodel();
+}
+
+static void
+lfswstat(Req *r)
+{
+	lockmodel();
+	fswstat(r);
+	unlockmodel();
+}
+
+static void
+lfsflush(Req *r)
+{
+	lockmodel();
+	fsflush(r);
+	unlockmodel();
+}
+
+
+static char*
+lfswalk1(Fid *fid, char *name, Qid *qid)
+{
+	char *e;
+
+	lockmodel();
+	e = fswalk1(fid, name, qid);
+	unlockmodel();
+	return e;
+}
+
+static char*
+lfsclone(Fid *old, Fid *new)
+{
+	char *e;
+
+	lockmodel();
+	e = fsclone(old, new);
+	unlockmodel();
+	return e;
+}
+
+static void
+lfsdestroyfid(Fid *fid)
+{
+	lockmodel();
+	fsdestroyfid(fid);
+	unlockmodel();
+}
+
+static void	poster(void*);
+
+static void
+fsstart(Srv*)
+{
+	startresponder();
+	proccreate(poster, nil, 32*1024);
+}
+
+static Srv fs = {
+	.start = fsstart,
+	.attach = lfsattach,
+	.walk1 = lfswalk1,
+	.clone = lfsclone,
+	.open = lfsopen,
+	.create = lfscreate,
+	.read = lfsread,
+	.write = lfswrite,
+	.remove = lfsremove,
+	.stat = lfsstat,
+	.wstat = lfswstat,
+	.flush = lfsflush,
+	.destroyfid = lfsdestroyfid,
+};
+
+/*
+ * The connection uxd takes at registration (policy.md, Registration):
+ * the same tree, served on a pipe posted as /srv/NAME. uxd applies the
+ * rights. The pipe is made by the poster proc, which shares the author
+ * connection's fd table, so the responder can answer either.
+ */
+static Channel	*postc, *postr;
+static Srv	pubtmpl;	/* fs before it runs: no pools, buffers or locks of its own yet */
+
+static void
+pubfree(Srv *s)
+{
+	close(s->infd);
+	free(s);
+}
+
+static void
+pubproc(void *v)
+{
+	threadsetname("uxkit public");
+	srv(v);
+}
+
+static void forker(void (*)(void*), void*, int);
+
+static void
+poster(void*)
+{
+	char *name, path[160];
+	int fd[2], cfd;
+	Srv *s;
+
+	threadsetname("uxkit poster");
+	for(;;){
+		name = recvp(postc);
+		snprint(path, sizeof path, "/srv/%s", name);
+		if(pipe(fd) < 0){
+			sendul(postr, -1);
+			continue;
+		}
+		if((cfd = create(path, OWRITE, 0600)) < 0 || fprint(cfd, "%d", fd[0]) < 0){
+			if(cfd >= 0){
+				close(cfd);
+				remove(path);
+			}
+			close(fd[0]);
+			close(fd[1]);
+			sendul(postr, -1);
+			continue;
+		}
+		close(cfd);
+		close(fd[0]);
+		s = emalloc(sizeof *s);
+		*s = pubtmpl;
+		s->infd = s->outfd = fd[1];
+		s->forker = forker;
+		s->free = pubfree;
+		proccreate(pubproc, s, 32*1024);
+		sendul(postr, 0);
+	}
+}
+
+/* libux's registration posts the tree with this (uxpublish) */
+static int
+pubpost(char *name)
+{
+	sendp(postc, name);
+	return recvul(postr) == 0 ? 0 : -1;
 }
 
 static void
@@ -1268,7 +1469,7 @@ forker(void (*fn)(void*), void *arg, int flag)
 static void
 usage(void)
 {
-	fprint(2, "usage: uxkit [-dD] [-m mtpt] [-s srvname] cmd [arg...]\n");
+	fprint(2, "usage: uxkit [-dD] [-m mtpt] [-n name] [-s srvname] cmd [arg...]\n");
 	threadexitsall("usage");
 }
 
@@ -1309,6 +1510,44 @@ client(void *v)
 
 int mainstacksize = 64*1024;
 
+static char *appname;
+
+/*
+ * The app's name at uxd, [a-z][a-z0-9-]*: the client's, or its
+ * script's when the client is a shell (rc tools.rc is tools).
+ */
+static char*
+nameof1(char **argv)
+{
+	char *s, *p, *q;
+
+	s = argv[0];
+	if((p = strrchr(s, '/')) != nil)
+		s = p+1;
+	if((strcmp(s, "rc") == 0 || strcmp(s, "sh") == 0) && argv[1] != nil){
+		s = argv[1];
+		if((p = strrchr(s, '/')) != nil)
+			s = p+1;
+	}
+	s = estrdup(s);
+	if((p = strchr(s, '.')) != nil)
+		*p = 0;
+	for(p = q = s; *p; p++){
+		if(*p >= 'A' && *p <= 'Z')
+			*p += 'a'-'A';
+		if(*p >= 'a' && *p <= 'z' || *p >= '0' && *p <= '9' && q > s || *p == '-' && q > s)
+			*q++ = *p;
+		else if(q > s)
+			*q++ = '-';
+	}
+	*q = 0;
+	if(*s == 0){
+		free(s);
+		s = estrdup("uitree");
+	}
+	return s;
+}
+
 /*
  * uxkitdebug=1 keeps a proc that fails an assertion (the heap's among
  * them) alive and asleep, so acid can read its stack.
@@ -1342,6 +1581,9 @@ threadmain(int argc, char **argv)
 	case 'm':
 		mtpt = EARGF(usage());
 		break;
+	case 'n':
+		appname = EARGF(usage());
+		break;
 	case 's':
 		srvname = EARGF(usage());
 		break;
@@ -1350,12 +1592,18 @@ threadmain(int argc, char **argv)
 	}ARGEND
 	if(argc < 1)
 		usage();
+	if(appname == nil)
+		appname = nameof1(argv);
 	initapp();
+	postc = chancreate(sizeof(char*), 0);
+	postr = chancreate(sizeof(ulong), 0);
 	if(drawing)
-		uistart();
+		uistart(appname, pubpost);
 	if(access(mtpt, AEXIST) < 0)
 		close(create(mtpt, OREAD, DMDIR|0777));
 	fs.forker = forker;
+	pubtmpl = fs;
+	pubtmpl.start = nil;
 	threadpostmountsrv(&fs, srvname, mtpt, MREPL|MCREATE);
 	putenv("ui", mtpt);
 	if(!drawing)

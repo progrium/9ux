@@ -1705,10 +1705,12 @@ appev(Uxev *e, void*)
 	unlockmodel();
 }
 
+/* name is the app's at uxd; post serves its tree to uxd */
 void
-uistart(void)
+uistart(char *name, int (*post)(char*))
 {
-	uxinit("uxkit", "uitree");
+	uxinit(name, name);
+	uxpublish(post);
 	uxapphandler(appev, nil);
 }
 

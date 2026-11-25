@@ -252,8 +252,48 @@ the child only execs. 240 runs in a row came up clean; before the fix,
 failures came within 4 to 37 runs. With `uxkitdebug=1`, a failed heap
 assertion leaves the proc asleep so acid can read its stack.
 
+## uxd: uitree apps beside ux.md apps
+
+This is step 3 of the migration: uxd takes both shapes of tree, and a
+uitree app shows up under `/mnt/ux/apps` next to the ux.md ones.
+
+- **Registration.** uxd accepts an app whose `version` starts
+  `uitree 1.`, and policy.md's `register NAME srv=...` as well as
+  ux.md's `name=` form. Windows map by rio's `winid` as before.
+- **uxkit registers.** With `-d`, libux's registration (its retries,
+  window lines and re-registering when uxd restarts) now posts uxkit's
+  uitree server instead of libux's own tree (`uxpublish`). The app's
+  name is the client's, or its script's for rc: `tools.rc` is
+  `tools-1`; `-n` sets it. uxkit serves that second connection from
+  the same model, so the model lock is now uxkit's own, around every
+  request on either connection, instead of lib9p's per-connection lock.
+- **Rights.** ctl help now names a right per verb, as policy.md asks:
+  `set edit`, `new author`, a window's `close activate`, and so on, so
+  uxd needs no type knowledge. uxd checks each `ctl` line against it,
+  skips here-value bodies, and refuses `author` verbs to every attach,
+  the session's too, since it holds the whole tree. Writes other than a
+  `value` or a window's `bounds` are refused.
+- **Secrets.** A node flagged `secret` (a word in the first line of its
+  `tree`) reads empty through uxd, and its values are cut from event
+  lines, which get `redacted=on` before `seq=`. A `sensitive` flag
+  works the same way for readers without that right, ready for when
+  uitree settles where that flag lives (policy.md open question 1).
+
+`uxd/test/uitree.rc` runs uxkit (headless) beside fakeapp and checks
+all of this: reads, refused writes, the session's clicks and sets,
+a grant, a here-value, redaction, and unregistering. The tools gui
+test now runs uxd too, and checks that the drawn window is in
+`/mnt/ux/windows` under rio's id and that a click sent through uxd
+reaches the client.
+
+Not done yet: `set` needs `edit` whatever prop it names (policy.md
+would let a descriptor mark some props `activate`), and a ctl write
+split over several 9P writes is checked one write at a time.
+
 ## Next, if this goes ahead
 
-1. Give hover-card and the layout and feedback types their own look.
-2. The transfer layer (drag and drop), the last skipped script.
-3. Replace the spike's C API in libux with uxkit's tree.
+1. Step 4: make the node tree libux's source of truth, with the C API
+   (`uxbutton`, `uxwindow`, ...) making nodes, so Desktop and the other
+   apps' public paths become `win/NAME/...`.
+2. Give hover-card and the layout and feedback types their own look.
+3. The transfer layer (drag and drop), the last skipped script.

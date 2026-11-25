@@ -29,6 +29,7 @@ Msg*	tread(Conn*, ulong, vlong, ulong, Op*);
 Msg*	twrite(Conn*, ulong, vlong, ulong, char*, Op*);
 Msg*	tstat(Conn*, ulong, Op*);
 char*	readapp(Conn*, ulong, char*, Op*);
+char*	readapphead(Conn*, ulong, char*, Op*);
 
 /* fs.c */
 Qid	passqid(App*, Qid);

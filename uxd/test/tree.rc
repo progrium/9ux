@@ -11,6 +11,7 @@ u=/mnt/ux
 test=version
 same $u/version 'ux 1.0
 feature grants
+feature uitree
 '
 same $u/rights 'read sensitive activate edit keys clipboard admin
 '
@@ -67,6 +68,7 @@ same ../name/type 'text-field
 cd ../../../../..
 same ../version 'ux 1.0
 feature grants
+feature uitree
 '
 cd /
 
