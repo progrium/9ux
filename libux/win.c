@@ -538,6 +538,10 @@ _wininput(Uxwin *w, Mouse *m)
 
 	down = (m->buttons & ~w->lastm.buttons) != 0;
 	w->lastm = *m;
+	if(w->pop != nil){
+		_popmouse(w, m, down);
+		return;
+	}
 	if(w->grab != nil){
 		if(w->grab->dead || !w->grab->t->mouse(w->grab, m))
 			w->grab = nil;

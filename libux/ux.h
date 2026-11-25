@@ -42,6 +42,7 @@ enum {
 	UXdrop,		/* dropped on a drop target (Uxev.text type, .action op, .pt, .drag) */
 	UXdragend,	/* our drag ended: Uxev.text the op the target did, nil if cancelled */
 	UXinterrupt,	/* console: Delete typed, or ctl interrupt */
+	UXcontext,	/* spike: a right-button press on a div, svg or styled-text (Uxev.pt, window-local) */
 };
 
 /* how an event came about; Uxev.via */
@@ -191,6 +192,15 @@ int	uxwinsetstyle(Uxwin*, char *words);
 void	uxsetsvg(Uxctl*, char *src);
 void	uxsetstext(Uxctl*, char *text, char *runs);
 Rectangle	uxctlrect(Uxctl*);
+Uxctl*	uxpopup(Uxwin*, char *id, char *placeholder);	/* spike: a pop-up menu button; uxsetitems */
+Uxctl*	uxradios(Uxwin*, char *id, int row);	/* radio buttons, one per item */
+Uxctl*	uxslider(Uxwin*, char *id, int min, int max, int step);
+Uxctl*	uxswitch(Uxwin*, char *id, char *label);
+Uxctl*	uxtabbar(Uxwin*, char *id);	/* a tab per item */
+void	uxsetrange(Uxctl*, int min, int max, int step);
+int	uxchoice(Uxctl*);	/* the chosen item, -1 none; a slider's value; a switch's 0/1 */
+void	uxsetchoice(Uxctl*, int);
+void	uxpopmenu(Uxwin*, Point, char **items, int n, Uxfn*, void*);	/* "-" is a separator; UXaction, Uxev.n */
 void	uxcall(Uxfn*, void*);	/* fn(nil event, arg) on the UI thread */	/* window-local, from the last layout */
 
 Uxctl*	uxconsole(Uxwin*, char *id, Rectangle r);

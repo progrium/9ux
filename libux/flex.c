@@ -427,6 +427,8 @@ measure(Uxctl *c, int availw)
 
 	w = c->w;
 	p = Pt(100, 100);
+	if(_iswidget(c))
+		return _widgetsize(c, availw);
 	if(c->t == &_svgtype)
 		return _svgsize(c);
 	if(c->t == &_stexttype)
@@ -743,6 +745,18 @@ static Verb divverbs[] = { nil };
 int
 _spikemouse(Uxctl *c, Mouse *m)
 {
+	Uxev e;
+
+	if((m->buttons & 4) && c->fn != nil){
+		memset(&e, 0, sizeof e);
+		e.type = UXcontext;
+		e.via = UXui;
+		e.win = c->w;
+		e.ctl = c;
+		e.pt = c->w->img != nil ? subpt(m->xy, c->w->img->r.min) : m->xy;
+		_notify(c->fn, c->arg, &e);
+		return 0;
+	}
 	if((m->buttons & 7) && c->fn != nil)
 		_activate(c, UXui);
 	return 0;

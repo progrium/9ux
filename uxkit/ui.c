@@ -29,6 +29,7 @@ struct Uc {
 	char	*val;
 	char	**ids;	/* a list's item ids, by row */
 	int	nids;
+	char	*pre;	/* style words before the node's own (a popover's place) */
 };
 
 /* a drawn window, or an open overlay (ov: its node) drawn as a dialog */
@@ -47,6 +48,13 @@ struct Uw {
 static Uw	*uws;
 static int	nopened;
 
+static void	togglepops(Node*);
+static void	contextmenu(Node*, Point);
+static Uw*	uwof(char*, int);
+static int	ison(Node*, char*);
+static char*	valof(Node*);
+static void	mkctl(Uw*, Node*, Uxctl*);
+
 static int
 drawn(Node *n, Node *k)
 {
@@ -63,7 +71,11 @@ sig(Fmt *f, Node *n)
 {
 	int i, j;
 
-	fmtprint(f, "%d:%s[", n->id, n->type);
+	fmtprint(f, "%d:%s", n->id, n->type);
+	if(strcmp(n->type, "tabs") == 0 || strcmp(n->type, "tab") == 0)
+		fmtprint(f, "(%s,%s)", getprop(n, "value") != nil ? getprop(n, "value") : "",
+			getprop(n, "label") != nil ? getprop(n, "label") : "");
+	fmtprint(f, "[");
 	for(i = 0; i < n->nord; i++)
 		for(j = 0; j < n->nkid; j++)
 			if(n->kid[j]->id == n->ord[i])
@@ -101,16 +113,27 @@ winof(Node *n)
 static void
 nodeev(Uxev *e, void *arg)
 {
-	Node *n;
+	Node *n, *x;
 
+	if(e->type == UXcontext){
+		lockmodel();
+		if((x = nodebyid((int)(uintptr)arg)) != nil && !quitting)
+			contextmenu(x, e->pt);
+		unlockmodel();
+		return;
+	}
 	if(e->type != UXactivate)
 		return;
 	lockmodel();
-	for(n = nodebyid((int)(uintptr)arg); n != nil; n = n->parent)
+	x = nodebyid((int)(uintptr)arg);
+	for(n = x; n != nil; n = n->parent)
 		if(hasword(getprop(n, "on"), "click"))
 			break;
 	if(n != nil && !quitting)
 		emitnode("click", winof(n), n, nil, 0);
+	if(x != nil && !quitting)
+		togglepops(x);
+	sweep();
 	unlockmodel();
 }
 
@@ -194,6 +217,187 @@ selids(Uc *u)
 	return fmtstrflush(&f);
 }
 
+/* the tab kids of a tabs node, in order */
+static int
+tabkids(Node *n, Node **k, int max)
+{
+	int i, j, m;
+
+	m = 0;
+	for(i = 0; i < n->nord; i++)
+		for(j = 0; j < n->nkid; j++)
+			if(n->kid[j]->id == n->ord[i] && strcmp(n->kid[j]->type, "tab") == 0 && m < max)
+				k[m++] = n->kid[j];
+	return m;
+}
+
+/* the chosen tab: value names it, or the first */
+static int
+curtab(Node *n, Node **k, int m)
+{
+	char *v;
+	int i;
+
+	v = getprop(n, "value");
+	for(i = 0; v != nil && i < m; i++)
+		if(strcmp(k[i]->name, v) == 0)
+			return i;
+	return 0;
+}
+
+/* a click on a tab: tabs' value is the tab's name */
+static void
+tabev(Uxev *e, int id)
+{
+	Node *n, *k[64];
+	int i, m;
+
+	if(e->type != UXvalue)
+		return;
+	lockmodel();
+	n = nodebyid(id);
+	if(n != nil && !quitting){
+		m = tabkids(n, k, nelem(k));
+		i = uxchoice(e->ctl);
+		if(i >= 0 && i < m && !ison(k[i], "disabled"))
+			uservalue(n, "change", "value", k[i]->name, k[i]->name);
+	}
+	sweep();
+	unlockmodel();
+}
+
+/* the overlays in n's window's over/ of a type whose anchor is n */
+static int
+anchored(Node *n, char *type, Node **out, int max)
+{
+	Win *w;
+	Node *a;
+	char *an;
+	int i, m;
+
+	w = winof(n);
+	m = 0;
+	if(w == nil || w->over == nil)
+		return 0;
+	for(i = 0; i < w->over->nkid && m < max; i++){
+		if(strcmp(w->over->kid[i]->type, type) != 0)
+			continue;
+		an = getprop(w->over->kid[i], "anchor");
+		if(an == nil || resolve(w->root, an, &a) != nil){
+			if(an != nil)
+				free(resolve(w->root, an, &a));
+			continue;
+		}
+		if(a == n)
+			out[m++] = w->over->kid[i];
+	}
+	return m;
+}
+
+/* a click on a popover's anchor opens or closes it */
+static void
+togglepops(Node *n)
+{
+	Node *p[8];
+	int i, m, open;
+	char *t;
+
+	m = anchored(n, "popover", p, nelem(p));
+	for(i = 0; i < m; i++){
+		t = getprop(p[i], "trigger");
+		if(t != nil && strcmp(t, "hover") == 0)
+			continue;
+		open = !ison(p[i], "open");
+		setprop(p[i], "open", open ? "on" : "off", open);
+		emitnode(open ? "open" : "close", winof(n), p[i], nil, 0);
+	}
+}
+
+/* the open context menu's items, for menuev */
+static int	cmnode;
+static char	**cmids;
+static int	ncmids;
+
+static void
+menuev(Uxev *e, void*)
+{
+	Node *n;
+	int *anc, nanc;
+	char *path;
+
+	if(e->type != UXaction)
+		return;
+	lockmodel();
+	n = nodebyid(cmnode);
+	if(n != nil && !quitting && e->n >= 0 && e->n < ncmids && cmids[e->n] != nil){
+		nanc = ancestors(n, &anc);
+		path = relpath(n);
+		emit("action", cmids[e->n], path, "via=user", winof(n)->name, anc, nanc, 0);
+		free(path);
+		free(anc);
+	}
+	sweep();
+	unlockmodel();
+}
+
+/*
+ * A right-button press: the context menu anchored at the node or its
+ * nearest ancestor that has one, from its menu file (core.md's items:
+ * item ID label=..., sep).
+ */
+static void
+contextmenu(Node *n, Point pt)
+{
+	Node *cm[1], *x;
+	Uw *u;
+	char *buf, *line, *nl, *f[32], **labels, *lab;
+	int nf, nl2, i;
+
+	for(x = n; x != nil; x = x->parent)
+		if(anchored(x, "context-menu", cm, 1) > 0)
+			break;
+	if(x == nil || (u = uwof(winof(n)->name, 0)) == nil)
+		return;
+	for(i = 0; i < ncmids; i++)
+		free(cmids[i]);
+	free(cmids);
+	cmids = nil;
+	ncmids = 0;
+	labels = nil;
+	nl2 = 0;
+	buf = estrdup(getprop(cm[0], "menu") != nil ? getprop(cm[0], "menu") : "");
+	for(line = buf; line != nil && *line; line = nl){
+		nl = strchr(line, '\n');
+		if(nl != nil)
+			*nl++ = 0;
+		nf = tokenize(line, f, nelem(f));
+		if(nf < 1)
+			continue;
+		if(strcmp(f[0], "sep") == 0){
+			lab = "-";
+			cmids = erealloc(cmids, (ncmids+1)*sizeof(char*));
+			cmids[ncmids++] = nil;
+		}else if(strcmp(f[0], "item") == 0 && nf >= 2){
+			lab = f[1];
+			for(i = 2; i < nf; i++)
+				if(strncmp(f[i], "label=", 6) == 0)
+					lab = f[i]+6;
+			cmids = erealloc(cmids, (ncmids+1)*sizeof(char*));
+			cmids[ncmids++] = estrdup(f[1]);
+		}else
+			continue;
+		labels = erealloc(labels, (nl2+1)*sizeof(char*));
+		labels[nl2++] = estrdup(lab);
+	}
+	free(buf);
+	cmnode = cm[0]->id;
+	if(nl2 > 0)
+		uxpopmenu(u->uw, pt, labels, nl2, menuev, nil);
+	for(i = 0; i < nl2; i++)
+		free(labels[i]);
+	free(labels);
+}
+
 /* a native control's event */
 static void
 ctlev(Uxev *e, void *arg)
@@ -201,12 +405,16 @@ ctlev(Uxev *e, void *arg)
 	Node *n;
 	Uc *u;
 	char *v;
+	int i;
 
 	if(e->type == UXactivate){
 		lockmodel();
 		n = nodebyid((int)(uintptr)arg);
-		if(n != nil && !quitting && !ison(n, "disabled") && strcmp(n->type, "button") == 0)
+		if(n != nil && !quitting && !ison(n, "disabled") && strcmp(n->type, "button") == 0){
 			emitnode("click", winof(n), n, nil, 0);
+			togglepops(n);
+			sweep();
+		}
 		unlockmodel();
 		if(n == nil || strcmp(n->type, "button") != 0)
 			nodeev(e, arg);
@@ -214,6 +422,10 @@ ctlev(Uxev *e, void *arg)
 	}
 	if(e->via == UXctl)
 		return;
+	if((int)(uintptr)arg < 0){
+		tabev(e, -(int)(uintptr)arg);
+		return;
+	}
 	lockmodel();
 	n = nodebyid((int)(uintptr)arg);
 	u = ucbyid((int)(uintptr)arg);
@@ -223,6 +435,21 @@ ctlev(Uxev *e, void *arg)
 	}
 	switch(e->type){
 	case UXvalue:
+		if(strcmp(n->type, "select") == 0 || strcmp(n->type, "radio-group") == 0){
+			i = uxchoice(e->ctl);
+			if(i >= 0 && i < u->nids)
+				uservalue(n, "change", "value", u->ids[i], u->ids[i]);
+			break;
+		}
+		if(strcmp(n->type, "slider") == 0 || strcmp(n->type, "switch") == 0){
+			i = uxchoice(e->ctl);
+			v = strcmp(n->type, "slider") == 0 ? smprint("%d", i) : estrdup(i ? "on" : "off");
+			uservalue(n, "change", "value", v, v);
+			free(u->val);
+			u->val = valof(n);
+			free(v);
+			break;
+		}
 		v = uxgetvalue(e->ctl);
 		if(strcmp(n->type, "textarea") == 0 || issecret(n))
 			uservalue(n, "change", nil, v, nil);
@@ -233,7 +460,7 @@ ctlev(Uxev *e, void *arg)
 		free(v);
 		break;
 	case UXsubmit:
-		emitnode("submit", winof(n), n, nil, 0);
+		emitnode(strcmp(n->type, "slider") == 0 ? "commit" : "submit", winof(n), n, nil, 0);
 		break;
 	case UXselection:
 		v = selids(u);
@@ -315,6 +542,20 @@ restyle(Uxctl *c, Uxwin *uw, char *pre, char *style)
 	free(buf);
 }
 
+/* a number prop, or its default */
+static char*
+propnum(Node *n, char *name)
+{
+	char *v;
+	Pdesc *p;
+
+	v = getprop(n, name);
+	if(v != nil && v[0] != 0)
+		return v;
+	p = pdesc(typebyname(n->type), name);
+	return p != nil && p->dflt != nil ? p->dflt : "0";
+}
+
 static char*
 valof(Node *n)
 {
@@ -346,6 +587,14 @@ valof(Node *n)
 		t = getprop(n, "items");
 		return estrdup(t != nil ? t : "");
 	}
+	if(strcmp(n->type, "select") == 0 || strcmp(n->type, "radio-group") == 0){
+		t = getprop(n, "items");
+		r = getprop(n, "value");
+		return smprint("%s\001%s\001%d", t != nil ? t : "", r != nil ? r : "", ison(n, "disabled"));
+	}
+	if(strcmp(n->type, "slider") == 0)
+		return smprint("%s\001%s\001%s\001%s\001%d", propnum(n, "min"), propnum(n, "max"),
+			propnum(n, "step"), propnum(n, "value"), ison(n, "disabled"));
 	if(strcmp(n->type, "table") == 0){
 		t = getprop(n, "columns");
 		r = getprop(n, "rows");
@@ -411,8 +660,8 @@ clearids(Uc *u)
 }
 
 /* a list's items: id label [icon=] [disabled]; # groups and - separators aren't rows */
-static void
-setlist(Uc *u, char *items)
+static int
+parseitems(Uc *u, char *items, char ***rowsp)
 {
 	char **l, **rows, *f[16];
 	int n, i, k, nf;
@@ -431,9 +680,36 @@ setlist(Uc *u, char *items)
 		u->ids[u->nids++] = estrdup(f[0]);
 		rows[k++] = estrdup(nf > 1 ? f[1] : f[0]);
 	}
+	freelist(l, n);
+	*rowsp = rows;
+	return k;
+}
+
+static void
+setlist(Uc *u, char *items)
+{
+	char **rows;
+	int k;
+
+	k = parseitems(u, items, &rows);
 	uxsetitems(u->c, rows, k);
 	freelist(rows, k);
-	freelist(l, n);
+}
+
+/* select and radio-group: items, and the value's index */
+static void
+setchoice(Uc *u, char *items, char *v)
+{
+	char **rows;
+	int k, i;
+
+	k = parseitems(u, items, &rows);
+	uxsetitems(u->c, rows, k);
+	freelist(rows, k);
+	for(i = 0; i < u->nids; i++)
+		if(strcmp(u->ids[i], v) == 0)
+			break;
+	uxsetchoice(u->c, i < u->nids ? i : -1);
 }
 
 /* a table: columns (id label width ...) and rows (id, then a field per column) */
@@ -481,7 +757,7 @@ settable(Uc *u, char *cols, char *rowsv)
 static void
 setnative(Uc *u, Node *n, char *v)
 {
-	char *f[4], *buf;
+	char *f[8], *buf;
 	int nf;
 
 	buf = estrdup(v);
@@ -489,7 +765,18 @@ setnative(Uc *u, Node *n, char *v)
 	if(strcmp(n->type, "button") == 0 && nf >= 2){
 		uxsetlabel(u->c, f[0]);
 		uxenable(u->c, !atoi(f[1]));
-	}else if((strcmp(n->type, "checkbox") == 0 || strcmp(n->type, "switch") == 0) && nf >= 3){
+	}else if((strcmp(n->type, "select") == 0 || strcmp(n->type, "radio-group") == 0) && nf >= 3){
+		setchoice(u, f[0], f[1]);
+		uxenable(u->c, !atoi(f[2]));
+	}else if(strcmp(n->type, "slider") == 0 && nf >= 5){
+		uxsetrange(u->c, atoi(f[0]), atoi(f[1]), atoi(f[2]));
+		uxsetchoice(u->c, atoi(f[3]));
+		uxenable(u->c, !atoi(f[4]));
+	}else if(strcmp(n->type, "switch") == 0 && nf >= 3){
+		uxsetchoice(u->c, strcmp(f[0], "on") == 0);
+		uxsetlabel(u->c, f[1]);
+		uxenable(u->c, !atoi(f[2]));
+	}else if(strcmp(n->type, "checkbox") == 0 && nf >= 3){
 		uxsetvalue(u->c, f[0]);
 		uxsetlabel(u->c, f[1]);
 		uxenable(u->c, !atoi(f[2]));
@@ -508,7 +795,8 @@ isnative(char *t)
 {
 	return strcmp(t, "button") == 0 || strcmp(t, "checkbox") == 0 || strcmp(t, "switch") == 0
 		|| strcmp(t, "input") == 0 || strcmp(t, "textarea") == 0 || strcmp(t, "list") == 0
-		|| strcmp(t, "table") == 0;
+		|| strcmp(t, "table") == 0 || strcmp(t, "select") == 0 || strcmp(t, "radio-group") == 0
+		|| strcmp(t, "slider") == 0;
 }
 
 static void
@@ -544,8 +832,42 @@ setstyle(Uc *u, Node *n)
 	free(u->style);
 	u->style = estrdup(n->style);
 	/* uitree's text is regular weight unless styled bold; libux's labels are bold */
-	restyle(u->c, nil, strcmp(n->type, "spacer") == 0 ? "flex-1"
-		: strcmp(n->type, "text") == 0 ? "font-normal" : "", n->style);
+	restyle(u->c, nil, u->pre != nil ? u->pre
+		: strcmp(n->type, "spacer") == 0 ? "flex-1"
+		: strcmp(n->type, "text") == 0 ? "font-normal"
+		: strcmp(n->type, "tabs") == 0 ? "v-flex"
+		: strcmp(n->type, "tab") == 0 ? "v-flex flex-1 gap=8 p=10 border-1 bg=background" : "", n->style);
+}
+
+/* a tabs node: a tab bar, then the chosen tab's panel */
+static void
+mktabs(Uw *w, Node *n, Uxctl *c)
+{
+	char id[32];
+	Node *k[64];
+	char *labels[64];
+	Uxctl *bar;
+	Uc *u;
+	int i, m, cur;
+
+	m = tabkids(n, k, nelem(k));
+	snprint(id, sizeof id, "n%d-bar", n->id);
+	bar = uxtabbar(w->uw, id);
+	uxsetparent(bar, c);
+	for(i = 0; i < m; i++)
+		labels[i] = getprop(k[i], "label") != nil ? getprop(k[i], "label") : k[i]->name;
+	uxsetitems(bar, labels, m);
+	cur = curtab(n, k, m);
+	uxsetchoice(bar, m > 0 ? cur : -1);
+	uxhandler(bar, ctlev, (void*)(uintptr)-n->id);
+	w->c = erealloc(w->c, (w->n+1)*sizeof(Uc));
+	u = &w->c[w->n++];
+	memset(u, 0, sizeof *u);
+	u->id = 0;
+	u->c = bar;
+	u->type = estrdup("tabbar");
+	if(m > 0)
+		mkctl(w, k[cur], c);
 }
 
 static void
@@ -569,8 +891,16 @@ mkctl(Uw *w, Node *n, Uxctl *parent)
 		c = uxsvg(w->uw, id, svgsrc(v));
 	else if(strcmp(n->type, "button") == 0)
 		c = uxbutton(w->uw, id, "", ZR);
-	else if(strcmp(n->type, "checkbox") == 0 || strcmp(n->type, "switch") == 0)
+	else if(strcmp(n->type, "checkbox") == 0)
 		c = uxcheckbox(w->uw, id, "", ZR);
+	else if(strcmp(n->type, "switch") == 0)
+		c = uxswitch(w->uw, id, "");
+	else if(strcmp(n->type, "select") == 0)
+		c = uxpopup(w->uw, id, getprop(n, "placeholder") != nil ? getprop(n, "placeholder") : "");
+	else if(strcmp(n->type, "radio-group") == 0)
+		c = uxradios(w->uw, id, getprop(n, "dir") != nil && strcmp(getprop(n, "dir"), "row") == 0);
+	else if(strcmp(n->type, "slider") == 0)
+		c = uxslider(w->uw, id, 0, 100, 1);
 	else if(strcmp(n->type, "input") == 0)
 		c = uxtextfield(w->uw, id, "", ZR, ison(n, "secret") ? UXsecret : 0);
 	else if(strcmp(n->type, "textarea") == 0)
@@ -592,6 +922,10 @@ mkctl(Uw *w, Node *n, Uxctl *parent)
 	if(isnative(n->type))
 		setnative(u, n, v);
 	setstyle(u, n);
+	if(strcmp(n->type, "tabs") == 0){
+		mktabs(w, n, c);
+		return;
+	}
 	for(i = 0; i < n->nord; i++)
 		for(j = 0; j < n->nkid; j++)
 			if(n->kid[j]->id == n->ord[i])
@@ -608,6 +942,7 @@ clearctls(Uw *w)
 		free(w->c[i].type);
 		free(w->c[i].style);
 		free(w->c[i].val);
+		free(w->c[i].pre);
 		freelist(w->c[i].ids, w->c[i].nids);
 	}
 	free(w->c);
@@ -735,11 +1070,81 @@ mkalert(Uw *u, Node *n)
 	uxdefault(u->uw, c);
 }
 
+/* a window's open popovers */
+static int
+openpops(Node *root, Node **out, int max)
+{
+	Node *o;
+	int i, m;
+
+	m = 0;
+	o = root->parent == nil && root->win != nil ? root->win->over : nil;
+	for(i = 0; o != nil && i < o->nkid && m < max; i++)
+		if(strcmp(o->kid[i]->type, "popover") == 0 && ison(o->kid[i], "open"))
+			out[m++] = o->kid[i];
+	return m;
+}
+
+typedef struct Old Old;
+struct Old {
+	int	id;
+	Rectangle	r;
+};
+
+/*
+ * An open popover: an absolutely placed box by its anchor, drawn over
+ * the window's other controls. old holds where the controls were at
+ * the last layout, since the new ones haven't been laid out yet.
+ */
+static void
+mkpop(Uw *u, Node *p, Old *old, int nold)
+{
+	Node *a;
+	Win *w;
+	Rectangle ar;
+	char *pl, *e;
+	int i, k, x, y;
+
+	w = winof(p);
+	ar = Rect(0, 0, 0, 0);
+	a = nil;
+	if(getprop(p, "anchor") != nil && (e = resolve(w->root, getprop(p, "anchor"), &a)) != nil){
+		free(e);
+		a = nil;
+	}
+	for(i = 0; a != nil && i < nold; i++)
+		if(old[i].id == a->id)
+			ar = old[i].r;
+	pl = getprop(p, "placement") != nil ? getprop(p, "placement") : "bottom-start";
+	if(strncmp(pl, "right", 5) == 0){
+		x = ar.max.x + 4;
+		y = ar.min.y;
+	}else if(strncmp(pl, "left", 4) == 0){
+		x = ar.min.x - 200;
+		y = ar.min.y;
+	}else{
+		x = strcmp(pl, "bottom-end") == 0 ? ar.max.x - 200 : ar.min.x;
+		y = ar.max.y + 4;
+	}
+	if(x < 4)
+		x = 4;
+	k = u->n;
+	mkctl(u, p, nil);
+	free(u->c[k].pre);
+	u->c[k].pre = smprint("absolute v-flex gap=6 p=10 bg=background border-1 left=%d top=%d", x, y);
+	free(u->c[k].style);
+	u->c[k].style = nil;
+	setstyle(&u->c[k], p);
+}
+
 static void
 syncwin(Uw *u, Node *root, char *title, char *rs)
 {
 	Fmt f;
 	char *s;
+	Node *pop[8];
+	Old *old;
+	int i, np;
 
 	if(strcmp(u->title, title) != 0){
 		free(u->title);
@@ -753,21 +1158,42 @@ syncwin(Uw *u, Node *root, char *title, char *rs)
 	}
 	fmtstrinit(&f);
 	sig(&f, root);
+	np = openpops(root, pop, nelem(pop));
+	for(i = 0; i < np; i++){
+		fmtprint(&f, "pop:%s:%s:", propor(pop[i], "anchor", ""), propor(pop[i], "placement", ""));
+		sig(&f, pop[i]);
+	}
 	if(strcmp(root->type, "alert-dialog") == 0)
 		fmtprint(&f, "%s\001%s\001%s\001%s", propor(root, "title", ""),
 			propor(root, "description", ""), propor(root, "confirm", ""), propor(root, "cancel", ""));
 	s = fmtstrflush(&f);
 	if(u->sig == nil || strcmp(u->sig, s) != 0){
+		old = emalloc((u->n+1)*sizeof(Old));
+		for(i = 0; i < u->n; i++){
+			old[i].id = u->c[i].id;
+			old[i].r = uxctlrect(u->c[i].c);
+		}
+		np = u->n;
 		clearctls(u);
 		if(strcmp(root->type, "alert-dialog") == 0)
 			mkalert(u, root);
 		else
 			mkkids(u, root, nil);
+		{
+			int j, m;
+
+			m = openpops(root, pop, nelem(pop));
+			for(j = 0; j < m; j++)
+				mkpop(u, pop[j], old, np);
+		}
+		free(old);
 		free(u->sig);
 		u->sig = s;
 	}else{
 		free(s);
 		update(u, root);
+		for(i = 0; i < np; i++)
+			update(u, pop[i]);
 	}
 }
 

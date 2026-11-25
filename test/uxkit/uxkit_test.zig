@@ -132,3 +132,75 @@ test "uxkit: form, list, table and an alert dialog drawn with libux controls" {
     try s.settle();
     s.saveScreen("uxkit-form-done");
 }
+
+fn ptIn(wr: harness.Rect, b: [4]i32, dx: i32, dy: i32) harness.Point {
+    return harness.pt(wr.min.x + 1 + b[0] + dx, wr.min.y + 4 + b[1] + dy);
+}
+
+test "uxkit: tabs, select, radios, slider, switch, popover and context menu" {
+    var s = try harness.Session.start(.{ .name = "uxkit-widgets", .rio_args = &.{"-u"} });
+    defer s.stop();
+    try s.openWindow(rect(40, 40, 620, 480), "rc /mnt/term/cwd/test/uxkit/uxkit.rc widgets.rc");
+    gpa.free(try s.waitWindows(1));
+    s.waitRc("test -e /srv/uitree.$user", 15_000) catch |e| {
+        s.saveScreen("uxkit-widgets-fail");
+        s.rcQuiet("cat $work/uxkit.err") catch {};
+        return e;
+    };
+    _ = try s.rc("mkdir -p /n/ui && mount /srv/uitree.$user /n/ui");
+    try s.waitRc("test -e $work/uxkit.events", 15_000);
+    try s.settle();
+    s.saveScreen("uxkit-widgets");
+
+    const ids = try s.windows();
+    defer gpa.free(ids);
+    const wr = try s.windowRect(ids[0]);
+
+    // the select pops up its menu below it; the second item is French
+    const sel = try bounds(s, "tabs/general/lang/f");
+    s.click(ptIn(wr, sel, 10, @divTrunc(sel[3], 2)), .left);
+    try s.settle();
+    s.saveScreen("uxkit-widgets-select");
+    s.click(ptIn(wr, sel, 30, sel[3] + 1 + 18 + 9), .left);
+    try waitEvent(s, "^change lang tabs/general/lang/f .*value=fr");
+
+    // the third radio button
+    const rg = try bounds(s, "tabs/general/when/f");
+    s.click(ptIn(wr, rg, 6, 2 * 20 + 10), .left);
+    try waitEvent(s, "^change when tabs/general/when/f .*value=manual");
+
+    // the slider's far end is its max; the release commits
+    const sl = try bounds(s, "tabs/general/size/f");
+    s.click(ptIn(wr, sl, sl[2] - 2, @divTrunc(sl[3], 2)), .left);
+    try waitEvent(s, "^change size tabs/general/size/f .*value=24");
+    try waitEvent(s, "^commit size tabs/general/size/f");
+
+    // the switch
+    try clickNode(s, wr, "tabs/general/sound");
+    try waitEvent(s, "^change sound tabs/general/sound .*value=on");
+
+    // More opens its popover
+    try clickNode(s, wr, "tabs/general/foot/more");
+    try waitEvent(s, "^open - over/info");
+    try s.settle();
+    s.saveScreen("uxkit-widgets-popover");
+    try clickNode(s, wr, "tabs/general/foot/more");
+    try waitEvent(s, "^close - over/info");
+
+    // a right click on the box is its context menu; Paste is the second item
+    const box = try bounds(s, "tabs/general/foot/box");
+    const p = ptIn(wr, box, 20, 10);
+    s.click(p, .right);
+    try s.settle();
+    s.saveScreen("uxkit-widgets-menu");
+    s.click(harness.pt(p.x + 20, p.y + 1 + 18 + 9), .left);
+    try waitEvent(s, "^action paste over/cm");
+    try s.waitRc("grep -s 'Chose paste' /n/ui/win/main/status/text", 5_000);
+
+    // the Appearance tab
+    const tb = try bounds(s, "tabs");
+    s.click(ptIn(wr, tb, 4 + 60 + 30, 11), .left);
+    try waitEvent(s, "^change tabs tabs .*value=look");
+    try s.settle();
+    s.saveScreen("uxkit-widgets-tab");
+}

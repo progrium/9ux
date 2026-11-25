@@ -870,6 +870,8 @@ _drawctl(Uxctl *c)
 		_drawsvg(c, r);
 	else if(c->t == &_stexttype)
 		_drawstext(c, r);
+	else if(_iswidget(c))
+		_drawwidget(c, r);
 	if(!eqrect(w->clip, w->img->r)){
 		w->clip = w->img->r;
 		replclipr(w->img, 0, w->clip);
@@ -902,6 +904,7 @@ _redraw(Uxwin *w)
 	}
 	for(i = 0; i < w->nctl; i++)
 		_drawctl(w->ctl[i]);
+	_drawpop(w);
 	_resdraw(w);
 	flushimage(w->d, 1);
 	{

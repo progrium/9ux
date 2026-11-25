@@ -18,6 +18,7 @@ OFILES=\
 	reg.$O\
 	res.$O\
 	srv.$O\
+	widget.$O\
 	win.$O\
 	uxglyphs.$O\
 

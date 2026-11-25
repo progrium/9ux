@@ -26,6 +26,7 @@ typedef struct Note Note;
 typedef struct Action Action;
 typedef struct Uxstyle Uxstyle;
 typedef struct Uxlen Uxlen;
+typedef struct Uxpop Uxpop;
 
 /* spike: uitree style words (flex.c) */
 enum {
@@ -198,6 +199,8 @@ struct Uxctl {
 	int	lw;	/* console: the width it was wrapped to */
 	int	raw;	/* console: keys go straight to the app */
 	int	follow;	/* console: show the end at the next layout */
+	int	vmin, vmax, vstep, val;	/* spike: slider */
+	int	row;	/* spike: radios laid out in a row */
 	Font	*cfont;	/* console: its own font, or nil for the body font */
 
 	/* spike: uitree layout, svg and styled-text */
@@ -249,6 +252,7 @@ struct Uxwin {
 	Image	*hatch;	/* grey3 every other pixel, for open icons */
 	Rectangle	clip;	/* where the control being drawn may draw */
 	Uxstyle	*st;	/* spike: a root style: lay the window out by flexbox */
+	Uxpop	*pop;	/* spike: a pop-up menu over the window (widget.c) */
 };
 
 struct Item {
@@ -471,6 +475,14 @@ int	_dragstart(Uxdrag*, Uxctl*);
 
 /* flex.c, svg.c, stext.c: the spike */
 extern Ctltype	_divtype, _svgtype, _stexttype;
+/* spike: widget.c */
+int	_iswidget(Uxctl*);
+Point	_widgetsize(Uxctl*, int);
+void	_drawwidget(Uxctl*, Rectangle);
+void	_popopen(Uxwin*, Point, char**, int, int, void(*)(Uxwin*, int, void*), void*);
+void	_popclose(Uxwin*, int);
+void	_popmouse(Uxwin*, Mouse*, int);
+void	_drawpop(Uxwin*);
 int	_spikemouse(Uxctl*, Mouse*);
 int	_parsecolor(char*, ulong*);
 void	_styledefault(Uxstyle*);
