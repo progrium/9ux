@@ -239,6 +239,7 @@ char*	settype(Node*, char*);
 char*	canhold(Node*, char*, char*);
 int	ancestors(Node*, int**);
 char*	effmode(void);
+void	setsysmode(char*);
 Win*	newwin(char*);
 void	delwin(Win*);
 char*	nodeword(Node*, char*);

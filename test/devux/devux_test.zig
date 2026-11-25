@@ -31,7 +31,7 @@ fn barTitles(s: *Session) ![8]i32 {
         var ink = false;
         var y: i32 = 2;
         while (y < bar_h - 2) : (y += 1) {
-            if (img.at(x, y) == 0x000000) ink = true;
+            if (img.at(x, y) != img.at(x, 0)) ink = true; // not the bar: ink in either theme
         }
         if (!ink) continue;
         if (x - last > 8) {
@@ -123,10 +123,10 @@ test "version and ctl" {
     defer s.stop();
     const v = try s.readFile("/dev/ux/version");
     defer gpa.free(v);
-    try std.testing.expectEqualStrings("devux 1.2\nfeature focus\nfeature desktop\nfeature menubar\nfeature drag\nfeature chrome\n", v);
+    try std.testing.expectEqualStrings("devux 1.2\nfeature focus\nfeature desktop\nfeature menubar\nfeature drag\nfeature chrome\nfeature theme\n", v);
     const c = try s.readFile("/dev/ux/ctl");
     defer gpa.free(c);
-    try std.testing.expectEqualStrings("mode on\ncmdkey mod4\nclock on\n", c);
+    try std.testing.expectEqualStrings("mode on\ntheme light\ncmdkey mod4\nclock on\n", c);
 }
 
 test "focus events and the menu bar follow the focused window" {
@@ -305,7 +305,7 @@ test "mode off is stock rio: no bar, desktop hidden" {
     }
     const c = try s.readFile("/dev/ux/ctl");
     defer gpa.free(c);
-    try std.testing.expectEqualStrings("mode off\ncmdkey mod4\nclock on\n", c);
+    try std.testing.expectEqualStrings("mode off\ntheme light\ncmdkey mod4\nclock on\n", c);
 }
 
 test "classic chrome: title bar, move by title, zoom, and the close box" {

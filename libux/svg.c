@@ -901,7 +901,7 @@ _drawsvg(Uxctl *c, Rectangle r)
 	g = svgof(c);
 	if(g == nil)
 		return;
-	fg = c->st != nil && c->st->hasfg ? c->st->fg : UXink;
+	fg = c->st != nil && c->st->hasfg ? c->st->fg : UXcoltext;
 	if(!(c->state & Cenabled))
 		fg = UXcoldisabled;
 	/* rendered once per size and colour, then composited */

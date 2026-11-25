@@ -52,7 +52,7 @@ baselook(Uxctl *c)
 	memset(&l, 0, sizeof l);
 	s = c->st;
 	l.f = _font(c->w, s != nil && s->textsize >= 0 ? s->textsize : 2, s != nil && s->bold > 0, 0);
-	l.fg = s != nil && s->hasfg ? s->fg : UXink;
+	l.fg = s != nil && s->hasfg ? s->fg : UXcoltext;
 	return l;
 }
 

@@ -135,7 +135,7 @@ drawclock(void)
 	w = stringwidth(F, s);
 	p = Pt(barr.max.x-UXmenubarclockpad-w, barr.min.y+(Dy(barr)-1-F->height)/2);
 	clockr = Rect(p.x, barr.min.y, barr.max.x, barr.max.y-1);
-	string(bar, p, uxcolor(UXink), ZP, F, s);
+	string(bar, p, uxcolor(UXcoltext), ZP, F, s);
 }
 
 /* clock on, clock off, or clock at text... (frozen, for screenshots and tests) */
@@ -357,8 +357,8 @@ drawtitle(int k, int hi)
 	Point p;
 
 	t = &titles[k];
-	bg = uxcolor(hi ? UXcolselect : UXpaper);
-	fg = uxcolor(hi ? UXcolselecttext : UXink);
+	bg = uxcolor(hi ? UXcolselect : UXcolwindow);
+	fg = uxcolor(hi ? UXcolselecttext : UXcoltext);
 	draw(bar, t->r, bg, nil, ZP);
 	if(k == 0){
 		/* the mark */
@@ -388,8 +388,8 @@ uxbardraw(void)
 	if(a != nil && a->batch)
 		return;
 	layout();
-	draw(bar, barr, uxcolor(UXpaper), nil, ZP);
-	draw(bar, Rect(barr.min.x, barr.max.y-1, barr.max.x, barr.max.y), uxcolor(UXink), nil, ZP);
+	draw(bar, barr, uxcolor(UXcolwindow), nil, ZP);
+	draw(bar, Rect(barr.min.x, barr.max.y-1, barr.max.x, barr.max.y), uxcolor(UXcolline), nil, ZP);
 	drawclock();
 	for(k=0; k<ntitles; k++)
 		drawtitle(k, k == openedtitle);
@@ -476,7 +476,7 @@ drawitem(Drop *d, int k, int hi)
 
 	i = d->it[k];
 	r = d->ir[k];
-	draw(d->i, r, uxcolor(UXpaper), nil, ZP);
+	draw(d->i, r, uxcolor(UXcolwindow), nil, ZP);
 	if(i->sep){
 		/* a dotted line */
 		y = (r.min.y+r.max.y)/2;
@@ -486,8 +486,8 @@ drawitem(Drop *d, int k, int hi)
 		return;
 	}
 	hi = hi && i->enabled;
-	bg = uxcolor(hi ? UXcolselect : UXpaper);
-	fg = uxcolor(hi ? UXcolselecttext : (i->enabled ? UXink : UXcoldisabled));
+	bg = uxcolor(hi ? UXcolselect : UXcolwindow);
+	fg = uxcolor(hi ? UXcolselecttext : (i->enabled ? UXcoltext : UXcoldisabled));
 	draw(d->i, r, bg, nil, ZP);
 	string(d->i, Pt(r.min.x+UXmenupadleft, r.min.y+(Dy(r)-F->height)/2), fg, ZP, F,
 		i->label != nil ? i->label : i->action);
@@ -610,9 +610,9 @@ opendrop(Uxmenu *m, Rectangle at, int beside)
 		draw(d->i, r, under, nil, r.min);
 		freeimage(under);
 	}
-	draw(d->i, rectaddpt(fr, Pt(UXmenushadow, UXmenushadow)), uxcolor(UXink), nil, ZP);
-	draw(d->i, fr, uxcolor(UXpaper), nil, ZP);
-	border(d->i, fr, 1, uxcolor(UXink), ZP);
+	draw(d->i, rectaddpt(fr, Pt(UXmenushadow, UXmenushadow)), uxcolor(UXcolshadow), nil, ZP);
+	draw(d->i, fr, uxcolor(UXcolwindow), nil, ZP);
+	border(d->i, fr, 1, uxcolor(UXcolline), ZP);
 	r = fr;
 	y = r.min.y+1;
 	k = 0;

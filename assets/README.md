@@ -58,11 +58,11 @@ is the value to pass to `allocimage`.
 | grey4 | `4` | `777777` | 50% | shadows, secondary marks (rio's background) |
 | grey5 | `5` | `444444` | black | secondary text, grow box ridges |
 
-`palette.ndb` also names **roles** (`titlebar`, `desktop`, `select`,
-`focus`, ...), which `gen/uxstyle.h` has as `UXcoltitlebar`,
-`UXcolselect` and so on.
-rio and libux should draw with the roles, so a theme change is an edit
-to `palette.ndb`.
+`palette.ndb` also names **roles** (`window`, `text`, `line`,
+`titlebar`, `desktop`, `select`, `focus`, ...), which `gen/uxstyle.h`
+has as `UXcolwindow`, `UXcoltext` and so on. rio and libux draw only
+with the roles, never a palette colour by name, so each role can take
+another value in the dark theme (see [Themes](#themes-light-and-dark)).
 
 Two selection colours, on purpose: **butter** selects *text* (as in rio
 and acme), **navy** selects *objects* (menu items, list rows, icons).
@@ -238,6 +238,46 @@ Drawing new icons:
 - Check it on white, on the default desktop, in 1 bit and selected
   (`tools/mockup.py` renders `mockups/icons@2x.png` with all four).
 
+## Themes: light and dark
+
+9/UX has two themes. **Light** is everything above. **Dark** keeps the
+same shapes and the butter-and-teal identity at night: charcoal windows
+and menus, light text, dark grey outlines, a mid-olive title bar with
+dark title text and light close and zoom boxes, and the Nine teal
+pattern in deep teal.
+
+![The Desktop app in the dark theme](mockups/dark/desktop@2x.png)
+
+![The app scene in the dark theme](mockups/dark/app@2x.png)
+
+![Controls in the dark theme](mockups/dark/controls@3x.png)
+
+How it works:
+
+- **Roles.** Each `role` line in `palette.ndb` has its light value (a
+  palette colour) and its `dark` value. `gen/uxtheme.c` has both as
+  tables, `uxlight` and `uxdark`; `UXcolrole` reads the current one
+  through `uxtheme`. The roles that only the dark theme pulls apart are
+  `text`, `line` and `shadow` (all ink in light), and `window`,
+  `control`, `boxfill` and `selecttext` (all paper).
+- **Desktop patterns.** `pattern=dark` in `palette.ndb` recolours the
+  pattern letters for the dark theme; `gen/patterns/NAME.dark.img` sits
+  beside each tile, and libux uses it when `$uxpattern` names the light
+  one.
+- **Switching.** rio holds the system's theme: `echo theme dark
+  >/dev/ux/ctl` (or `$uxtheme=dark` when it starts) redraws the menu bar
+  and window chrome and sends a `theme mode=dark` event on
+  `/dev/ux/events` ([devux](../docs/protocols/devux.md)). A libux app
+  reads the theme when it starts and follows the event, as uitree's
+  system appearance (`theme/mode` reads the effective mode). An app can
+  choose its own with `echo dark >$ui/theme/pref` (`system`, the default,
+  follows rio).
+- **What stays light.** Icons keep their colours. rc, acme and sam
+  windows draw in their own colours, as stock rio does.
+
+`tools/mockup.py` draws the dark theme from the same `palette.ndb`
+roles, into [`mockups/dark/`](mockups/dark/).
+
 ## Theme explorations
 
 `tools/mockup.py` can draw the same scenes in other themes, to try
@@ -317,7 +357,9 @@ committed, so nobody needs to run the tools to use the assets.
 | `icons/NAME.SIZE.img` | uncompressed `a8r8g8b8` image(6) with alpha, for `readimage` |
 | `icons/NAME.SIZE.1.img` | the same icon in 1 bit (black, white, clear) |
 | `patterns/NAME.img` | one 8x8 `r8g8b8` tile, to use with `replclipr` |
-| `uxstyle.h` | `UXink`... colours and `UXmenubarheight`... metrics |
+| `patterns/NAME.dark.img` | the same tile in the dark theme's colours |
+| `uxstyle.h` | `UXink`... colours, `UXcolwindow`... roles and `UXmenubarheight`... metrics |
+| `uxtheme.c` | the light and dark themes' role tables (`uxlight`, `uxdark`) and `uxtheme`, the current one |
 | `uxcursors.c` | Plan 9 `Cursor` structs |
 | `uxglyphs.c`, `uxglyphs.h` | the chrome glyphs (`UXglyph` with `black` and `white` rows, MSB first, padded to bytes) |
 | `uxcursors.h` | `extern` declarations for `uxcursors.c` |

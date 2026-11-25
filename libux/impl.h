@@ -243,7 +243,10 @@ struct Uxwin {
 	int	edgeok;	/* rio took chrome edge for this window */
 	Image	*edgeimg;	/* the main window's image when edge: over the border too */
 	int	winnamefd;	/* a dialog's winname, or -1 */
-	Image	*col[24];
+	Image	*col[128];	/* solid colours, by value (_color) */
+	ulong	colv[128];
+	int	ncol;
+	Image	*shade;	/* a selected icon's darkening */
 	Image	*glyph[32];
 	Image	*glyphw[32];	/* the glyphs' white layers */
 	Image	*hatch;	/* grey3 every other pixel, for open icons */
@@ -391,6 +394,14 @@ Rectangle	_vislocal(Uxctl*);
 void	_scrollparts(Uxctl*, Rectangle, Rectangle*, Rectangle*, Rectangle*, Rectangle*);
 int	_listhead(Uxctl*);
 Image*	_color(Uxwin*, ulong);
+
+/*
+ * A theme role as a colour value, for tables made before the theme is
+ * known (flex.c's tokens): alpha 1, the role's index above it. _color
+ * and _rgba turn it into the current theme's value.
+ */
+#define	UXrole(r)	((ulong)(r)<<8 | 0x01)
+#define	_rgba(v)	(((v)&0xFF) == 0x01 && ((v)>>8) < UXNrole ? uxtheme[(v)>>8] : (v))
 void	_winfonts(Uxwin*);
 
 /* menu.c */
@@ -402,6 +413,8 @@ void	_menuwin(Uxwin*, int);
 void	_chrome(Uxwin*);
 void	_edgeimage(Uxwin*);
 void	_riomode(int);
+char*	_riotheme(void);
+extern void	(*_themehook)(char*);
 Rectangle	_riorect(Uxwin*);
 
 /* res.c */

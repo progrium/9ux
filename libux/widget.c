@@ -81,10 +81,17 @@ col(Uxwin *w, ulong rgba)
 	return _color(w, rgba);
 }
 
+/* a control's text and marks, and its outlines */
 static ulong
 ink(Uxctl *c)
 {
-	return (c->state & Cenabled) ? UXink : UXcoldisabled;
+	return (c->state & Cenabled) ? UXcoltext : UXcoldisabled;
+}
+
+static ulong
+outline(Uxctl *c)
+{
+	return (c->state & Cenabled) ? UXcolline : UXcoldisabled;
 }
 
 static char*
@@ -151,11 +158,11 @@ drawpopup(Uxctl *c, Rectangle r)
 
 	w = c->w;
 	b = Rect(r.min.x, r.min.y, r.max.x-1, r.max.y-1);
-	draw(w->img, b, col(w, c->pressed ? UXcolselect : UXpaper), nil, ZP);
-	border(w->img, b, 1, col(w, ink(c)), ZP);
+	draw(w->img, b, col(w, c->pressed ? UXcolselect : UXcolcontrol), nil, ZP);
+	border(w->img, b, 1, col(w, outline(c)), ZP);
 	/* the drop shadow, right and below */
-	draw(w->img, Rect(b.min.x+2, b.max.y, b.max.x+1, b.max.y+1), col(w, ink(c)), nil, ZP);
-	draw(w->img, Rect(b.max.x, b.min.y+2, b.max.x+1, b.max.y+1), col(w, ink(c)), nil, ZP);
+	draw(w->img, Rect(b.min.x+2, b.max.y, b.max.x+1, b.max.y+1), col(w, outline(c)), nil, ZP);
+	draw(w->img, Rect(b.max.x, b.min.y+2, b.max.x+1, b.max.y+1), col(w, outline(c)), nil, ZP);
 	s = itemlabel(c, c->check);
 	if(s == nil)
 		s = c->label;
@@ -222,8 +229,8 @@ drawradios(Uxctl *c, Rectangle r)
 	for(i = 0; i < c->nitems; i++){
 		ir = radiorect(c, r, i);
 		o = Pt(ir.min.x + Radiosize/2, ir.min.y + Dy(ir)/2);
-		fillellipse(w->img, o, Radiosize/2, Radiosize/2, col(w, c->pressed && c->lastitem == i ? UXcoltrack : UXpaper), ZP);
-		ellipse(w->img, o, Radiosize/2, Radiosize/2, 0, col(w, ink(c)), ZP);
+		fillellipse(w->img, o, Radiosize/2, Radiosize/2, col(w, c->pressed && c->lastitem == i ? UXcoltrack : UXcolcontrol), ZP);
+		ellipse(w->img, o, Radiosize/2, Radiosize/2, 0, col(w, outline(c)), ZP);
 		if(i == c->check)
 			fillellipse(w->img, o, 3, 3, col(w, ink(c)), ZP);
 		string(w->img, Pt(ir.min.x + Radiosize + UXcheckgap, ir.min.y + (Dy(ir)-w->sysfont->height)/2),
@@ -284,12 +291,12 @@ drawslider(Uxctl *c, Rectangle r)
 	x = sliderx(c, r);
 	draw(w->img, t, col(w, UXcoltrack), nil, ZP);
 	draw(w->img, Rect(t.min.x, t.min.y, x, t.max.y), col(w, (c->state & Cenabled) ? UXcolselect : UXcoldisabled), nil, ZP);
-	border(w->img, t, 1, col(w, ink(c)), ZP);
+	border(w->img, t, 1, col(w, outline(c)), ZP);
 	th = Rect(x - Thumbw/2, y - Thumbh/2, x + Thumbw/2, y + Thumbh/2);
-	draw(w->img, th, col(w, c->pressed ? UXcoltrack : UXpaper), nil, ZP);
-	border(w->img, th, 1, col(w, ink(c)), ZP);
-	draw(w->img, Rect(th.min.x+1, th.max.y, th.max.x+1, th.max.y+1), col(w, ink(c)), nil, ZP);
-	draw(w->img, Rect(th.max.x, th.min.y+1, th.max.x+1, th.max.y+1), col(w, ink(c)), nil, ZP);
+	draw(w->img, th, col(w, c->pressed ? UXcoltrack : UXcolcontrol), nil, ZP);
+	border(w->img, th, 1, col(w, outline(c)), ZP);
+	draw(w->img, Rect(th.min.x+1, th.max.y, th.max.x+1, th.max.y+1), col(w, outline(c)), nil, ZP);
+	draw(w->img, Rect(th.max.x, th.min.y+1, th.max.x+1, th.max.y+1), col(w, outline(c)), nil, ZP);
 }
 
 static int
@@ -349,14 +356,14 @@ drawswitch(Uxctl *c, Rectangle r)
 	fillellipse(w->img, Pt(t.min.x+rad, t.min.y+rad), rad, rad, col(w, c->check ? UXcolselect : UXcoltrack), ZP);
 	fillellipse(w->img, Pt(t.max.x-rad-1, t.min.y+rad), rad, rad, col(w, c->check ? UXcolselect : UXcoltrack), ZP);
 	draw(w->img, Rect(t.min.x+rad, t.min.y, t.max.x-rad-1, t.max.y+1), col(w, c->check ? UXcolselect : UXcoltrack), nil, ZP);
-	ellipse(w->img, Pt(t.min.x+rad, t.min.y+rad), rad, rad, 0, col(w, ink(c)), ZP);
-	ellipse(w->img, Pt(t.max.x-rad-1, t.min.y+rad), rad, rad, 0, col(w, ink(c)), ZP);
-	draw(w->img, Rect(t.min.x+rad, t.min.y, t.max.x-rad-1, t.min.y+1), col(w, ink(c)), nil, ZP);
-	draw(w->img, Rect(t.min.x+rad, t.min.y+2*rad, t.max.x-rad-1, t.min.y+2*rad+1), col(w, ink(c)), nil, ZP);
+	ellipse(w->img, Pt(t.min.x+rad, t.min.y+rad), rad, rad, 0, col(w, outline(c)), ZP);
+	ellipse(w->img, Pt(t.max.x-rad-1, t.min.y+rad), rad, rad, 0, col(w, outline(c)), ZP);
+	draw(w->img, Rect(t.min.x+rad, t.min.y, t.max.x-rad-1, t.min.y+1), col(w, outline(c)), nil, ZP);
+	draw(w->img, Rect(t.min.x+rad, t.min.y+2*rad, t.max.x-rad-1, t.min.y+2*rad+1), col(w, outline(c)), nil, ZP);
 	draw(w->img, Rect(t.min.x+rad, t.min.y+1, t.max.x-rad-1, t.min.y+2*rad), col(w, c->check ? UXcolselect : UXcoltrack), nil, ZP);
 	kx = c->check ? t.max.x-rad-1 : t.min.x+rad;
-	fillellipse(w->img, Pt(kx, t.min.y+rad), rad-2, rad-2, col(w, UXpaper), ZP);
-	ellipse(w->img, Pt(kx, t.min.y+rad), rad-2, rad-2, 0, col(w, ink(c)), ZP);
+	fillellipse(w->img, Pt(kx, t.min.y+rad), rad-2, rad-2, col(w, UXcolcontrol), ZP);
+	ellipse(w->img, Pt(kx, t.min.y+rad), rad-2, rad-2, 0, col(w, outline(c)), ZP);
 	if(c->label[0])
 		string(w->img, Pt(t.max.x+UXcheckgap, r.min.y + (Dy(r)-w->sysfont->height)/2),
 			col(w, ink(c)), ZP, w->sysfont, c->label);
@@ -402,7 +409,7 @@ drawtabbar(Uxctl *c, Rectangle r)
 
 	w = c->w;
 	sel = -1;
-	draw(w->img, Rect(r.min.x, r.max.y-1, r.max.x, r.max.y), col(w, UXink), nil, ZP);
+	draw(w->img, Rect(r.min.x, r.max.y-1, r.max.x, r.max.y), col(w, UXcolline), nil, ZP);
 	for(i = 0; i < c->nitems; i++){
 		t = tabrect(c, r, i);
 		if(i == c->check){
@@ -411,17 +418,17 @@ drawtabbar(Uxctl *c, Rectangle r)
 		}
 		t.min.y += 3;
 		draw(w->img, t, col(w, UXcolface), nil, ZP);
-		border(w->img, t, 1, col(w, UXink), ZP);
+		border(w->img, t, 1, col(w, UXcolline), ZP);
 		string(w->img, Pt(t.min.x+Tabpad, t.min.y + (Dy(t)-w->sysfont->height)/2),
 			col(w, ink(c)), ZP, w->sysfont, c->items[i]);
 	}
 	if(sel >= 0){
 		/* the chosen tab sits in front, open into the panel below */
 		t = tabrect(c, r, sel);
-		draw(w->img, t, col(w, UXpaper), nil, ZP);
-		draw(w->img, Rect(t.min.x, t.min.y, t.max.x, t.min.y+1), col(w, UXink), nil, ZP);
-		draw(w->img, Rect(t.min.x, t.min.y, t.min.x+1, t.max.y), col(w, UXink), nil, ZP);
-		draw(w->img, Rect(t.max.x-1, t.min.y, t.max.x, t.max.y), col(w, UXink), nil, ZP);
+		draw(w->img, t, col(w, UXcolwindow), nil, ZP);
+		draw(w->img, Rect(t.min.x, t.min.y, t.max.x, t.min.y+1), col(w, UXcolline), nil, ZP);
+		draw(w->img, Rect(t.min.x, t.min.y, t.min.x+1, t.max.y), col(w, UXcolline), nil, ZP);
+		draw(w->img, Rect(t.max.x-1, t.min.y, t.max.x, t.max.y), col(w, UXcolline), nil, ZP);
 		string(w->img, Pt(t.min.x+Tabpad, t.min.y + (Dy(t)-w->sysfont->height)/2),
 			col(w, ink(c)), ZP, w->sysfont, c->items[sel]);
 	}
@@ -589,9 +596,9 @@ _drawpop(Uxwin *w)
 	if(p == nil || w->img == nil)
 		return;
 	r = p->r;
-	draw(w->img, rectaddpt(r, Pt(UXmenushadow, UXmenushadow)), col(w, UXink), nil, ZP);
-	draw(w->img, r, col(w, UXpaper), nil, ZP);
-	border(w->img, r, 1, col(w, UXink), ZP);
+	draw(w->img, rectaddpt(r, Pt(UXmenushadow, UXmenushadow)), col(w, UXcolshadow), nil, ZP);
+	draw(w->img, r, col(w, UXcolwindow), nil, ZP);
+	border(w->img, r, 1, col(w, UXcolline), ZP);
 	for(i = 0; i < p->n; i++){
 		ir = Rect(r.min.x+1, r.min.y+1+i*UXmenuitemheight, r.max.x-1, r.min.y+1+(i+1)*UXmenuitemheight);
 		if(isseparator(p->items[i])){
@@ -602,7 +609,7 @@ _drawpop(Uxwin *w)
 		if(i == p->hover)
 			draw(w->img, ir, col(w, UXcolselect), nil, ZP);
 		string(w->img, Pt(ir.min.x+UXmenupadleft, ir.min.y + (Dy(ir)-w->sysfont->height)/2),
-			col(w, i == p->hover ? UXcolselecttext : UXink), ZP, w->sysfont, p->items[i]);
+			col(w, i == p->hover ? UXcolselecttext : UXcoltext), ZP, w->sysfont, p->items[i]);
 	}
 }
 
@@ -953,7 +960,7 @@ paintop(Uxwin *w, Op *o, Point org)
 			}
 		if(s != nil){
 			f = opattr(o, "size") != nil && atoi(opattr(o, "size")) >= 14 ? w->sysfont : w->font;
-			stroke = opcolor(w, opattr(o, "color"), UXink, &snone);
+			stroke = opcolor(w, opattr(o, "color"), UXcoltext, &snone);
 			if(!snone)
 				string(w->img, addpt(Pt(rnd(v[0]), rnd(v[1]) - f->ascent), org), stroke, ZP, f, s);
 		}
@@ -969,7 +976,7 @@ paintop(Uxwin *w, Op *o, Point org)
 		if(strcmp(k, "polygon") == 0 && !fnone)
 			fillpoly(w->img, pts, np, 0, fill, ZP);
 		if(snone && strcmp(k, "polygon") != 0)
-			stroke = col(w, UXink), snone = 0;
+			stroke = col(w, UXcoltext), snone = 0;
 		if(!snone)
 			poly(w->img, pts, np, Endsquare, Endsquare, wd > 1 ? wd/2 : 0, stroke, ZP);
 		if(strcmp(k, "polygon") == 0 && !snone && np > 2)

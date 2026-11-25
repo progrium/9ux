@@ -13,24 +13,27 @@
 #include "ux.h"
 #include "impl.h"
 
-static ulong palette[] = {
-	UXink, UXpaper, UXcream, UXbutter, UXolive, UXmist, UXsea, UXteal,
-	UXdeep, UXnavy, UXred, UXgrey1, UXgrey2, UXgrey3, UXgrey4, UXgrey5,
-};
-
-/* a solid colour on w's display, cached per window */
+/*
+ * a solid colour on w's display, cached per window by value: the
+ * palette's colours and both themes' roles fit (theme changes need no
+ * flush, since a value stays the same colour)
+ */
 Image*
 _color(Uxwin *w, ulong rgba)
 {
 	int i;
 
-	for(i = 0; i < nelem(palette); i++)
-		if(palette[i] == rgba)
-			break;
-	if(i == nelem(palette))
+	rgba = _rgba(rgba);
+	for(i = 0; i < w->ncol; i++)
+		if(w->colv[i] == rgba)
+			return w->col[i];
+	if(w->ncol == nelem(w->col))
 		return allocimage(w->d, Rect(0,0,1,1), w->img->chan, 1, rgba);	/* not cached */
+	w->col[i] = allocimage(w->d, Rect(0,0,1,1), w->img->chan, 1, rgba);
 	if(w->col[i] == nil)
-		w->col[i] = allocimage(w->d, Rect(0,0,1,1), w->img->chan, 1, rgba);
+		return w->d->black;
+	w->colv[i] = rgba;
+	w->ncol++;
 	return w->col[i];
 }
 
@@ -292,10 +295,10 @@ drawbutton(Uxctl *c, Rectangle r)
 	en = (c->state & Cenabled) != 0;
 	if((c->state & Cdefault) && en)
 		/* a 2 px ring with a 1 px gap outside the button */
-		roundrect(w, insetrect(r, -UXbuttondefaultring), UXbuttonradius+UXbuttondefaultring, 2, 0, UXink);
-	line = en ? UXink : UXcoldisabled;
-	bg = c->pressed == 1 ? UXcolselect : UXpaper;
-	fg = !en ? UXcoldisabled : c->pressed == 1 ? UXcolselecttext : UXink;
+		roundrect(w, insetrect(r, -UXbuttondefaultring), UXbuttonradius+UXbuttondefaultring, 2, 0, UXcolline);
+	line = en ? UXcolline : UXcoldisabled;
+	bg = c->pressed == 1 ? UXcolselect : UXcolcontrol;
+	fg = !en ? UXcoldisabled : c->pressed == 1 ? UXcolselecttext : UXcoltext;
 	roundrect(w, r, UXbuttonradius, 1, bg, line);
 	if(w->focus == c && c->pressed == 0 && !(c->state & Cdefault))
 		roundrect(w, insetrect(r, 2), UXbuttonradius-1, 1, 0, UXcolfocus);
@@ -325,13 +328,13 @@ drawtext(Uxctl *c, Rectangle r)
 	f = w->font;
 	ht = f->height;
 	focused = w->focus == c && active(w);
-	fg = _color(w, (c->state & Cenabled) ? UXink : UXcoldisabled);
+	fg = _color(w, (c->state & Cenabled) ? UXcoltext : UXcoldisabled);
 	bg = _color(w, UXcolfield);
 	selbg = _color(w, UXcoltextselect);
 	if(focused)
 		frame(w, insetrect(r, -UXfieldfocusring), UXfieldfocusring, UXcolfocus);
 	draw(w->img, r, bg, nil, ZP);
-	frame(w, r, 1, (c->state & UXreadonly) ? UXcoldisabled : UXink);
+	frame(w, r, 1, (c->state & UXreadonly) ? UXcoldisabled : UXcolline);
 	in = insetrect(r, 1);
 	in.min.x += UXfieldpad-1;
 	in.max.x -= UXfieldpad-1;
@@ -340,7 +343,7 @@ drawtext(Uxctl *c, Rectangle r)
 	if(c->state & UXsecret){
 		bullets(w, in.min, c->ntext, ht, fg);
 		if(focused)
-			draw(w->img, Rect(in.min.x + c->q0*7, in.min.y, in.min.x + c->q0*7 + 1, in.min.y+ht), _color(w, UXink), nil, ZP);
+			draw(w->img, Rect(in.min.x + c->q0*7, in.min.y, in.min.x + c->q0*7 + 1, in.min.y+ht), _color(w, UXcoltext), nil, ZP);
 		unclip(w);
 		return;
 	}
@@ -356,7 +359,7 @@ drawtext(Uxctl *c, Rectangle r)
 	x = p.x;
 	for(q = c->org; q <= c->ntext; q++){
 		if(focused && q == c->q0 && c->q0 == c->q1)
-			draw(w->img, Rect(x, p.y, x+1, p.y+ht), _color(w, UXink), nil, ZP);
+			draw(w->img, Rect(x, p.y, x+1, p.y+ht), _color(w, UXcoltext), nil, ZP);
 		if(q == c->ntext)
 			break;
 		if(c->text[q] == '\n'){
@@ -383,7 +386,7 @@ drawcheck(Uxctl *c, Rectangle r)
 	ulong ink;
 
 	w = c->w;
-	ink = (c->state & Cenabled) ? UXink : UXcoldisabled;
+	ink = (c->state & Cenabled) ? UXcolline : UXcoldisabled;
 	b = Rect(0, 0, UXchecksize, UXchecksize);
 	b = rectaddpt(b, Pt(r.min.x, r.min.y + (Dy(r)-UXchecksize)/2));
 	if(c->pressed){
@@ -391,17 +394,17 @@ drawcheck(Uxctl *c, Rectangle r)
 		frame(w, b, 1, ink);
 		frame(w, insetrect(b, 1), 1, ink);
 	}else{
-		fill(w, b, UXpaper);
+		fill(w, b, UXcolcontrol);
 		frame(w, b, 1, ink);
 	}
 	if(c->check == 1)
-		glyphin(w, "check", insetrect(b, 1), _color(w, ink));
+		glyphin(w, "check", insetrect(b, 1), _color(w, (c->state & Cenabled) ? UXcoltext : UXcoldisabled));
 	else if(c->check == 2)
-		glyphin(w, "mixed", b, _color(w, ink));
+		glyphin(w, "mixed", b, _color(w, (c->state & Cenabled) ? UXcoltext : UXcoldisabled));
 	if(w->focus == c && active(w))
 		frame(w, insetrect(b, -2), 1, UXcolfocus);
 	string(w->img, Pt(b.max.x+UXcheckgap, r.min.y + (Dy(r)-w->sysfont->height)/2),
-		_color(w, ink), ZP, w->sysfont, c->label);
+		_color(w, (c->state & Cenabled) ? UXcoltext : UXcoldisabled), ZP, w->sysfont, c->label);
 }
 
 static void
@@ -414,7 +417,7 @@ drawlabel(Uxctl *c, Rectangle r)
 
 	s = _runestr(c->text, c->ntext);
 	f = (c->state & UXsmall) ? c->w->smallfont : c->w->sysfont;
-	col = (c->state & UXsmall) ? UXgrey5 : UXink;
+	col = (c->state & UXsmall) ? UXcolsecondary : UXcoltext;
 	x = r.min.x;
 	if(c->state & UXright)
 		x = r.max.x - stringwidth(f, s);
@@ -439,7 +442,7 @@ winbg(Uxwin *w)
 {
 	if(strcmp(w->kind, "dialog") == 0 || strcmp(w->kind, "alert") == 0)
 		return UXcolface;
-	return UXpaper;
+	return UXcolwindow;
 }
 
 static void
@@ -455,7 +458,7 @@ drawgroup(Uxctl *c, Rectangle r)
 	frame(w, r, 1, UXcoldisabled);
 	if(c->label[0]){
 		p = Pt(r.min.x+UXcontrolgap, r.min.y - f->height/2);
-		stringbg(w->img, p, _color(w, UXink), ZP, f, c->label, _color(w, winbg(w)), Pt(-4, 0));
+		stringbg(w->img, p, _color(w, UXcoltext), ZP, f, c->label, _color(w, winbg(w)), Pt(-4, 0));
 	}
 }
 
@@ -510,11 +513,11 @@ drawlist(Uxctl *c, Rectangle r)
 	f = w->font;
 	plain = inscroll(c) && c->ncols > 0;	/* a folder window's list: the scroll view frames it */
 	vis = _vis(c);
-	fill(w, r, UXpaper);
+	fill(w, r, UXcolwindow);
 	if(plain)
 		in = r;
 	else{
-		frame(w, r, 1, UXink);
+		frame(w, r, 1, UXcolline);
 		in = insetrect(r, 1);
 	}
 	hh = _listhead(c);
@@ -543,12 +546,12 @@ drawlist(Uxctl *c, Rectangle r)
 		x = lr.min.x + UXlistpad;
 		if(c->ncols == 0){
 			string(w->img, Pt(x, lr.min.y + (UXlistrowheight-f->height)/2),
-				_color(w, on ? UXcolselecttext : UXink), ZP, f, c->items[i]);
+				_color(w, on ? UXcolselecttext : UXcoltext), ZP, f, c->items[i]);
 			continue;
 		}
 		for(j = 0; j < c->ncols; j++){
 			t = column(c->items[i], j);
-			fg = on ? UXcolselecttext : j == 0 ? UXink : UXgrey5;
+			fg = on ? UXcolselecttext : j == 0 ? UXcoltext : UXcolsecondary;
 			if(j == 0 && c->ricons != nil && c->ricons[i] != nil){
 				img = _resicon(w, c->ricons[i], 1);
 				if(img != nil){
@@ -575,14 +578,14 @@ drawlist(Uxctl *c, Rectangle r)
 		x = hr.min.x + UXlistpad;
 		sf = w->smallfont != nil ? w->smallfont : f;
 		for(j = 0; j < c->ncols; j++){
-			string(w->img, Pt(x, hr.min.y + (hh-1-sf->height)/2), _color(w, UXgrey5), ZP, sf, c->cols[j]);
+			string(w->img, Pt(x, hr.min.y + (hh-1-sf->height)/2), _color(w, UXcolsecondary), ZP, sf, c->cols[j]);
 			x += c->colw[j];
 		}
 	}else{
 		/* the chooser's directory */
 		fill(w, Rect(hr.min.x, hr.min.y, hr.max.x, hr.max.y-1), UXcolface);
 		string(w->img, Pt(hr.min.x+UXlistpad, hr.min.y + (hh-1-f->height)/2),
-			_color(w, UXink), ZP, f, c->dir);
+			_color(w, UXcoltext), ZP, f, c->dir);
 	}
 	fill(w, Rect(hr.min.x, hr.max.y-1, hr.max.x, hr.max.y), UXcoldisabled);
 }
@@ -591,9 +594,9 @@ drawlist(Uxctl *c, Rectangle r)
 static Image*
 shade(Uxwin *w)
 {
-	if(w->col[nelem(palette)] == nil)
-		w->col[nelem(palette)] = allocimage(w->d, Rect(0,0,1,1), RGBA32, 1, setalpha(0x000033FF, 0x80));
-	return w->col[nelem(palette)];
+	if(w->shade == nil)
+		w->shade = allocimage(w->d, Rect(0,0,1,1), RGBA32, 1, setalpha(0x000033FF, 0x80));
+	return w->shade;
 }
 
 /* grey3 on every other pixel, clear between: an open icon's hatching (assets/README.md, Desktop: Open) */
@@ -617,36 +620,58 @@ hatch(Uxwin *w)
 
 /*
  * The desktop: the desktop colour, tiled with the pattern image named
- * by $uxpattern (an assets/gen/patterns tile) when there is one.
+ * by $uxpattern (an assets/gen/patterns tile) when there is one. In the
+ * dark theme, its dark form beside it (NAME.dark.img) if there is one.
  */
+static Image*
+readpattern(Display *d, int dark)
+{
+	Image *pat;
+	char *f, *g;
+	int fd, n;
+
+	f = getenv("uxpattern");
+	if(f == nil)
+		return nil;
+	pat = nil;
+	g = nil;
+	n = strlen(f);
+	if(dark && n > 4 && strcmp(f+n-4, ".img") == 0)
+		g = smprint("%.*s.dark.img", n-4, f);
+	if((fd = open(g != nil ? g : f, OREAD)) < 0 && g != nil)
+		fd = open(f, OREAD);
+	if(fd >= 0){
+		pat = readimage(d, fd, 0);
+		if(pat != nil)
+			replclipr(pat, 1, Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF));
+		close(fd);
+	}
+	free(g);
+	free(f);
+	return pat;
+}
+
 static void
 deskbg(Uxwin *w, Rectangle r)
 {
 	static Display *pd;
-	static Image *pat;
-	static int tried;
-	char *f;
-	int fd;
+	static Image *pat[2];
+	static int tried[2];
+	int k;
 
 	fill(w, r, UXcoldesktop);
 	if(pd != w->d){
 		pd = w->d;
-		pat = nil;
-		tried = 0;
+		pat[0] = pat[1] = nil;
+		tried[0] = tried[1] = 0;
 	}
-	if(!tried){
-		tried = 1;
-		f = getenv("uxpattern");
-		if(f != nil && (fd = open(f, OREAD)) >= 0){
-			pat = readimage(w->d, fd, 0);
-			if(pat != nil)
-				replclipr(pat, 1, Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF));
-			close(fd);
-		}
-		free(f);
+	k = uxtheme == uxdark;
+	if(!tried[k]){
+		tried[k] = 1;
+		pat[k] = readpattern(w->d, k);
 	}
-	if(pat != nil)
-		draw(w->img, r, pat, nil, ZP);
+	if(pat[k] != nil)
+		draw(w->img, r, pat[k], nil, ZP);
 }
 
 /* the label, elided in the middle to fit max pixels; malloc'd */
@@ -703,7 +728,7 @@ drawicons(Uxctl *c, Rectangle r)
 	if(desk)
 		deskbg(w, r);
 	else
-		fill(w, r, UXpaper);
+		fill(w, r, UXcolwindow);
 	for(i = 0; i < c->nicons; i++){
 		ic = &c->icons[i];
 		/* pos is the icon's centre */
@@ -717,8 +742,8 @@ drawicons(Uxctl *c, Rectangle r)
 				draw(w->img, ir, shade(w), img, img->r.min);
 		}else{
 			/* no icon resource */
-			fill(w, ir, ic->sel ? UXgrey4 : UXgrey1);
-			frame(w, ir, 1, UXink);
+			fill(w, ir, ic->sel ? UXcolmuted : UXcolface);
+			frame(w, ir, 1, UXcolline);
 		}
 		if(ic->label[0] == 0)
 			continue;
@@ -728,17 +753,17 @@ drawicons(Uxctl *c, Rectangle r)
 		lr = Rect(lp.x-UXiconviewlabelpad, lp.y, lp.x+lw+UXiconviewlabelpad, lp.y+f->height);
 		if(ic->sel){
 			fill(w, lr, active(w) ? UXcolselect : UXcoltrack);
-			string(w->img, lp, _color(w, active(w) ? UXcolselecttext : UXink), ZP, f, l);
+			string(w->img, lp, _color(w, active(w) ? UXcolselecttext : UXcoltext), ZP, f, l);
 		}else{
 			/* on the desktop a label sits on a paper plate, to read over any pattern */
 			if(desk)
-				fill(w, lr, UXpaper);
-			string(w->img, lp, _color(w, UXink), ZP, f, l);
+				fill(w, lr, UXcolwindow);
+			string(w->img, lp, _color(w, UXcoltext), ZP, f, l);
 		}
 		free(l);
 	}
 	if(c->drag == Dband && Dx(c->band) > 0 && Dy(c->band) > 0)
-		frame(w, c->band, 1, desk ? UXpaper : UXgrey4);
+		frame(w, c->band, 1, desk ? UXcolselecttext : UXcolmuted);
 	unclip(w);
 }
 
@@ -760,8 +785,8 @@ drawbar(Uxwin *w, Rectangle b, int vert, int off, int see, int all)
 	len = vert ? Dy(b) : Dx(b);
 	t = _thumbat(len, off, see, all, &tl);
 	live = active(w) && tl > 0;
-	fill(w, b, live ? UXcoltrack : UXpaper);
-	frame(w, b, 1, UXink);
+	fill(w, b, live ? UXcoltrack : UXcolwindow);
+	frame(w, b, 1, UXcolline);
 	if(!active(w))
 		return;
 	if(vert){
@@ -773,24 +798,24 @@ drawbar(Uxwin *w, Rectangle b, int vert, int off, int see, int all)
 	}
 	fill(w, a1, UXcolface);
 	fill(w, a2, UXcolface);
-	frame(w, a1, 1, UXink);
-	frame(w, a2, 1, UXink);
-	glyph2in(w, vert ? "arrow-up" : "arrow-left", a1, live ? UXink : UXgrey3, live ? UXpaper : UXcolface);
-	glyph2in(w, vert ? "arrow-down" : "arrow-right", a2, live ? UXink : UXgrey3, live ? UXpaper : UXcolface);
+	frame(w, a1, 1, UXcolline);
+	frame(w, a2, 1, UXcolline);
+	glyph2in(w, vert ? "arrow-up" : "arrow-left", a1, live ? UXcoltext : UXcoldisabled, live ? UXcolcontrol : UXcolface);
+	glyph2in(w, vert ? "arrow-down" : "arrow-right", a2, live ? UXcoltext : UXcoldisabled, live ? UXcolcontrol : UXcolface);
 	if(!live)
 		return;
 	if(vert)
 		th = Rect(b.min.x, b.min.y+t, b.max.x, b.min.y+t+tl);
 	else
 		th = Rect(b.min.x+t, b.min.y, b.min.x+t+tl, b.max.y);
-	fill(w, th, UXpaper);
-	frame(w, th, 1, UXink);
+	fill(w, th, UXcolcontrol);
+	frame(w, th, 1, UXcolline);
 	if(vert)
-		glyphin(w, "thumbgrip", th, _color(w, UXgrey4));
+		glyphin(w, "thumbgrip", th, _color(w, UXcolmuted));
 	else{
 		cx = th.min.x + Dx(th)/2;
 		for(k = 0; k < 3; k++)
-			fill(w, Rect(cx-2+2*k, th.min.y+4, cx-1+2*k, th.max.y-4), UXgrey4);
+			fill(w, Rect(cx-2+2*k, th.min.y+4, cx-1+2*k, th.max.y-4), UXcolmuted);
 	}
 }
 
@@ -803,20 +828,20 @@ drawscroll(Uxctl *c, Rectangle r)
 	w = c->w;
 	_scrollparts(c, r, &port, &vb, &hb, &gb);
 	/* the frame, around the header too; the header itself is the app's */
-	frame(w, r, 1, UXink);
-	fill(w, port, UXpaper);
+	frame(w, r, 1, UXcolline);
+	fill(w, port, UXcolwindow);
 	if(c->header >= 3){
 		/* the header ends in a double rule, as a folder window's info bar */
-		fill(w, Rect(port.min.x, port.min.y-3, port.max.x, port.min.y-2), UXink);
-		fill(w, Rect(port.min.x, port.min.y-1, port.max.x, port.min.y), UXink);
+		fill(w, Rect(port.min.x, port.min.y-3, port.max.x, port.min.y-2), UXcolline);
+		fill(w, Rect(port.min.x, port.min.y-1, port.max.x, port.min.y), UXcolline);
 	}
 	drawbar(w, vb, 1, c->origin.y - c->extent.min.y, Dy(port), Dy(c->extent));
 	drawbar(w, hb, 0, c->origin.x - c->extent.min.x, Dx(port), Dx(c->extent));
 	if(Dx(gb) > 0){
 		fill(w, gb, UXcolface);
-		frame(w, gb, 1, UXink);
+		frame(w, gb, 1, UXcolline);
 		if(active(w))
-			glyph(w, "grow", addpt(gb.min, Pt(2, 2)), _color(w, UXgrey5));
+			glyph(w, "grow", addpt(gb.min, Pt(2, 2)), _color(w, UXcolsecondary));
 	}
 }
 
@@ -902,7 +927,7 @@ _redraw(Uxwin *w)
 	fill(w, r, winbg(w));
 	if(strcmp(w->kind, "dialog") == 0 || strcmp(w->kind, "alert") == 0){
 		/* rio's border is the teal band; libux draws the ink frame inside it */
-		frame(w, r, 1, UXink);
+		frame(w, r, 1, UXcolline);
 	}
 	for(i = 0; i < w->nctl; i++)
 		_drawctl(w->ctl[i]);
@@ -921,6 +946,23 @@ _redraw(Uxwin *w)
 		if(dbg)	/* spike: how long a whole-window redraw takes */
 			fprint(2, "redraw %lldµs\n", (nsec()-t0)/1000);
 	}
+}
+
+/* the theme changed: everything draws again in its colours */
+void
+uxsetdark(int dark)
+{
+	int i;
+
+	qlock(&uxlk);
+	if((uxtheme == uxdark) != (dark != 0)){
+		uxtheme = dark ? uxdark : uxlight;
+		for(i = 0; i < ux.nwin; i++)
+			ux.win[i]->dirty = 1;
+		if(ux.uikick)
+			nbsendul(ux.uikick, 1);
+	}
+	qunlock(&uxlk);
 }
 
 void

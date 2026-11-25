@@ -1014,6 +1014,7 @@ applynow(Faux *a, char *v)
 			buf = smprint("mode=%s via=ctl", effmode());
 			emit("theme", "-", "-", buf, nil, nil, 0, 1);
 			free(buf);
+			uisync();	/* the app draws in its new mode */
 		}
 		free(old);
 		return nil;

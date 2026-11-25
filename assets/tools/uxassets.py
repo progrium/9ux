@@ -75,6 +75,25 @@ def load_palette(path=None):
     return byname, bychar
 
 
+def load_roles():
+    """palette.ndb's roles as (name, light rgb, dark rgb), and the dark
+    theme's pattern colours by palette name."""
+    byname, _ = load_palette()
+    roles, darkpat = [], {}
+    for e in read_ndb(os.path.join(ASSETS, "palette.ndb")):
+        if "role" in e:
+            dark = e.get("dark")
+            if dark is None:
+                raise SystemExit("palette.ndb: role %s has no dark value" % e["role"])
+            dark = byname[dark].rgb if dark in byname else hexrgb(dark)
+            roles.append((e["role"], byname[e["color"]].rgb, dark))
+        elif e.get("pattern") == "dark":
+            for k, v in e.items():
+                if k != "pattern":
+                    darkpat[k] = hexrgb(v)
+    return roles, darkpat
+
+
 def load_metrics(path=None):
     path = path or os.path.join(ASSETS, "metrics.ndb")
     m = {}

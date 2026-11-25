@@ -61,7 +61,8 @@ static char version[] =
 	"feature desktop\n"
 	"feature menubar\n"
 	"feature drag\n"
-	"feature chrome\n";
+	"feature chrome\n"
+	"feature theme\n";
 
 static char draghelp[] =
 	"start -\n"

@@ -692,6 +692,8 @@ void	_dxtextsel(Uxctl*, int*, int*);
 char*	_dxitems(Uxctl*);
 char*	_dxrun(Uxctl*, char*);
 extern Uxfn	*_chooserhook;
+extern void	(*_themehook)(char*);
+char*	_riotheme(void);
 
 /* a text field's selection prop, from the control; model held */
 static void
@@ -1005,8 +1007,21 @@ capiwinev(Uxev *e, void *arg)
 void
 uxinit(char *name, char *title)
 {
+	char *t, *m;
+
 	dxinit(name, title);
 	initapp();
+	/* the system's appearance: rio's theme, or $uxtheme without one */
+	if((t = getenv("uxkitmode")) == nil){
+		m = _riotheme();
+		if(m == nil && (t = getenv("uxtheme")) != nil && strcmp(t, "dark") == 0)
+			m = "dark";
+		if(m != nil)
+			mode = m;
+	}
+	free(t);
+	uxsetdark(strcmp(effmode(), "dark") == 0);
+	_themehook = setsysmode;
 	evhook = hook;
 	quithook = quitasked;
 	closehook = closeasked;

@@ -136,11 +136,11 @@ drawtitle(Image *dst, Window *w, int pressed)
 	int on, wid, x, y, x0, x1;
 	Point p;
 
-	ink = uxcolor(UXink);
+	ink = uxcolor(UXcoltitletext);
 	t = titlerect(w);
 	on = w == input;
 	draw(dst, t, uxcolor(on ? UXcoltitlebar : UXcoltitleoff), nil, ZP);
-	draw(dst, Rect(t.min.x, t.max.y-1, t.max.x, t.max.y), ink, nil, ZP);
+	draw(dst, Rect(t.min.x, t.max.y-1, t.max.x, t.max.y), uxcolor(UXcolline), nil, ZP);
 	if(on)
 		draw(dst, Rect(t.min.x, t.min.y, t.max.x, t.min.y+1), uxcolor(UXcoltitlelight), nil, ZP);
 	lab = uxlabel(w);
@@ -161,14 +161,14 @@ drawtitle(Image *dst, Window *w, int pressed)
 			if(tr.max.x+UXwindowtitlepad < x1)
 				draw(dst, Rect(tr.max.x+UXwindowtitlepad, y, x1, y+1), uxcolor(UXcoltitlerule), nil, ZP);
 		}
-		/* the boxes: paper squares in ink, the zoom box with a small square */
+		/* the boxes: light squares in the title's ink, the zoom box with a small square */
 		b = closebox(w);
-		draw(dst, b, uxcolor(UXpaper), nil, ZP);
+		draw(dst, b, uxcolor(UXcolboxfill), nil, ZP);
 		border(dst, b, 1, ink, ZP);
 		if(pressed == 1)
 			uxglyph(dst, Pt(b.min.x+(Box-uxglyphwidth("close"))/2, b.min.y+(Box-uxglyphheight("close"))/2), "close", ink);
 		b = zoombox(w);
-		draw(dst, b, uxcolor(UXpaper), nil, ZP);
+		draw(dst, b, uxcolor(UXcolboxfill), nil, ZP);
 		border(dst, b, 1, ink, ZP);
 		x = b.min.x;
 		y = b.min.y;
@@ -177,7 +177,7 @@ drawtitle(Image *dst, Window *w, int pressed)
 			draw(dst, insetrect(b, 2), ink, nil, ZP);
 	}
 	if(wid > 0){
-		string(dst, p, uxcolor(on ? UXink : UXcoltitletextoff), ZP, uxsysfont, lab);
+		string(dst, p, uxcolor(on ? UXcoltitletext : UXcoltitletextoff), ZP, uxsysfont, lab);
 		/* too long: cover what runs past the room there is */
 		if(stringwidth(uxsysfont, lab) > wid)
 			draw(dst, Rect(tr.max.x, t.min.y+1, t.max.x-(Boxin+Box), t.max.y-1),
@@ -186,21 +186,21 @@ drawtitle(Image *dst, Window *w, int pressed)
 	free(lab);
 }
 
-/* the frame image: ink box, title bar, shadow */
+/* the frame image: line box, title bar, shadow */
 static void
 drawframe(Chrome *c, Window *w, int pressed)
 {
 	Rectangle o, f;
-	Image *ink;
+	Image *shadow;
 
 	if(c->frame == nil)
 		return;
-	ink = uxcolor(UXink);
+	shadow = uxcolor(UXcolshadow);
 	f = c->fr;
 	o = outer(w);
-	draw(c->frame, Rect(o.min.x+1, o.max.y, f.max.x, f.max.y), ink, nil, ZP);
-	draw(c->frame, Rect(o.max.x, o.min.y+1, f.max.x, f.max.y), ink, nil, ZP);
-	border(c->frame, o, 1, ink, ZP);
+	draw(c->frame, Rect(o.min.x+1, o.max.y, f.max.x, f.max.y), shadow, nil, ZP);
+	draw(c->frame, Rect(o.max.x, o.min.y+1, f.max.x, f.max.y), shadow, nil, ZP);
+	border(c->frame, o, 1, uxcolor(UXcolline), ZP);
 	drawtitle(c->frame, w, pressed);
 }
 
@@ -220,7 +220,7 @@ uxchromeborder(Window *w)
 	c = findchrome(w->id);
 	r = w->i->r;
 	in = insetrect(r, Borderwidth);
-	paper = uxcolor(UXpaper);
+	paper = uxcolor(UXcolwindow);
 	/* left, right and bottom: ink at the very edge is the frame's; with edge, the app's */
 	if(c == nil || !c->edge){
 		draw(w->i, Rect(r.min.x, in.min.y, in.min.x, r.max.y), paper, nil, ZP);
@@ -325,6 +325,17 @@ uxchromeall(void)
 			uxchromefit(w);
 			repaint(w);
 		}
+}
+
+/* the theme changed: redraw every frame from scratch */
+void
+uxchrometheme(void)
+{
+	Chrome *c;
+
+	for(c=chromes; c; c=c->next)
+		freeframe(c);
+	uxchromeall();
 }
 
 /* chrome [winid] on|off */

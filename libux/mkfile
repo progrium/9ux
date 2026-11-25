@@ -20,6 +20,7 @@ OFILES=\
 	widget.$O\
 	win.$O\
 	uxglyphs.$O\
+	uxtheme.$O\
 	tapi.$O\
 	tcanvas.$O\
 	tcatalog.$O\
@@ -42,6 +43,9 @@ $LIB: $OFILES
 
 uxglyphs.$O: ../assets/gen/uxglyphs.c
 	$CC $CFLAGS -o $target ../assets/gen/uxglyphs.c
+
+uxtheme.$O: ../assets/gen/uxtheme.c ../assets/gen/uxstyle.h
+	$CC $CFLAGS -o $target ../assets/gen/uxtheme.c
 
 test:V: all
 	cd test && mk test
