@@ -115,6 +115,12 @@ struct Type {
 	char	**word;	/* bare words */
 	char	**wkind;	/* each word's kind: flag, size, variant... */
 	int	nword;
+	char	**verb;
+	char	**vclass;
+	int	nverb;
+	char	**slot;
+	char	**slotok;	/* nil: any type */
+	int	nslot;
 	int	child;	/* 0: none, 1: any, 2: the list */
 	char	**childok;
 	int	nchildok;
@@ -129,6 +135,7 @@ struct Tok {
 
 /* a line of a ctl write or document: its tokens and indent */
 struct Line {
+	char	*raw;
 	Tok	*t;
 	int	n;
 	int	indent;
@@ -222,7 +229,7 @@ int	isnodefile(char*, int);
 char*	printtree(Node*);
 char*	quoteval(char*);
 char*	settype(Node*, char*);
-char*	canhold(Node*, char*);
+char*	canhold(Node*, char*, char*);
 int	ancestors(Node*, int**);
 char*	effmode(void);
 Win*	newwin(char*);
@@ -236,7 +243,8 @@ char*	trim1(char*, long);
 /* cmd.c */
 int	lex(char*, Line**, char**);
 void	freelines(Line*, int);
-char*	ctlrun(Node*, char*);
+char*	ctlrun(Node*, char*, char*);
+char*	setnodeprop(Node*, char*, char*);
 char*	injectline(char*);
 char*	setwinprop(Win*, char*, char*);
 char*	settree(Node*, char*);
@@ -266,6 +274,10 @@ void	subflush(Req*);
 void	servesubs(void);
 int	anysub(void);
 char*	codeof(char*);
+void	trace(char*, ...);
+char*	tracetext(void);
+int	issecret(Node*);
+int	isfileprop(Pdesc*);
 void	startresponder(void);
 extern int	srvpid;
 

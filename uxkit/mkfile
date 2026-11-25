@@ -1,7 +1,7 @@
 </$objtype/mkfile
 
 TARG=uxkit
-OFILES=fs.$O model.$O cmd.$O ev.$O ui.$O
+OFILES=fs.$O model.$O cmd.$O ev.$O ui.$O catalog.$O
 HFILES=dat.h ../libux/ux.h
 LIB=../libux/libux.a$O
 CFLAGS=$CFLAGS -I../libux

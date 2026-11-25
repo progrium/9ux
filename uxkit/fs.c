@@ -89,6 +89,7 @@ static Tab tab[] = {
 };
 
 static char *mtpt = "/mnt/ui";
+extern char *profiles[];
 static char *srvname;
 
 static Faux*
@@ -241,8 +242,9 @@ fswalk1(Fid *fid, char *name, Qid *qid)
 	case Qnode:
 		if((n = nodebyid(a->node)) == nil)
 			return "not found";
+		/* a child named like a window file (title, focus...) hides it */
 		for(i = 0; i < nelem(tab); i++)
-			if((tab[i].parent == Qnode || (tab[i].parent == -1 && n->parent == nil))
+			if((tab[i].parent == Qnode || (tab[i].parent == -1 && n->parent == nil && kidbyname(n, name) == nil))
 			&& strcmp(tab[i].name, name) == 0){
 				a->k = tab[i].k;
 				*qid = qidof(a);
@@ -250,7 +252,7 @@ fswalk1(Fid *fid, char *name, Qid *qid)
 				return nil;
 			}
 		p = pdesc(typebyname(n->type), name);
-		if(p != nil && p->file){
+		if(p != nil && isfileprop(p)){
 			a->k = Qprop;
 			a->name = estrdup(name);
 			break;
@@ -391,7 +393,7 @@ dirlist(Faux *a)
 		p = nil;
 		for(i = 0; typebyname(n->type) != nil && i < typebyname(n->type)->np; i++){
 			p = &typebyname(n->type)->p[i];
-			if(p->file)
+			if(isfileprop(p))
 				dadd(l, Qprop, n->id, p->name);
 		}
 		USED(p);
@@ -445,13 +447,22 @@ oneline(char *s)
 static char*
 version(void)
 {
-	return smprint("uitree 1.0\nhost 9ux-uxkit 0.1\nlayer core 1.0\nlayer components 1.0\nprofile core\ncmdkey super\n");
+	Fmt f;
+	int i;
+
+	fmtstrinit(&f);
+	fmtprint(&f, "uitree 1.0\nhost 9ux-uxkit 0.1\nlayer core 1.0\nlayer components 1.0\n");
+	for(i = 0; profiles[i] != nil; i++)
+		fmtprint(&f, "profile %s\n", profiles[i]);
+	fmtprint(&f, "cmdkey super\n");
+	return fmtstrflush(&f);
 }
 
 static char*
 helptext(Node *n)
 {
 	Fmt f;
+	int i;
 
 	fmtstrinit(&f);
 	if(n == nil){
@@ -459,6 +470,9 @@ helptext(Node *n)
 		fmtprint(&f, "set core\nnew core\ndelete core\ntree core\n");
 	}else{
 		fmtprint(&f, "set core\nnew core\ndelete core\ntree core\n");
+		if(typebyname(n->type) != nil)
+			for(i = 0; i < typebyname(n->type)->nverb; i++)
+				fmtprint(&f, "%s %s\n", typebyname(n->type)->verb[i], typebyname(n->type)->vclass[i]);
 		if(n->parent == nil)
 			fmtprint(&f, "show window\nactivate window\nstate window\nnotify window\nclose window\ndestroy window\nask window\nkeep window\n");
 	}
@@ -474,6 +488,7 @@ content(Faux *a, long *len, char **err)
 	Fmt f;
 	char *s, *t;
 	int i, j, mi;
+	Pdesc *pd;
 
 	*err = nil;
 	*len = -1;
@@ -495,7 +510,9 @@ content(Faux *a, long *len, char **err)
 		return version();
 	case Qctl:
 		return helptext(nil);
-	case Qtrace: case Qinject:
+	case Qtrace:
+		return tracetext();
+	case Qinject:
 		return estrdup("");
 	case Qkeys:
 		return estrdup(app->keys);
@@ -567,7 +584,10 @@ content(Faux *a, long *len, char **err)
 		}
 		return oneline(n->bounds);
 	case Qprop:
-		return oneline(getprop(n, a->name));
+		s = getprop(n, a->name);
+		if(s == nil && (pd = pdesc(typebyname(n->type), a->name)) != nil)
+			s = pd->dflt;
+		return oneline(s);
 	case Qtitle:
 		return oneline(w->title);
 	case Qinner:
@@ -638,8 +658,16 @@ fsread(Req *r)
 static int
 buffered(Faux *a)
 {
+	Node *n;
+	Pdesc *p;
+
 	switch(a->k){
-	case Qprop: case Qtree: case Qkeys: case Qtokens: case Qclip:
+	case Qprop:
+		/* text, bytes and data apply at close; the rest as written */
+		if((n = nodebyid(a->node)) == nil || (p = pdesc(typebyname(n->type), a->name)) == nil)
+			return 1;
+		return strcmp(p->form, "text") == 0 || strcmp(p->form, "bytes") == 0 || strcmp(p->form, "data") == 0;
+	case Qtree: case Qkeys: case Qtokens: case Qclip:
 		return 1;
 	case Qmenu:
 		return strcmp(a->name, "bar") != 0;
@@ -764,15 +792,18 @@ fscreate(Req *r)
 			respond(r, "in use");
 			return;
 		}
-		if(isnodefile(name, n->parent == nil) || name[0] == '@' || name[0] == '.'){
+		if(isnodefile(name, 0) || name[0] == '@' || name[0] == '.'){
 			respond(r, "in use: a node file");
 			return;
 		}
-		if((e = canhold(n, "div")) != nil){
+		if((e = canhold(n, "div", name)) != nil){
 			respond(r, e);
 			return;
 		}
 		c = newnode(n, name, "div");
+		e = uipath(c);
+		trace("mkdir path=%s", e);
+		free(e);
 		a->node = c->id;
 		a->k = Qnode;
 		a->omode = r->ifcall.mode;
@@ -808,6 +839,7 @@ fsremove(Req *r)
 {
 	Faux *a;
 	Node *n;
+	char *e;
 	int i;
 
 	a = r->fid->aux;
@@ -825,6 +857,9 @@ fsremove(Req *r)
 			respond(r, "permission denied");
 			return;
 		}
+		e = uipath(n);
+		trace("remove path=%s", e);
+		free(e);
 		delnode(n);
 		respond(r, nil);
 		sweep();
@@ -844,10 +879,40 @@ fsremove(Req *r)
  * Writing.
  */
 static void
+tracewrite(Faux *a, char *v, long n)
+{
+	Node *x;
+	char *q;
+
+	if(n < 0)
+		n = strlen(v);
+	if(n > 0 && v[n-1] == '\n' && a->k != Qclip)
+		n--;
+	x = a->k == Qprop ? nodebyid(a->node) : nil;
+	if(x != nil && strcmp(a->name, "value") == 0 && issecret(x))
+		trace("write path=%s value=<secret>", a->upath);
+	else if(n > 64 || memchr(v, '\n', n) != nil || memchr(v, 0, n) != nil)
+		trace("write path=%s len=%ld", a->upath, n);
+	else{
+		q = emalloc(n+1);
+		memmove(q, v, n);
+		q[n] = 0;
+		v = quoteval(q);
+		trace("write path=%s value=%s", a->upath, v);
+		free(v);
+		free(q);
+	}
+}
+
+static void
 failed(Faux *a, char *err)
 {
 	Node *n;
+	char *q;
 
+	q = quoteval(err);
+	trace("error path=%s err=%s", a->upath, q);
+	free(q);
 	n = a->k >= Qnode ? nodebyid(a->node) : nil;
 	emiterr(a->upath, err, n, nil, a->wname);
 }
@@ -942,6 +1007,8 @@ applynow(Faux *a, char *v)
 		if(strcmp(v, "default") != 0)
 			return smprint("not found: theme %s", v);
 		return nil;
+	case Qprop:
+		return setnodeprop(n, a->name, v);
 	case Qmenu:	/* bar */
 		free(app->bar);
 		app->bar = estrdup(v);
@@ -955,7 +1022,6 @@ static char*
 applyclose(Faux *a)
 {
 	Node *n;
-	Pdesc *p;
 	char *v, *e;
 
 	switch(a->k){
@@ -963,16 +1029,7 @@ applyclose(Faux *a)
 		if((n = nodebyid(a->node)) == nil)
 			return nil;
 		v = trim1(a->buf != nil ? a->buf : "", a->nbuf);
-		p = pdesc(typebyname(n->type), a->name);
-		e = nil;
-		if(p == nil)
-			e = smprint("not found: %s", a->name);
-		else if(p->readonly)
-			e = smprint("bad value: %s is read-only", a->name);
-		else if(strcmp(p->form, "bytes") != 0 && strcmp(p->form, "data") != 0 && strcmp(p->form, "text") != 0)
-			e = checkvalue(n, p, v);
-		if(e == nil)
-			setprop(n, a->name, v, 0);
+		e = setnodeprop(n, a->name, v);
 		free(v);
 		return e;
 	case Qtree:
@@ -1062,7 +1119,7 @@ fswrite(Req *r)
 	if(a->k >= Qnode)
 		n = nodebyid(a->node);
 	if(a->k >= Qnode && n == nil){
-		emiterr(a->upath, "gone", nil, nil, a->wname);
+		failed(a, "gone");
 		respond(r, "gone");
 		return;
 	}
@@ -1087,7 +1144,7 @@ fswrite(Req *r)
 			text = a->buf;
 			a->buf = nil;
 			a->nbuf = 0;
-			e = ctlrun(a->k == Qctl ? nil : nodebyid(a->node), text);
+			e = ctlrun(a->k == Qctl ? nil : nodebyid(a->node), text, a->upath);
 			free(text);
 			if(e != nil)
 				failed(a, e);
@@ -1098,9 +1155,11 @@ fswrite(Req *r)
 	}
 	v = trim1(r->ifcall.data, cnt);
 	e = applynow(a, v);
-	free(v);
 	if(e != nil)
 		failed(a, e);
+	else
+		tracewrite(a, v, -1);
+	free(v);
 	respond(r, e);
 	sweep();
 }
@@ -1122,14 +1181,15 @@ fsdestroyfid(Fid *fid)
 		e = nil;
 		if(buffered(a)){
 			if(a->wrote || a->trunc)
-				e = applyclose(a);
+				if((e = applyclose(a)) == nil)
+					tracewrite(a, a->buf != nil ? a->buf : "", a->nbuf);
 		}else if(a->k == Qctl || a->k == Qnctl){
 			if(a->nbuf > 0){
 				text = emalloc(a->nbuf+1);
 				memmove(text, a->buf, a->nbuf);
 				text[a->nbuf] = 0;
 				if(a->k == Qctl || nodebyid(a->node) != nil)
-					e = ctlrun(a->k == Qctl ? nil : nodebyid(a->node), text);
+					e = ctlrun(a->k == Qctl ? nil : nodebyid(a->node), text, a->upath);
 				free(text);
 			}
 		}else if(a->k == Qinject){

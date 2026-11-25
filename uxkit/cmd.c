@@ -45,6 +45,7 @@ freelines(Line *l, int n)
 		for(j = 0; j < l[i].n; j++)
 			free(l[i].t[j].s);
 		free(l[i].t);
+		free(l[i].raw);
 	}
 	free(l);
 }
@@ -88,6 +89,7 @@ lex(char *text, Line **lines, char **err)
 		memset(cur, 0, sizeof *cur);
 		cur->indent = k;
 		p += k;
+		cur->raw = estrdup(p);
 		hi = i;	/* the last physical line used */
 		while(*p){
 			while(*p == ' ' || *p == '\t')
@@ -506,6 +508,7 @@ tick(int secs)
 	if(batch != nil && now >= batchstart + 2){
 		appfree(batch);
 		batch = nil;
+		trace("batch timeout");
 	}
 	for(l = &requests; (r = *l) != nil; ){
 		if(r->due > now){
@@ -525,7 +528,11 @@ tick(int secs)
 /*
  * Props, bare words and style on a node, from a command's tokens.
  */
-static char*
+static int	creating;
+static void	echovalue(Node*, Pdesc*, char*);
+static int	hasitem(char*, char*);
+
+char*
 setnodeprop(Node *n, char *name, char *v)
 {
 	Pdesc *p;
@@ -557,11 +564,63 @@ setnodeprop(Node *n, char *name, char *v)
 		return smprint("not found: %s has no prop %s", n->type, name);
 	if((e = checkvalue(n, p, v)) != nil)
 		return e;
+	if(strcmp(name, "value") == 0 && pdesc(typebyname(n->type), "items") != nil
+	&& strcmp(p->form, "word") == 0 && getprop(n, "items") != nil && getprop(n, "items")[0] != 0
+	&& !hasitem(getprop(n, "items"), v))
+		return smprint("not found: no item %s", v);
 	if(strcmp(p->form, "bool") == 0)
 		setprop(n, name, v, strcmp(v, "on") == 0);
 	else
 		setprop(n, name, v, 0);
+	if(strcmp(name, "value") == 0 && !creating)
+		echovalue(n, p, v);
 	return nil;
+}
+
+/* a client's write to a value is echoed as a change with via=ctl */
+static void
+echovalue(Node *n, Pdesc *p, char *v)
+{
+	char *a, *q;
+	Node *r;
+
+	for(r = n; r->parent != nil; r = r->parent)
+		;
+	if(strcmp(p->form, "text") == 0 || strcmp(p->form, "bytes") == 0 || strcmp(p->form, "data") == 0
+	|| issecret(n))
+		a = estrdup("via=ctl");
+	else{
+		q = quoteval(v);
+		a = smprint("value=%s via=ctl", q);
+		free(q);
+	}
+	emitnode("change", r->win, n, a, 1);
+	free(a);
+}
+
+/* is id the first field of a line of items? */
+static int
+hasitem(char *items, char *id)
+{
+	char *buf, *line, *nl, *f[4], *tab;
+	int found;
+
+	if(items == nil)
+		return 0;
+	found = 0;
+	buf = estrdup(items);
+	for(line = buf; line != nil && *line && !found; line = nl){
+		nl = strchr(line, '\n');
+		if(nl != nil)
+			*nl++ = 0;
+		if((tab = strchr(line, '\t')) != nil){
+			*tab = 0;
+			found = strcmp(line, id) == 0;
+		}else if(tokenize(line, f, nelem(f)) > 0)
+			found = strcmp(f[0], id) == 0;
+	}
+	free(buf);
+	return found;
 }
 
 static char*
@@ -630,10 +689,11 @@ applyargs(Node *n, Tok *t, int nt)
 static char*
 checkname(Node *parent, char *s)
 {
+	USED(parent);
 	if(s[0] == 0 || strcmp(s, ".") == 0 || strcmp(s, "..") == 0 || s[0] == '@'
 	|| strchr(s, '/') != nil || strpbrk(s, " \t\n") != nil)
 		return smprint("bad value: name %s", s);
-	if(isnodefile(s, parent->parent == nil))
+	if(isnodefile(s, 0))
 		return smprint("in use: %s is a node file", s);
 	return nil;
 }
@@ -672,7 +732,7 @@ cmdnew(Node *base, Tok *t, int nt)
 	if(e == nil){
 		p = pdesc(typebyname(parent->type), name);
 		USED(p);
-		e = canhold(parent, t[0].s);
+		e = canhold(parent, t[0].s, name);
 	}
 	if(e != nil){
 		free(path);
@@ -680,7 +740,10 @@ cmdnew(Node *base, Tok *t, int nt)
 	}
 	n = newnode(parent, name, t[0].s);
 	free(path);
-	return applyargs(n, t+2, nt-2);
+	creating++;
+	e = applyargs(n, t+2, nt-2);
+	creating--;
+	return e;
 }
 
 /* the action IDs that keys and menus name */
@@ -748,8 +811,15 @@ setaction(Tok *t, int nt)
 static void
 clearnode(Node *n)
 {
-	while(n->nprop > 0)
-		rmprop(n, n->prop[0].name);
+	int i;
+
+	/* value is the node's state, and a rewrite keeps it */
+	for(i = 0; i < n->nprop; ){
+		if(strcmp(n->prop[i].name, "value") == 0)
+			i++;
+		else
+			rmprop(n, n->prop[i].name);
+	}
 	free(n->style);
 	n->style = estrdup("");
 }
@@ -768,12 +838,19 @@ docnode(Node *n, Line *L, int nl, int *i)
 	if(strcmp(n->type, me->t[0].s) != 0 && (e = settype(n, me->t[0].s)) != nil)
 		return e;
 	clearnode(n);
-	if((e = applyargs(n, me->t+2, me->n-2)) != nil)
+	creating++;
+	e = applyargs(n, me->t+2, me->n-2);
+	creating--;
+	if(e != nil)
 		return e;
 	keep = nil;
 	nkeep = 0;
 	while(*i < nl && L[*i].indent > base){
 		c = &L[*i];
+		if(c->indent != base+2){
+			free(keep);
+			return smprint("bad syntax: a child is indented two more than its parent");
+		}
 		if(c->n < 2){
 			free(keep);
 			return smprint("bad syntax: a document line is TYPE NAME");
@@ -788,7 +865,7 @@ docnode(Node *n, Line *L, int nl, int *i)
 			x = nil;
 		}
 		if(x == nil){
-			if((e = checkname(n, c->t[1].s)) != nil || (e = canhold(n, c->t[0].s)) != nil){
+			if((e = checkname(n, c->t[1].s)) != nil || (e = canhold(n, c->t[0].s, c->t[1].s)) != nil){
 				free(keep);
 				return e;
 			}
@@ -1032,6 +1109,35 @@ appverb(Tok *t, int nt)
 	return smprint("unknown command: %s", v);
 }
 
+/* a verb the node's descriptor lists; (char*)-1 if it lists none by that name */
+static char*
+typeverb(Node *n, Tok *t, int nt)
+{
+	Type *ty;
+	char *d;
+	Node *r;
+	int i;
+
+	USED(nt);
+	ty = typebyname(n->type);
+	if(ty == nil)
+		return (char*)-1;
+	for(i = 0; i < ty->nverb; i++){
+		if(strcmp(ty->verb[i], t[0].s) != 0)
+			continue;
+		d = getprop(n, "disabled");
+		if(d != nil && strcmp(d, "on") == 0)
+			return smprint("disabled: %s", n->name);
+		if(strcmp(ty->vclass[i], "activate") == 0){
+			for(r = n; r->parent != nil; r = r->parent)
+				;
+			emitnode(t[0].s, r->win, n, "via=ctl", 0);
+		}
+		return nil;
+	}
+	return (char*)-1;
+}
+
 static char*
 cmd(Node *base, Line *l)
 {
@@ -1071,14 +1177,71 @@ cmd(Node *base, Line *l)
 	}
 	if(base == nil)
 		return appverb(t, nt);
+	if((e = typeverb(base, t, nt)) != (char*)-1)
+		return e;
 	if(base->parent == nil && base->win != nil)
 		return winverb(base->win, t, nt);
 	return smprint("unknown command: %s", v);
 }
 
+/* a line for the trace, with a secret node's value hidden */
+static void
+tracecmd(Node *base, Line *l, char *upath)
+{
+	char *path, *s, *q, *p, *e;
+	Node *n;
+	int secret, i;
+	Fmt f;
+
+	secret = 0;
+	path = nil;
+	if(l->n >= 3 && strcmp(l->t[0].s, "new") == 0)
+		path = l->t[2].s;
+	else if(l->n >= 2 && strcmp(l->t[0].s, "set") == 0)
+		path = l->t[1].s;
+	if(path != nil && resolvein(base, path, &n) == nil && issecret(n))
+		secret = 1;
+	for(i = 0; i < l->n; i++)
+		if(!l->t[i].quoted && strcmp(l->t[i].s, "secret") == 0)
+			secret = 1;
+	s = l->raw;
+	if(secret){
+		fmtstrinit(&f);
+		for(p = s; *p; ){
+			if(strncmp(p, "value=", 6) == 0 && (p == s || p[-1] == ' ' || p[-1] == '\t')){
+				fmtprint(&f, "value=<secret>");
+				p += 6;
+				if(*p == '\''){
+					for(p++; *p; p++)
+						if(*p == '\''){
+							if(p[1] == '\'')
+								p++;
+							else{
+								p++;
+								break;
+							}
+						}
+				}else
+					while(*p && *p != ' ' && *p != '\t')
+						p++;
+				continue;
+			}
+			fmtrune(&f, *p++);
+		}
+		s = fmtstrflush(&f);
+	}else
+		s = estrdup(s);
+	if((e = strchr(s, '\n')) != nil)
+		*e = 0;
+	q = quoteval(s);
+	trace("ctl path=%s cmd=%s", upath, q);
+	free(q);
+	free(s);
+}
+
 /* a ctl write: every line applies, or none does */
 char*
-ctlrun(Node *base, char *text)
+ctlrun(Node *base, char *text, char *upath)
 {
 	Line *L;
 	int nl, i, id;
@@ -1099,6 +1262,9 @@ ctlrun(Node *base, char *text)
 		}
 		e = cmd(base, &L[i]);
 	}
+	if(e == nil)
+		for(i = 0; i < nl; i++)
+			tracecmd(id != 0 ? nodebyid(id) : nil, &L[i], upath);
 	freelines(L, nl);
 	if(e != nil){
 		appfree(app);

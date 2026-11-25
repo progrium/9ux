@@ -51,59 +51,7 @@ trim1(char *s, long n)
 	return t;
 }
 
-/*
- * The core profile's descriptors, as uitree's core/types/NAME/spec has them.
- */
-static char *catalog[] = {
-	"div",
-	"type    div  tier=element  profile=core  since=1.0\n"
-	"child   any\n",
-
-	"text",
-	"type    text  tier=element  profile=core  since=1.0\n"
-	"prop    text        text  file\n"
-	"prop    selectable  bool\n"
-	"prop    truncate    bool\n"
-	"word    selectable truncate  kind=flag\n"
-	"child   none\n",
-
-	"styled-text",
-	"type    styled-text  tier=element  profile=core  since=1.0\n"
-	"prop    text        text  file\n"
-	"prop    runs        bytes  file\n"
-	"prop    selectable  bool\n"
-	"prop    truncate    bool\n"
-	"word    selectable truncate  kind=flag\n"
-	"child   none\n",
-
-	"img",
-	"type    img  tier=element  profile=core  since=1.0\n"
-	"prop    src    text  file\n"
-	"prop    data   bytes  file\n"
-	"prop    scale  number  default=1\n"
-	"child   none\n",
-
-	"svg",
-	"type    svg  tier=element  profile=core  since=1.0\n"
-	"prop    src  text  file\n"
-	"child   none\n",
-
-	"icon",
-	"type    icon  tier=element  profile=core  since=1.0\n"
-	"prop    name  word\n"
-	"word    xs sm md lg  kind=size\n"
-	"child   none\n",
-
-	"scroll",
-	"type    scroll  tier=element  profile=core  since=1.0\n"
-	"prop    origin  number\n"
-	"child   any\n",
-
-	"spacer",
-	"type    spacer  tier=element  profile=core  since=1.0\n"
-	"child   none\n",
-	nil,
-};
+extern char *catalog[];
 
 static char*
 attrof(char **f, int n, char *name)
@@ -167,6 +115,19 @@ parsespec(Type *t)
 				t->wkind[t->nword] = kind;
 				t->nword++;
 			}
+		}else if(strcmp(f[0], "verb") == 0 && n >= 2){
+			t->verb = erealloc(t->verb, (t->nverb+1)*sizeof(char*));
+			t->vclass = erealloc(t->vclass, (t->nverb+1)*sizeof(char*));
+			t->verb[t->nverb] = estrdup(f[1]);
+			s = attrof(f+2, n-2, "class");
+			t->vclass[t->nverb] = s != nil ? s : estrdup("edit");
+			t->nverb++;
+		}else if(strcmp(f[0], "slot") == 0 && n >= 2){
+			t->slot = erealloc(t->slot, (t->nslot+1)*sizeof(char*));
+			t->slotok = erealloc(t->slotok, (t->nslot+1)*sizeof(char*));
+			t->slot[t->nslot] = estrdup(f[1]);
+			t->slotok[t->nslot] = attrof(f+2, n-2, "accepts");
+			t->nslot++;
 		}else if(strcmp(f[0], "child") == 0 && n >= 2){
 			if(strcmp(f[1], "none") == 0)
 				t->child = 0;
@@ -487,6 +448,9 @@ checkvalue(Node *n, Pdesc *p, char *v)
 		free(s);
 		if(t == nil)
 			return smprint("bad value: %s", v);
+	}else if(strcmp(f, "child") == 0){
+		if(kidbyname(n, v) == nil)
+			return smprint("not found: no child %s", v);
 	}else if(strcmp(f, "path") == 0){
 		w = winof(n);
 		if(w == nil || resolve(w->root, v, &x) != nil)
@@ -738,9 +702,26 @@ rmprop(Node *n, char *name)
 	n->nprop = j;
 }
 
-/* can n hold a child of type t? */
+static int
+inlistc(char *list, char *s)
+{
+	char *buf, *p;
+	int r;
+
+	if(list == nil)
+		return 1;
+	buf = estrdup(list);
+	r = 0;
+	for(p = strtok(buf, ","); p != nil; p = strtok(nil, ","))
+		if(strcmp(p, s) == 0)
+			r = 1;
+	free(buf);
+	return r;
+}
+
+/* can n hold a child of type t named name? A slot takes what it accepts. */
 char*
-canhold(Node *n, char *t)
+canhold(Node *n, char *t, char *name)
 {
 	Type *pt;
 	int i;
@@ -748,6 +729,13 @@ canhold(Node *n, char *t)
 	pt = typebyname(n->type);
 	if(pt == nil)
 		return nil;
+	if(name != nil)
+		for(i = 0; i < pt->nslot; i++)
+			if(strcmp(pt->slot[i], name) == 0){
+				if(inlistc(pt->slotok[i], t))
+					return nil;
+				return smprint("unknown type: %s's %s slot takes %s", n->type, name, pt->slotok[i]);
+			}
 	if(pt->child == 0)
 		return smprint("unknown type: %s holds no children", n->type);
 	if(pt->child == 2){
@@ -780,7 +768,7 @@ settype(Node *n, char *t)
 		return smprint("type is fixed: %s", n->type);
 	if(n->parent == nil)
 		return smprint("type is fixed: a window's root");
-	if((e = canhold(n->parent, t)) != nil)
+	if((e = canhold(n->parent, t, n->name)) != nil)
 		return e;
 	if(ty->child == 0 && n->nkid > 0)
 		return smprint("unknown type: %s holds no children", t);
@@ -1058,6 +1046,8 @@ printnode(Fmt *f, Node *n, int depth)
 	for(i = 0; i < n->nprop; i++){
 		if(n->prop[i].bare || isdefault(n, &n->prop[i]))
 			continue;
+		if(strcmp(n->prop[i].name, "value") == 0 && issecret(n))
+			continue;
 		if(strchr(n->prop[i].val, '\n') != nil){
 			for(k = nhere+1; ; k++){
 				if(k == 1)
@@ -1109,5 +1099,59 @@ printtree(Node *n)
 
 	fmtstrinit(&f);
 	printnode(&f, n, 0);
+	return fmtstrflush(&f);
+}
+
+int
+issecret(Node *n)
+{
+	char *s;
+
+	s = getprop(n, "secret");
+	return s != nil && strcmp(s, "on") == 0;
+}
+
+/* value is always a file; other props when the descriptor says so */
+int
+isfileprop(Pdesc *p)
+{
+	return p->file || strcmp(p->name, "value") == 0;
+}
+
+/*
+ * The trace: what applied and what failed, recent history first.
+ */
+enum {
+	Ntrace = 2000,
+};
+static char	*tr[Ntrace];
+static int	ntr;
+
+void
+trace(char *fmt, ...)
+{
+	va_list arg;
+	char *s;
+
+	va_start(arg, fmt);
+	s = vsmprint(fmt, arg);
+	va_end(arg);
+	if(ntr == Ntrace){
+		free(tr[0]);
+		memmove(tr, tr+1, (Ntrace-1)*sizeof(char*));
+		ntr--;
+	}
+	tr[ntr++] = s;
+}
+
+char*
+tracetext(void)
+{
+	Fmt f;
+	int i;
+
+	fmtstrinit(&f);
+	for(i = 0; i < ntr; i++)
+		fmtprint(&f, "%s\n", tr[i]);
 	return fmtstrflush(&f);
 }
