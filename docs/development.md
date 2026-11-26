@@ -60,12 +60,37 @@ Below, `h9` means `scripts/h9.sh` or your own `$H9`.
 From the 9ux checkout:
 
 ```sh
+scripts/run.sh                        # build, then the whole desktop in a host window
+scripts/run.sh -d                     # the same, printing what's running to the terminal
 h9 --rc 'mk'                          # build every component
 h9 --rc 'cd rio && mk'                # just the rio fork
 h9 --gfx rio/7.out                    # run it (arm64; 6.out on amd64)
 h9 --gfx rio/7.out -i 'window acme'   # with a legacy app to check compatibility
 h9 --gfx=noclip rio/7.out             # keep snarf off the host clipboard
 ```
+
+`rio -u` on its own is the fork with an empty gray desktop: Desktop,
+its icons and the Trash need the session's services (the plumber, uxd
+on `/mnt/ux`, uxmeta on `/mnt/meta`) and Desktop itself running first.
+`scripts/run.sh` starts them the way the website's demo does, with the
+same scripts ([`web/boot.rc`](../web/boot.rc) and
+[`web/session.rc`](../web/session.rc)): the checkout is bound at `/9ux`,
+the demo's home folder (`web/home`) and Applications (`web/apps`) are the
+volumes, and `--write=ephemeral` keeps every change in memory, so the
+checkout isn't touched. Arguments after `-d` and `-s` go to h9, such as
+`--gfx-scale 2`.
+
+To run with your own h9 and root rather than the pinned ones, set both:
+
+```sh
+export H9=/path/to/hyper9/zig-out/bin/h9
+export H9ROOT=/path/to/hyper9/.local/9front/root   # built with `zig build mkroot -- --src`
+```
+
+With `H9` set, `scripts/h9.sh` builds nothing and h9 finds the root
+through `H9ROOT`; without it, h9 falls back to its built-in root, which
+has no `mk`. The root needs `/sys/src` (the mkfiles include
+`/sys/src/cmd/mkone`).
 
 Object files and `?.out` are ignored by git. To try `mk install` into the
 root without changing it, use `h9 --write=ephemeral --writable "$H9ROOT"`.

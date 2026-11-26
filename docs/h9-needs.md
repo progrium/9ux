@@ -82,6 +82,20 @@ the end.
 - **h9 would need:** to be looked at if it happens again; record the
   run here.
 
+## A refused attach hangs the mount
+
+- **Found by:** `scripts/run.sh`, at H9_REV 178dcfb, native backend,
+  under `--gfx` (X11).
+- **What happens:** web/boot.rc used to set `user=glenda`, and the
+  plumber names itself and checks attaches by `$user`, while the
+  machine's user is the host's. The plumber answers the mount's attach
+  with `Rerror`; h9 prints `unexpected reply tag 30976; type 107` and
+  the `mount` (so `plumber` itself) never returns, so session.rc stopped
+  before Desktop and the screen stayed gray.
+- **Workaround:** boot.rc keeps the machine's `$user` when it has one.
+- **h9 would need:** an `Rerror` to a mount's attach to fail the mount
+  with that error, as on 9front.
+
 ## Resolved
 
 Fixed in h9 by [progrium/hyper9#153](https://github.com/progrium/hyper9/pull/153),

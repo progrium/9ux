@@ -101,10 +101,16 @@ it and its 9front root under `.local/`. Below, `h9` means `scripts/h9.sh`
 (or your own build, with `H9=/path/to/h9`).
 
 ```sh
+scripts/run.sh                        # the whole desktop in a host window, as on the web demo
 h9 --rc 'mk'                          # build every component with 9front's mk
-h9 --gfx rio/7.out -u                 # run the fork in 9/UX mode in a host window (6.out on amd64)
+h9 --gfx rio/7.out -u                 # just the fork in 9/UX mode (6.out on amd64): no Desktop
 h9 --gfx rio/7.out -i 'window acme'   # with a legacy app beside it
 ```
+
+`scripts/run.sh` builds the tree, then starts the session the web demo
+runs ([`web/boot.rc`](web/boot.rc)): the plumber, uxd and uxmeta, the
+rio fork, and Desktop with its volumes, Trash, and the Applications
+folder. Its changes live in memory and are gone when the window closes.
 
 On Linux, `h9 --gfx` needs h9 built with X11 (`H9_BUILD_FLAGS=-Dgfx=x11`
 before the first run); the tests don't. Setup, the everyday loop, and
@@ -152,7 +158,7 @@ desktop/                Desktop
 apps/sample/           libux sample app
 assets/                style guide, mockups, icons, cursors, patterns
 test/                  harness, fakes, rio regression, GUI and e2e tests
-scripts/               pinned versions, h9.sh, test.sh, vm.sh, zig.sh
+scripts/               pinned versions, h9.sh, run.sh, test.sh, vm.sh, zig.sh
 mkfile                 builds every component that has a mkfile
 ```
 
