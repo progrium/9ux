@@ -10,6 +10,11 @@
 # with session.rc as its -i command. Lines on the console that start
 # "9ux: " are progress the page shows over the screen.
 #
+# scripts/run.sh runs the same session on the host, in an h9 window,
+# with the checkout bound at /9ux and the host's architecture: the
+# page's machine is 386 and has no $objtype, so that's the default, and
+# $O, the compiler letter in the binaries' names, follows $objtype.
+#
 #	rc boot.rc [-d] [-s] [-v name]
 #
 # -d (the page's ?debug) has session.rc print what it started; -s (a
@@ -33,11 +38,28 @@ while(~ $1 -d -s -v){
 }
 if(~ $#vol 1)
 	flags=($flags -v $vol)
-user=glenda
+# The machine's own user: the plumber names its /srv file after $user and
+# refuses an attach from anyone else, so on the host (where h9's user is
+# yours) a made-up one leaves `plumber` waiting on its own mount.
+if(~ $#user 0)
+	user=glenda
 home=/usr/glenda
 workspace=demo
-cputype=386
-objtype=386
+if(~ $#objtype 0){
+	cputype=386
+	objtype=386
+}
+switch($objtype){
+case 386
+	O=8
+case amd64
+	O=6
+case arm64
+	O=7
+case *
+	echo boot.rc: no binaries for $objtype >[1=2]
+	exit objtype
+}
 prompt=('% ' '	')
 path=(. /bin)
 font=/lib/font/bit/vga/unicode.font
@@ -49,8 +71,12 @@ bind -c /9ux/web/home $home
 cd $home
 t=/tmp/9ux
 mkdir -p $t/sys $t/apps $t/user $t/lib
+# The services' mount points: the page's archive has them (web/root.list),
+# but a 9front root from the release doesn't.
+for(m in plumb ux meta res clip)
+	test -d /mnt/$m || mkdir -p /mnt/$m
 
-/9ux/uxd/8.out -m /mnt/ux -g $t/grants
+/9ux/uxd/$O.out -m /mnt/ux -g $t/grants
 
 {
 	for(e in .txt .md .jsx .js .ts .css .html .svg .json .xml .go .c .h .rc .sh .yml .yaml .toml)
@@ -70,11 +96,11 @@ if(~ $#vol 1){
 	mkdir -p $home/$vol
 	echo 'volume='$vol' path='$home/$vol' icon=disk-remote desktop=yes' >>$t/user/meta.ndb
 }
-/9ux/uxmeta/8.out -s uxmeta.$user -m /mnt/meta -d $t/sys -a $t/apps -u $t/user -w $workspace -i 500
+/9ux/uxmeta/$O.out -s uxmeta.$user -m /mnt/meta -d $t/sys -a $t/apps -u $t/user -w $workspace -i 500
 
 for(f in /mnt/ux/register /mnt/meta/ctl)
 	if(! test -e $f)
 		echo boot.rc: no $f >[1=2]
 
 say starting rio
-exec /9ux/rio/8.out -u -i 'rc /9ux/web/session.rc '$"flags
+exec /9ux/rio/$O.out -u -i 'rc /9ux/web/session.rc '$"flags
