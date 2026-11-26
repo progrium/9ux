@@ -1,0 +1,9 @@
+#!/bin/rc
+# A full-screen program in Run Command: xtermdemo.awk's screen in raw
+# mode, until a key, which goes in /tmp/xtermkey; then back.
+{
+	echo rawon
+	awk -f /mnt/term/cwd/test/runcmd/xtermdemo.awk >/dev/cons
+	read -c 1 </dev/cons >/tmp/xtermkey
+	awk 'BEGIN { printf "\033[?1049l" }' >/dev/cons
+} >/dev/consctl

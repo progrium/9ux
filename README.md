@@ -50,7 +50,10 @@ the end-to-end demo, and the open issues. What works today:
 - **Run Command**: rc in a 9/UX window, after A/UX's CommandShell: the
   proportional body font, a classic scroll bar and grow box, and File,
   Edit and Shell menus (Interrupt is ◇-period, or Delete). rc gets the window's
-  own `/dev/cons`, as with vt(1).
+  own `/dev/cons`, as with vt(1). It's also an xterm (`TERM=xterm-256color`,
+  with `LINES`, `COLS` and `WINCH` kept as vt does): colours and line editing
+  in the text, and full-screen programs on their own screen in a fixed-width
+  font, for Linux programs under h9 and ssh to Unix hosts.
 
 Still to do by hand before tagging: CPU-server (`rcpu`, drawterm)
 sessions and 16- and 8-bit screens on real hardware. Classic `ICN#`

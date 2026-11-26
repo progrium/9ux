@@ -9,11 +9,20 @@
  * what it and its children read and write on the console goes through
  * the window. Delete interrupts it; when it exits, so does the window.
  *
- *	runcmd [-f font] [command ...]
+ * The console is an xterm (TERM=xterm-256color): escape sequences in
+ * the output colour it, edit lines in place and give full-screen
+ * programs their own screen, so Linux programs (under h9) and ssh to
+ * Unix hosts work in it, while rc's plain text stays as it was. As vt
+ * does, it keeps $TERM, $LINES, $COLS, $XPIXELS and $YPIXELS current
+ * in rc's environment, counts resizes in $WINCH, and, once winchon is
+ * written to consctl, interrupts rc's note group after each one.
+ *
+ *	runcmd [-d] [-f font] [-F font] [command ...]
  *
  * With a command, rc runs it (rc -c) instead of reading commands. The
  * font is the body font (Lucida Sans) unless -f gives another; rc gets
- * it as $font.
+ * it as $font. -F is the full-screen font (the mono role's, vga, by
+ * default). -d makes the console dumb: plain text, with no TERM.
  */
 #include <u.h>
 #include <libc.h>
@@ -27,6 +36,11 @@ static Uxwin *win, *dlg;
 static Uxctl *scroll, *text;
 static char **cmdargv;
 static char *fontname = "/lib/font/bit/lucidasans/unicode.7.font";	/* the body role, assets/fonts.ndb */
+static char *vtfont;	/* full-screen programs': nil for the mono role's */
+static int dumb;	/* -d: no terminal emulation */
+static int winch;	/* consctl winchon: interrupt rc after a resize */
+static int winchgen;
+static int lines, cols;
 static int rcpid = -1;
 static Channel *pidc;
 static Channel *inputc;	/* char*: a line typed, or "" for end of file */
@@ -144,6 +158,10 @@ fswrite(Req *r)
 			uxconsraw(text, 1);
 		else if(n >= 6 && strncmp(b, "rawoff", 6) == 0)
 			uxconsraw(text, 0);
+		else if(n >= 7 && strncmp(b, "winchon", 7) == 0)
+			winch = 1;
+		else if(n >= 8 && strncmp(b, "winchoff", 8) == 0)
+			winch = 0;
 		r->ofcall.count = n;
 		respond(r, nil);
 		return;
@@ -160,9 +178,11 @@ fsflush(Req *r)
 static void
 fsdestroyfid(Fid *f)
 {
-	/* closing consctl ends raw mode, as with rio */
-	if(f->file == devconsctl && f->omode >= 0)
+	/* closing consctl ends raw mode, as with rio (and winchon, as with vt) */
+	if(f->file == devconsctl && f->omode >= 0){
 		uxconsraw(text, 0);
+		winch = 0;
+	}
 	free(f->aux);
 	f->aux = nil;
 }
@@ -221,9 +241,6 @@ runrc(void*)
 	open("/dev/cons", OREAD);
 	open("/dev/cons", OWRITE);
 	dup(1, 2);
-	putenv("termprog", "runcmd");
-	/* so mc(1), lc and the like lay out columns for the console's font */
-	putenv("font", fontname);
 	cmd = nil;
 	for(a = cmdargv; *a != nil; a++){
 		if(cmd == nil)
@@ -257,6 +274,42 @@ waiter(void*)
 		}
 		free(w);
 	}
+}
+
+static void
+putenvint(char *name, int x)
+{
+	char buf[20];
+
+	snprint(buf, sizeof buf, "%d", x);
+	putenv(name, buf);
+}
+
+/*
+ * The terminal's size, for rc and what it runs, as vt(1) keeps it;
+ * rc shares our environment group. After a resize, a program that
+ * wrote winchon gets an interrupt, and finds $WINCH changed.
+ */
+static void
+exportsize(int resized)
+{
+	Point px;
+	int r, c;
+
+	if(dumb || uxconsgrid(text, &r, &c, &px) < 0)
+		return;
+	if(r == lines && c == cols && resized)
+		return;
+	lines = r;
+	cols = c;
+	putenvint("WINCH", ++winchgen);
+	putenvint("XPIXELS", px.x);
+	putenvint("YPIXELS", px.y);
+	putenvint("LINES", r);
+	putenvint("COLS", c);
+	putenv("TERM", "xterm-256color");
+	if(resized && winch && rcpid > 0)
+		postnote(PNGROUP, rcpid, "interrupt");
 }
 
 static void
@@ -389,13 +442,16 @@ textev(Uxev *e, void*)
 	case UXinterrupt:
 		interrupt();
 		break;
+	case UXresize:
+		exportsize(1);
+		break;
 	}
 }
 
 static void
 usage(void)
 {
-	fprint(2, "usage: %s [-f font] [command ...]\n", argv0);
+	fprint(2, "usage: %s [-d] [-f font] [-F font] [command ...]\n", argv0);
 	threadexitsall("usage");
 }
 
@@ -405,13 +461,26 @@ threadmain(int argc, char *argv[])
 	Point sz;
 
 	ARGBEGIN{
+	case 'd':
+		dumb = 1;
+		break;
 	case 'f':
 		fontname = EARGF(usage());
+		break;
+	case 'F':
+		vtfont = EARGF(usage());
 		break;
 	default:
 		usage();
 	}ARGEND
 	cmdargv = argv;
+
+	/* rc gets our environment group, so what we put there it sees, as with vt(1) */
+	if(rfork(RFENVG) < 0)
+		sysfatal("rfork: %r");
+	putenv("termprog", "runcmd");
+	/* so mc(1), lc and the like lay out columns for the console's font */
+	putenv("font", fontname);
 
 	uxinit("runcmd", "Run Command");
 	uxapphandler(appev, nil);
@@ -430,12 +499,15 @@ threadmain(int argc, char *argv[])
 	uxhandler(text, textev, nil);
 	if(uxconsfont(text, fontname) < 0)
 		sysfatal("can't open font %s: %r", fontname);
+	if(!dumb && uxconsvt(text, vtfont) < 0)
+		sysfatal("can't open font %s: %r", vtfont);
+	exportsize(0);
 	uxfocus(text);
 
 	fsfd = startfs();
 	pidc = chancreate(sizeof(ulong), 0);
 	proccreate(waiter, nil, 8*1024);
-	procrfork(runrc, nil, 16*1024, RFNAMEG|RFFDG|RFENVG|RFNOTEG);
+	procrfork(runrc, nil, 16*1024, RFNAMEG|RFFDG|RFNOTEG);
 	rcpid = recvul(pidc);
 	close(fsfd);
 	if(rcpid == ~0)

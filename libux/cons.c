@@ -24,6 +24,7 @@
 #include "dx.h"
 #include "ux.h"
 #include "impl.h"
+#include "vt.h"
 
 enum {
 	Pad	= 4,	/* text inset, left and right */
@@ -80,25 +81,76 @@ note(Uxctl *c, int type, int via, char *text)
 }
 
 
-/* replace runes q0..q1 with n runes r; offsets after q1 move with the text */
+/*
+ * replace runes q0..q1 with n runes r, in attributes a (or the
+ * default) if the console keeps them; offsets after q1 move with the
+ * text
+ */
 static void
-replace(Uxctl *c, int q0, int q1, Rune *r, int n)
+replacea(Uxctl *c, int q0, int q1, Rune *r, Vattr *a, int n)
 {
 	int d;
 
 	d = n - (q1-q0);
-	if(d > 0)
+	if(d > 0){
 		c->text = erealloc(c->text, (c->ntext + d + 1)*sizeof(Rune));
+		if(c->attr != nil)
+			c->attr = erealloc(c->attr, (c->ntext + d + 1)*sizeof(Vattr));
+	}
 	memmove(c->text+q0+n, c->text+q1, (c->ntext-q1)*sizeof(Rune));
 	memmove(c->text+q0, r, n*sizeof(Rune));
+	if(c->attr != nil){
+		memmove(c->attr+q0+n, c->attr+q1, (c->ntext-q1)*sizeof(Vattr));
+		if(a != nil)
+			memmove(c->attr+q0, a, n*sizeof(Vattr));
+		else
+			memset(c->attr+q0, 0, n*sizeof(Vattr));
+	}
 	c->ntext += d;
 #define Move(q) if(q >= q1) q += d; else if(q > q0) q = q0
 	Move(c->qh);
 	Move(c->q0);
 	Move(c->q1);
 	Move(c->qa);
+	if(c->vb != nil){
+		Move(c->vb->qc);
+		if(c->vb->qs >= 0){
+			Move(c->vb->qs);
+		}
+	}
 #undef Move
 	dirty(c, q0);
+}
+
+static void
+replace(Uxctl *c, int q0, int q1, Rune *r, int n)
+{
+	replacea(c, q0, q1, r, nil, n);
+}
+
+/* the terminal's view of the text: the console's */
+static void
+vtsync(Uxctl *c)
+{
+	Vbuf *b;
+
+	b = c->vb;
+	b->text = c->text;
+	b->attr = c->attr;
+	b->ntext = c->ntext;
+	b->qh = c->qh;
+	if(b->qc > b->qh)
+		b->qc = b->qh;
+}
+
+static void
+vbreplace(Vbuf *b, int q0, int q1, Rune *r, Vattr *a, int n)
+{
+	Uxctl *c;
+
+	c = b->aux;
+	replacea(c, q0, q1, r, a, n);
+	vtsync(c);
 }
 
 /* drop the oldest output, a whole line at a time, past Maxcons */
@@ -129,6 +181,18 @@ output(Uxctl *c, char *s, long n)
 	int nr, k;
 	char *e;
 
+	if(c->vt != nil){
+		vtsync(c);
+		c->vt->fgrgb = _rgba(UXcoltext) >> 8;
+		c->vt->bgrgb = _rgba(UXcolwindow) >> 8;
+		vtwrite(c->vt, s, n);
+		if(c->vt->gdirty){
+			c->vt->gdirty = 0;
+			c->w->dirty = 1;
+		}
+		trim(c);
+		return;
+	}
 	r = emalloc((n+1)*sizeof(Rune));
 	nr = 0;
 	for(e = s+n; s < e; ){
@@ -177,6 +241,8 @@ sendinput(Uxctl *c, int eof, int via)
 	}
 	s = _runestr(c->text+c->qh, q-c->qh);
 	c->qh = q;
+	if(c->vb != nil)
+		c->vb->qc = q;	/* the terminal's cursor goes on past the echoed line */
 	snprint(num, sizeof num, "%ld", strlen(s));
 	note(c, UXsubmit, via, s);
 	free(s);
@@ -327,6 +393,83 @@ height(Uxctl *c)
 	return 2*Padtop + c->nline*consfont(c)->height;
 }
 
+/* the terminal: what it's drawn in, and how many rows and columns fit */
+
+static Font*
+gridfont(Uxctl *c)
+{
+	return c->vfont != nil ? c->vfont : consfont(c);
+}
+
+/* where the console shows: its scroll view's port, or its own rect */
+static Rectangle
+vtport(Uxctl *c)
+{
+	Rectangle port, vb, hb, gb;
+
+	if(inscroll(c)){
+		_scrollparts(c->parent, c->parent->r, &port, &vb, &hb, &gb);
+		return port;
+	}
+	return c->r;
+}
+
+static void
+vtdims(Uxctl *c, int *rows, int *cols)
+{
+	Font *f;
+	Rectangle r;
+	int fw;
+
+	f = gridfont(c);
+	r = vtport(c);
+	*rows = 24;
+	*cols = 80;
+	if(f == nil)
+		return;
+	fw = stringwidth(f, "0");
+	if(fw <= 0 || f->height <= 0)
+		return;
+	*cols = (Dx(r) - 2*Pad) / fw;
+	*rows = (Dy(r) - 2*Padtop) / f->height;
+	if(*cols < 2)
+		*cols = 2;
+	if(*rows < 1)
+		*rows = 1;
+}
+
+/*
+ * Fit the terminal to the console, telling the app (UXresize) when
+ * its rows or columns change. The alternate screen fills the scroll
+ * view's port and doesn't scroll. 1 if it's showing.
+ */
+static int
+vtlayout(Uxctl *c)
+{
+	Uxctl *v;
+	Rectangle port, ext;
+	int rows, cols;
+
+	vtdims(c, &rows, &cols);
+	if(rows != c->vt->rows || cols != c->vt->cols){
+		vtresize(c->vt, rows, cols);
+		note(c, UXresize, UXui, nil);
+	}
+	if(!c->vt->alt)
+		return 0;
+	if(inscroll(c)){
+		v = c->parent;
+		port = vtport(c);
+		c->r = port;
+		ext = Rect(0, 0, Dx(port), Dy(port));
+		if(!eqrect(ext, v->extent))
+			v->extent = ext;
+		if(v->origin.y != 0)
+			_setorigin(v, Pt(v->origin.x, 0), UXui);
+	}
+	return 1;
+}
+
 /*
  * Before drawing: wrap what changed, and in a scroll view, fit its
  * width, grow with the text and set the view's extent, keeping the end
@@ -341,6 +484,8 @@ _conslayout(Uxctl *c)
 	char buf[64];
 
 	if(c->w->img == nil || consfont(c) == nil)
+		return;
+	if(c->vt != nil && vtlayout(c))
 		return;
 	v = inscroll(c) ? c->parent : nil;
 	atend = 0;
@@ -386,6 +531,165 @@ drawrun(Uxwin *w, Font *f, Point p, Rune *r, int n, Image *fg, Image *bg)
 		runestringnbg(w->img, p, fg, ZP, f, r, n, bg, ZP);
 }
 
+/*
+ * A terminal colour, 0xRRGGBB, cached per console since programs can
+ * ask for any: two ways a set, the one used less recently replaced, so
+ * the colours of one run (its foreground and background) never put
+ * each other out.
+ */
+static Image*
+vcolor(Uxctl *c, ulong rgb)
+{
+	Image *i;
+	int h, k;
+
+	h = ((rgb * 2654435761UL) >> 8 & 0xFFFFFF) % (nelem(c->vcol)/2) * 2;
+	for(k = 0; k < 2; k++)
+		if(c->vcol[h+k] != nil && c->vcolv[h+k] == rgb){
+			c->vlru[h/2] = k;
+			return c->vcol[h+k];
+		}
+	k = c->vcol[h] == nil ? 0 : c->vcol[h+1] == nil ? 1 : !c->vlru[h/2];
+	if(c->vcol[h+k] != nil)
+		freeimage(c->vcol[h+k]);
+	i = allocimage(c->w->d, Rect(0,0,1,1), c->w->img->chan, 1, rgb<<8 | 0xFF);
+	c->vcol[h+k] = i;
+	c->vcolv[h+k] = rgb;
+	c->vlru[h/2] = k;
+	return i != nil ? i : c->w->d->black;
+}
+
+static ulong
+mix(ulong a, ulong b)
+{
+	return ((a>>16&0xFF) + (b>>16&0xFF))/2 << 16
+		| ((a>>8&0xFF) + (b>>8&0xFF))/2 << 8
+		| ((a&0xFF) + (b&0xFF))/2;
+}
+
+/* an attribute's colours, as 0xRRGGBB, over the theme's text and window colours */
+static void
+attrrgb(Vattr *a, ulong *fg, ulong *bg)
+{
+	ulong deffg, defbg, t;
+
+	deffg = _rgba(UXcoltext) >> 8;
+	defbg = _rgba(UXcolwindow) >> 8;
+	*fg = vtrgb(a->fg, deffg);
+	*bg = vtrgb(a->bg, defbg);
+	/* bold in one of the first 8 colours is its bright one, as in xterm */
+	if((a->fl & Vbold) && (a->fg & 0xFF000000) == VTpal && (a->fg & 0xFF) < 8)
+		*fg = vtrgb(a->fg + 8, deffg);
+	if(a->fl & Vinverse){
+		t = *fg;
+		*fg = *bg;
+		*bg = t;
+	}
+	if(a->fl & Vfaint)
+		*fg = mix(*fg, *bg);
+	if(a->fl & Vhidden)
+		*fg = *bg;
+}
+
+static int
+attreq(Vattr *a, Vattr *b)
+{
+	return a->fg == b->fg && a->bg == b->bg && a->fl == b->fl;
+}
+
+/* n runes at p in attributes a: underlined, struck through or bold as asked */
+static void
+drawattr(Uxctl *c, Font *f, Point p, Rune *r, int n, Vattr *a, Image *selbg)
+{
+	Uxwin *w;
+	Image *fg, *bg;
+	ulong fgv, bgv;
+	int wd;
+
+	w = c->w;
+	attrrgb(a, &fgv, &bgv);
+	fg = vcolor(c, fgv);
+	bg = selbg != nil ? selbg : vcolor(c, bgv);
+	runestringnbg(w->img, p, fg, ZP, f, r, n, bg, ZP);
+	if(a->fl & (Vbold|Vuline|Vstrike)){
+		wd = runestringnwidth(f, r, n);
+		if(a->fl & Vbold)
+			runestringn(w->img, addpt(p, Pt(1, 0)), fg, ZP, f, r, n);
+		if(a->fl & Vuline)
+			draw(w->img, Rect(p.x, p.y+f->ascent+1, p.x+wd, p.y+f->ascent+2), fg, nil, ZP);
+		if(a->fl & Vstrike)
+			draw(w->img, Rect(p.x, p.y+f->ascent/2+1, p.x+wd, p.y+f->ascent/2+2), fg, nil, ZP);
+	}
+}
+
+/* the alternate screen: rows of cells in the fixed-width font */
+static void
+drawgrid(Uxctl *c, Rectangle r)
+{
+	Uxwin *w;
+	Vt *vt;
+	Font *f;
+	Vcell *row, *cl;
+	Rectangle vis, cr;
+	Point o, p;
+	ulong fgv, bgv, defbg;
+	int x, y, n, fw, ht, focused;
+
+	w = c->w;
+	vt = c->vt;
+	f = gridfont(c);
+	vis = _vis(c);
+	draw(w->img, vis, _color(w, UXcolwindow), nil, ZP);
+	if(f == nil)
+		return;
+	fw = stringwidth(f, "0");
+	ht = f->height;
+	defbg = _rgba(UXcolwindow) >> 8;
+	o = Pt(r.min.x + Pad, r.min.y + Padtop);
+	for(y = 0; y < vt->rows; y++){
+		row = vt->grid + y*vt->cols;
+		for(x = 0; x < vt->cols; ){
+			cl = &row[x];
+			if(cl->a.fl & Vcont){
+				x++;
+				continue;
+			}
+			p = Pt(o.x + x*fw, o.y + y*ht);
+			attrrgb(&cl->a, &fgv, &bgv);
+			if(cl->a.fl & Vwide){
+				if(bgv != defbg)
+					draw(w->img, Rect(p.x, p.y, p.x+2*fw, p.y+ht), vcolor(c, bgv), nil, ZP);
+				drawattr(c, f, p, &cl->r, 1, &cl->a, nil);
+				x += 2;
+				continue;
+			}
+			/* a run alike: its background at once, then each glyph on its column */
+			for(n = 1; x+n < vt->cols; n++)
+				if(!attreq(&row[x+n].a, &cl->a) || (row[x+n].a.fl & (Vwide|Vcont)))
+					break;
+			if(bgv != defbg)
+				draw(w->img, Rect(p.x, p.y, p.x+n*fw, p.y+ht), vcolor(c, bgv), nil, ZP);
+			for(; n > 0; n--, x++)
+				if(row[x].r != ' ' || (row[x].a.fl & (Vuline|Vstrike)))
+					drawattr(c, f, Pt(o.x + x*fw, p.y), &row[x].r, 1, &row[x].a, nil);
+		}
+	}
+	/* the cursor: a block, hollow when the window isn't the one typed to */
+	focused = w->focus == c && active(w);
+	if(vt->cursor){
+		cl = &vt->grid[vt->cy*vt->cols + vt->cx];
+		p = Pt(o.x + vt->cx*fw, o.y + vt->cy*ht);
+		cr = Rect(p.x, p.y, p.x + ((cl->a.fl & Vwide) ? 2*fw : fw), p.y+ht);
+		attrrgb(&cl->a, &fgv, &bgv);
+		if(focused){
+			draw(w->img, cr, vcolor(c, fgv), nil, ZP);
+			if(cl->r != ' ')
+				runestringn(w->img, p, vcolor(c, bgv), ZP, f, &cl->r, 1);
+		}else
+			border(w->img, cr, 1, vcolor(c, fgv), ZP);
+	}
+}
+
 void
 _drawcons(Uxctl *c, Rectangle r)
 {
@@ -394,8 +698,12 @@ _drawcons(Uxctl *c, Rectangle r)
 	Rectangle vis;
 	Image *fg, *bg, *selbg, *b;
 	Point p;
-	int i, q, e, x, x0, ht, tabw, focused, run, rw, sel;
+	int i, q, e, x, x0, ht, tabw, focused, run, rw, sel, cq;
 
+	if(c->vt != nil && c->vt->alt){
+		drawgrid(c, r);
+		return;
+	}
 	w = c->w;
 	f = consfont(c);
 	vis = _vis(c);
@@ -436,19 +744,34 @@ _drawcons(Uxctl *c, Rectangle r)
 					break;
 				if((q+run >= c->q0 && q+run < c->q1) != sel)
 					break;
+				if(c->attr != nil && !attreq(&c->attr[q+run], &c->attr[q]))
+					break;
 			}
-			drawrun(w, f, Pt(x0+x, p.y), c->text+q, run, fg, b);
+			if(c->attr != nil && (c->attr[q].fl || c->attr[q].fg || c->attr[q].bg))
+				drawattr(c, f, Pt(x0+x, p.y), c->text+q, run, &c->attr[q], sel ? selbg : nil);
+			else
+				drawrun(w, f, Pt(x0+x, p.y), c->text+q, run, fg, b);
 			x += runestringnwidth(f, c->text+q, run);
 			q += run;
 		}
 	}
-	/* the caret: a line at the insertion point */
-	if(focused && c->q0 == c->q1){
-		i = lineof(c, c->q0);
+	/*
+	 * the caret: a line at the insertion point, or, when a terminal
+	 * program reads keys raw, at its cursor
+	 */
+	cq = c->q0;
+	if(c->vt != nil && c->raw){
+		cq = c->vb->qc;
+		if(!c->vt->cursor)
+			focused = 0;
+	}else if(c->q0 != c->q1)
+		focused = 0;
+	if(focused){
+		i = lineof(c, cq);
 		/* at the end of a wrapped line, the caret goes at the next line's start */
 		q = c->line[i];
 		x = 0;
-		for(; q < c->q0; q++)
+		for(; q < cq; q++)
 			x += c->text[q] == '\n' ? 0 : runew(f, c->text[q], x, tabw);
 		p = Pt(x0+x, r.min.y + Padtop + i*ht);
 		draw(w->img, Rect(p.x, p.y, p.x+1, p.y+ht), _color(w, UXcoltext), nil, ZP);
@@ -498,11 +821,74 @@ isword(Rune r)
 	return r == '_' || isalpharune(r) || (r >= '0' && r <= '9') || r >= 0x80;
 }
 
+/*
+ * The mouse on the alternate screen: to the program, if it asked for
+ * it; else the wheel is the arrow keys, for pagers and the like.
+ */
+static int
+vtmousectl(Uxctl *c, Mouse *m)
+{
+	Font *f;
+	Rectangle r;
+	char b[32];
+	int x, y, fw, i, bit, n, k;
+
+	f = gridfont(c);
+	fw = f != nil ? stringwidth(f, "0") : 0;
+	if(f == nil || fw <= 0)
+		return 1;
+	r = _abs(c);
+	x = (m->xy.x - r.min.x - Pad) / fw;
+	y = (m->xy.y - r.min.y - Padtop) / f->height;
+	if(x < 0)
+		x = 0;
+	if(y < 0)
+		y = 0;
+	if(x >= c->vt->cols)
+		x = c->vt->cols-1;
+	if(y >= c->vt->rows)
+		y = c->vt->rows-1;
+	if(m->buttons & (8|16)){
+		if(c->vt->mouse){
+			if(vtmouse(c->vt, (m->buttons & 8) ? 64 : 65, VMpress, x, y, b, sizeof b) > 0)
+				note(c, UXsubmit, UXui, b);
+		}else if(c->raw){
+			k = (m->buttons & 8) ? Kup : Kdown;
+			for(i = 0; i < 3; i++)
+				if(vtkey(c->vt, k, b, sizeof b) > 0)
+					note(c, UXsubmit, UXui, b);
+		}
+		return 1;
+	}
+	if(c->vt->mouse == 0){
+		c->vbut = m->buttons;
+		return m->buttons != 0;
+	}
+	for(i = 0; i < 3; i++){
+		bit = 1<<i;
+		if((m->buttons & bit) == (c->vbut & bit))
+			continue;
+		n = vtmouse(c->vt, i, (m->buttons & bit) ? VMpress : VMrelease, x, y, b, sizeof b);
+		if(n > 0)
+			note(c, UXsubmit, UXui, b);
+	}
+	if(m->buttons == c->vbut){
+		for(i = 0; i < 3 && !(m->buttons & 1<<i); i++)
+			;
+		if(vtmouse(c->vt, i, VMmotion, x, y, b, sizeof b) > 0)
+			note(c, UXsubmit, UXui, b);
+	}
+	c->vbut = m->buttons;
+	return m->buttons != 0;
+}
+
 static int
 consmouse(Uxctl *c, Mouse *m)
 {
 	int q, a, b;
 
+	if(c->vt != nil && c->vt->alt)
+		return vtmousectl(c, m);
 	if(m->buttons & (8|16)){
 		if(inscroll(c))
 			return c->parent->t->mouse(c->parent, m);
@@ -575,7 +961,7 @@ conskey(Uxctl *c, Rune r)
 {
 	Font *f;
 	Rectangle port, vb, hb, gb;
-	char buf[UTFmax+1];
+	char buf[UTFmax+1], kb[16];
 	int n, ht, page;
 
 	if(r == Kdel){
@@ -583,6 +969,12 @@ conskey(Uxctl *c, Rune r)
 		return 1;
 	}
 	if(c->raw && !(c->state & UXreadonly)){
+		if(c->vt != nil){
+			/* as xterm sends it; keys it has none for go nowhere */
+			if(vtkey(c->vt, r, kb, sizeof kb) > 0)
+				note(c, UXsubmit, UXui, kb);
+			return 1;
+		}
 		n = runetochar(buf, &r);
 		buf[n] = 0;
 		note(c, UXsubmit, UXui, buf);
@@ -706,6 +1098,18 @@ _consedit(Uxctl *c, char *cmd)
 		s = _clipget();
 		if(s == nil)
 			return "failed: can't read the clipboard";
+		if(c->vt != nil && c->raw){
+			/* to the program as typed, bracketed if it asked (?2004) */
+			if(c->vt->bpaste){
+				r = runesmprint("\033[200~%s\033[201~", s);
+				free(s);
+				s = smprint("%S", r);
+				free(r);
+			}
+			note(c, UXsubmit, UXui, s);
+			free(s);
+			return nil;
+		}
 		r = runesmprint("%s", s);
 		free(s);
 		type(c, r, runestrlen(r), UXui);
@@ -873,4 +1277,123 @@ uxconsfont(Uxctl *c, char *name)
 	qunlock(&uxlk);
 	kick();
 	return 0;
+}
+
+/* the terminal */
+
+/* what it says back to a program's queries, as if typed */
+static void
+vtreply(Vt *vt, char *s, int n)
+{
+	Uxctl *c;
+	char *t;
+
+	c = vt->aux;
+	t = emalloc(n+1);
+	memmove(t, s, n);
+	note(c, UXsubmit, UXui, t);
+	free(t);
+}
+
+/*
+ * Make the console an xterm (vt.h): escape sequences in what's written
+ * are acted on, not shown. The alternate screen is drawn in font, or
+ * the mono role's (vga) if nil.
+ */
+int
+uxconsvt(Uxctl *c, char *font)
+{
+	Font *f;
+	int rows, cols;
+
+	qlock(&uxlk);
+	if(c->vt != nil){
+		qunlock(&uxlk);
+		return 0;
+	}
+	f = nil;
+	if(c->w->d != nil){
+		f = openfont(c->w->d, font != nil ? font : "/lib/font/bit/vga/unicode.font");
+		if(f == nil && font != nil){
+			qunlock(&uxlk);
+			return -1;
+		}
+	}
+	c->vfont = f;
+	c->attr = emalloc((c->ntext+1)*sizeof(Vattr));
+	c->vb = emalloc(sizeof *c->vb);
+	c->vb->replace = vbreplace;
+	c->vb->aux = c;
+	vtsync(c);
+	vtdims(c, &rows, &cols);
+	c->vt = vtnew(rows, cols, c->vb);
+	c->vb->qc = c->qh;
+	c->vt->reply = vtreply;
+	c->vt->aux = c;
+	c->vt->fgrgb = _rgba(UXcoltext) >> 8;
+	c->vt->bgrgb = _rgba(UXcolwindow) >> 8;
+	c->w->dirty = 1;
+	qunlock(&uxlk);
+	kick();
+	return 0;
+}
+
+/* how many rows and columns the terminal has, and their size in pixels */
+int
+uxconsgrid(Uxctl *c, int *rows, int *cols, Point *px)
+{
+	Font *f;
+
+	qlock(&uxlk);
+	if(c->vt == nil){
+		qunlock(&uxlk);
+		return -1;
+	}
+	vtdims(c, rows, cols);
+	f = gridfont(c);
+	if(px != nil)
+		*px = f != nil ? Pt(*cols*stringwidth(f, "0"), *rows*f->height) : ZP;
+	qunlock(&uxlk);
+	return 0;
+}
+
+/* for the tree (tapi.c): the output, its last max bytes */
+char*
+_consvalue(Uxctl *c, int max)
+{
+	char *s, *p;
+	int n;
+
+	qlock(&uxlk);
+	s = _runestr(c->text, c->qh);
+	qunlock(&uxlk);
+	n = strlen(s);
+	if(n <= max)
+		return s;
+	p = s + n - max;
+	while(*p != 0 && (*p & 0xC0) == 0x80)
+		p++;
+	p = strdup(p);
+	free(s);
+	return p;
+}
+
+/* the alternate screen as text, or nil if it isn't showing */
+char*
+_consscreen(Uxctl *c)
+{
+	char *s;
+
+	s = nil;
+	qlock(&uxlk);
+	if(c->vt != nil && c->vt->alt)
+		s = vtscreen(c->vt);
+	qunlock(&uxlk);
+	return s;
+}
+
+int
+_consisvt(Uxctl *c)
+{
+	return c->vt != nil;
 }

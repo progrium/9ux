@@ -19,6 +19,7 @@ OFILES=\
 	res.$O\
 	widget.$O\
 	win.$O\
+	vt.$O\
 	uxglyphs.$O\
 	uxtheme.$O\
 	tapi.$O\
@@ -30,7 +31,7 @@ OFILES=\
 	tmodel.$O\
 	trender.$O\
 
-HFILES=ux.h impl.h tree.h dx.h undx.h ../assets/gen/uxstyle.h ../assets/gen/uxglyphs.h
+HFILES=ux.h impl.h tree.h dx.h undx.h vt.h ../assets/gen/uxstyle.h ../assets/gen/uxglyphs.h
 CFLAGS=$CFLAGS -I../assets/gen
 
 all:V: $LIB

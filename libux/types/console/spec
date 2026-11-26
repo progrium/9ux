@@ -1,0 +1,15 @@
+type    console  tier=component  profile=desktop  since=1.0
+prop    value      text  file readonly
+prop    input      text  file readonly
+prop    raw        bool  default=off
+# 9ux: a terminal console: what it emulates (xterm-256color), and, while a full-screen program has its alternate screen up, that screen's rows as text
+prop    term       text  file readonly
+prop    screen     text  file readonly
+verb    append   TEXT                  class=edit
+verb    insert   TEXT                  class=edit
+verb    interrupt                      class=activate
+verb    clear                          class=edit
+event   submit     kind=action   attrs=n
+event   interrupt  kind=action
+# 9ux: the terminal's rows and columns changed
+event   resize     kind=state    attrs=rows,cols
