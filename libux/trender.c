@@ -1708,11 +1708,20 @@ appev(Uxev *e, void*)
 	unlockmodel();
 }
 
+extern void	(*_themehook)(char*);
+char*	_riotheme(void);
+
 /* name is the app's at uxd; post serves its tree to uxd */
 void
 uistart(char *name, int (*post)(char*))
 {
+	char *m;
+
 	uxinit(name, name);
+	/* follow rio's theme, as a C API app does (tapi.c) */
+	if((m = _riotheme()) != nil)
+		mode = m;
+	_themehook = setsysmode;
 	uxpublish(post);
 	uxapphandler(appev, nil);
 }
