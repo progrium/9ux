@@ -283,6 +283,21 @@ A console whose parent is a scroll view fits the view's width, grows
 with its text and sets the view's `extent`, keeping the end in view
 while it's shown there, so the view's vertical bar is the console's.
 
+A console can be a terminal (libux's `uxconsvt`; Run Command's is).
+Its `term` file then says what it emulates, `xterm-256color`, and the
+escape sequences in what the app writes are acted on, not shown:
+colours and styles go with the text, carriage return, backspace, cursor
+motion and erasing edit lines in place, and the replies to queries
+(cursor position, device attributes, colours) are sent as if typed.
+`value` holds only the text. A full-screen program's alternate screen
+(`ESC [ ? 1049 h`) is a grid of the terminal's rows and columns in a
+fixed-width font, filling the view; while it's up, `screen` holds its
+rows as text, a line each, and `value` keeps the main screen's. In raw
+mode keys are sent as xterm sends them (the up arrow as `ESC [ A`), the
+mouse is reported when a program asks for it, and a paste is bracketed
+when it asks for that. `resize` (`rows= cols=`) says the terminal's
+size changed.
+
 ### Menus
 
 An app's menus are served under `menus/`, mirroring what libux

@@ -25,6 +25,10 @@ typedef struct Action Action;
 typedef struct Uxstyle Uxstyle;
 typedef struct Uxlen Uxlen;
 typedef struct Uxpop Uxpop;
+typedef struct Vt Vt;
+typedef struct Vbuf Vbuf;
+typedef struct Vattr Vattr;
+#define VTTYPES	/* vt.h: these are declared */
 
 /* spike: uitree style words (flex.c) */
 enum {
@@ -199,6 +203,14 @@ struct Uxctl {
 	int	row;	/* spike: radios laid out in a row */
 	char	*ops;	/* spike: canvas display list */
 	Font	*cfont;	/* console: its own font, or nil for the body font */
+	Vt	*vt;	/* console: an xterm (vt.h), or nil for plain text */
+	Vbuf	*vb;	/* console with vt: the primary screen, which is text */
+	Vattr	*attr;	/* console with vt: each rune's colours and style */
+	Font	*vfont;	/* console with vt: the alternate screen's fixed-width font */
+	int	vbut;	/* console with vt: the mouse buttons last reported */
+	Image	*vcol[256];	/* console with vt: colours, by 0xRRGGBB (cons.c) */
+	ulong	vcolv[256];
+	uchar	vlru[128];	/* the way of each set used last */
 
 	/* spike: uitree layout, svg and styled-text */
 	Uxstyle	*st;	/* style words, or nil */
@@ -432,6 +444,9 @@ extern Ctltype	_constype;
 void	_conslayout(Uxctl*);
 void	_drawcons(Uxctl*, Rectangle);
 char*	_consedit(Uxctl*, char*);
+char*	_consvalue(Uxctl*, int);
+char*	_consscreen(Uxctl*);
+int	_consisvt(Uxctl*);
 
 /* drag.c */
 int	_dragstart(Uxdrag*, Uxctl*);

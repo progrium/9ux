@@ -79,6 +79,8 @@ struct Cc {
 	int	origin;	/* Kscroll: the y origin the node had */
 	Rectangle	r;	/* the API's rectangle, window-local */
 	int	raw;	/* Kcons: keys aren't echoed */
+	int	vt;	/* Kcons: an xterm (uxconsvt): value follows its text */
+	int	valpending;	/* Kcons with vt: value is to be brought up to date */
 	char	*data;	/* what the control shows from the node's main data prop */
 	char	*data2;	/* and a second one (styled-text's runs) */
 	char	*style;	/* the style words the control has, if it's laid out by them */
@@ -175,6 +177,7 @@ static void	hook(char*, char*, char*, char*, char*);
 static void	actioncall(char*, char*, char*);
 static void	menusync(void);
 static void	consappend(Node*, char*, long);
+static void	consrefresh(Cc*);
 static int	ischoice(int);
 static void	choiceprops(Cc*, Node*);
 static char*	choicevalue(Cc*);
@@ -691,6 +694,9 @@ void	_dxlistsel(Uxctl*, int*, int);
 void	_dxtextsel(Uxctl*, int*, int*);
 char*	_dxitems(Uxctl*);
 char*	_dxrun(Uxctl*, char*);
+char*	_consvalue(Uxctl*, int);
+char*	_consscreen(Uxctl*);
+int	_consisvt(Uxctl*);
 extern Uxfn	*_chooserhook;
 extern void	(*_themehook)(char*);
 char*	_riotheme(void);
@@ -846,8 +852,18 @@ capictlev(Uxev *e, void *arg)
 	case UXsubmit:
 		name = "submit";
 		/* what was typed stays in the console, echoed, unless raw */
-		if(c->kind == Kcons && !c->raw && e->text != nil)
+		if(c->kind == Kcons && c->vt)
+			consrefresh(c);
+		else if(c->kind == Kcons && !c->raw && e->text != nil)
 			consappend(n, e->text, strlen(e->text));
+		break;
+	case UXresize:
+		if(c->kind == Kcons){
+			name = "resize";
+			uxconsgrid(c->c, &i, &ni, nil);
+			fmtprint(&f, "rows=%d cols=%d ", i, ni);
+		}else
+			name = "event";
 		break;
 	case UXopen:
 		name = "open";
@@ -2153,6 +2169,60 @@ uxiconselect(Uxctl *c, char **ids, int ni)
 /* consoles: value is the output, as the console keeps it */
 enum { Maxcons = 64*1024 };
 
+/*
+ * An xterm console's text is edited in place, not only added to, so
+ * its value is copied from it: soon after a change, not on every write.
+ */
+static Channel *consvalc;
+
+static void
+consvalproc(void*)
+{
+	Node *n;
+	Cc *c;
+	char *v;
+	ulong id;
+
+	threadsetname("consvalue");
+	for(;;){
+		id = recvul(consvalc);
+		sleep(50);
+		lockmodel();
+		c = ccbynode(id);
+		n = nodebyid(id);
+		if(c == nil || n == nil || quitting){
+			unlockmodel();
+			continue;
+		}
+		c->valpending = 0;
+		v = _consvalue(c->c, Maxcons);
+		setprop(n, "value", v, 0);
+		free(v);
+		v = _consscreen(c->c);
+		if(v != nil){
+			setprop(n, "screen", v, 0);
+			free(v);
+		}else if(getprop(n, "screen") != nil)
+			rmprop(n, "screen");
+		unlockmodel();
+	}
+}
+
+/* bring an xterm console's value up to date, soon; model held */
+static void
+consrefresh(Cc *c)
+{
+	if(c->valpending)
+		return;
+	if(consvalc == nil){
+		consvalc = chancreate(sizeof(ulong), 64);
+		proccreate(consvalproc, nil, 16*1024);
+	}
+	c->valpending = 1;
+	if(nbsendul(consvalc, c->node) == 0)
+		c->valpending = 0;
+}
+
 /* the console's value grows by s, model held */
 static void
 consappend(Node *n, char *s, long ns)
@@ -2180,21 +2250,36 @@ void
 uxconswrite(Uxctl *c, char *s, long ns)
 {
 	Node *n;
+	Cc *cc;
 
-	lockmodel();
-	if((n = nodeof(c, nil)) != nil)
-		consappend(n, s, ns);
-	unlockmodel();
 	dxconswrite(c, s, ns);
+	lockmodel();
+	if((n = nodeof(c, &cc)) != nil){
+		if(cc->vt)
+			consrefresh(cc);
+		else
+			consappend(n, s, ns);
+	}
+	unlockmodel();
 }
 
 void
 uxconsclear(Uxctl *c)
 {
 	Node *n;
+	Cc *cc;
 	char *v, *p;
 
 	lockmodel();
+	if(nodeof(c, &cc) != nil && cc->vt){
+		unlockmodel();
+		dxconsclear(c);
+		lockmodel();
+		if(nodeof(c, &cc) != nil)
+			consrefresh(cc);
+		unlockmodel();
+		return;
+	}
 	if((n = nodeof(c, nil)) != nil && (v = getprop(n, "value")) != nil){
 		v = estrdup(v);
 		p = strrchr(v, '\n');
@@ -2203,6 +2288,25 @@ uxconsclear(Uxctl *c)
 	}
 	unlockmodel();
 	dxconsclear(c);
+}
+
+/* an xterm console: its node says so, and its value follows its text */
+int
+uxconsvt(Uxctl *c, char *font)
+{
+	Node *n;
+	Cc *cc;
+
+	if(dxconsvt(c, font) < 0)
+		return -1;
+	lockmodel();
+	if((n = nodeof(c, &cc)) != nil){
+		cc->vt = 1;
+		setprop(n, "term", "xterm-256color", 1);
+		consrefresh(cc);
+	}
+	unlockmodel();
+	return 0;
 }
 
 void

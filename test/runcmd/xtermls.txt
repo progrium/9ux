@@ -1,0 +1,9 @@
+[1;32mglenda@alpine[0m:[1;34m~/9ux[0m$ ls --color
+[0m[01;34mapps[0m  [01;34mdocs[0m  [01;34mlibux[0m  LICENSE  mkfile  README.md  [01;32mrun.sh[0m  [01;35mshot.png[0m
+[1;32mglenda@alpine[0m:[1;34m~/9ux[0m$ git log --oneline -3
+[33m3f95389[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m)[m scripts/run.sh: the whole desktop in a host window
+[33mb50fe7b[m libux: uxkit apps follow rio's theme
+[33m05466f2[m Dark mode: light and dark themes, switched at run time
+[1;32mglenda@alpine[0m:[1;34m~/9ux[0m$ git diff --stat
+ libux/vt.c | 1203 [32m++++++++++++++++++++++++++++[m
+ libux/cons.c |  312 [32m+++++++++[m[31m--[m

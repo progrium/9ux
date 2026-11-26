@@ -178,6 +178,14 @@ char*	uxchooserdir(Uxctl*);		/* malloc'd */
  * the view's width, grows with its text, sets the view's extent, and
  * keeps the end in view; its rect's width and height are its own.
  * Edit commands (uxedit) work on it: output can be copied, not cut.
+ *
+ * uxconsvt makes it an xterm (TERM=xterm-256color): what's written may
+ * hold escape sequences, which colour the text, move the cursor and
+ * edit lines in place; full-screen programs get an alternate screen,
+ * drawn in a fixed-width font, that fills the view. In raw mode keys
+ * go as xterm sends them (arrows as ESC [ A), and queries are answered
+ * as UXsubmit. When the terminal's rows or columns change, the
+ * console sends UXresize; uxconsgrid says what they are.
  */
 /*
  * Spike: uitree's portable style words and flexbox layout, and its
@@ -210,10 +218,12 @@ void	uxcall(Uxfn*, void*);	/* fn(nil event, arg) on the UI thread */
 void	uxsetdark(int);	/* draw in the dark theme (1) or the light one (0) */	/* window-local, from the last layout */
 
 Uxctl*	uxconsole(Uxwin*, char *id, Rectangle r);
-void	uxconswrite(Uxctl*, char *s, long n);	/* output, before what's typed; \b erases */
+void	uxconswrite(Uxctl*, char *s, long n);	/* output, before what's typed; \b erases (moves back, with uxconsvt) */
 void	uxconsraw(Uxctl*, int);
 void	uxconsclear(Uxctl*);	/* drop the output but its last line (the prompt); keep what's typed */
 int	uxconsfont(Uxctl*, char *font);	/* the body font otherwise; -1 if it can't be opened */
+int	uxconsvt(Uxctl*, char *font);	/* an xterm; its full-screen font, or nil for the mono role's */
+int	uxconsgrid(Uxctl*, int *rows, int *cols, Point *px);	/* -1 if not uxconsvt */
 
 /* menus, shown in rio's menu bar through /dev/ux and served under menus/ */
 Uxmenu*	uxmenu(char *id, char *title);

@@ -156,12 +156,17 @@ char *catalog[] = {
 	"prop    value      text  file readonly\n"
 	"prop    input      text  file readonly\n"
 	"prop    raw        bool  default=off\n"
+	"# 9ux: a terminal console: what it emulates (xterm-256color), and, while a full-screen program has its alternate screen up, that screen's rows as text\n"
+	"prop    term       text  file readonly\n"
+	"prop    screen     text  file readonly\n"
 	"verb    append   TEXT                  class=edit\n"
 	"verb    insert   TEXT                  class=edit\n"
 	"verb    interrupt                      class=activate\n"
 	"verb    clear                          class=edit\n"
 	"event   submit     kind=action   attrs=n\n"
 	"event   interrupt  kind=action\n"
+	"# 9ux: the terminal's rows and columns changed\n"
+	"event   resize     kind=state    attrs=rows,cols\n"
 	,
 	"context-menu",
 	"type    context-menu  tier=overlay  profile=overlay  since=1.0\n"
